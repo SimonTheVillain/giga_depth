@@ -7,6 +7,7 @@ from model.model_simple_full_res import SimpleNet
 from model.model_simple_half_res import SimpleNetHalf
 from model.model_flat_full_res import FlatNet
 from model.model_flat_half_res import FlatNetHalf
+from model.model_flat_half_res_no_y import FlatNetHalfNOY
 from torch.utils.data import DataLoader
 import numpy as np
 
@@ -92,15 +93,17 @@ def train():
     #dataset_path = "/home/simon/datasets/unity_rendered"
     #dataset_path = "/media/simon/SSD/unity_rendered_2/unity_rendered"
     dataset_path = "/media/simon/SSD/unity_rendered_2/reduced_0_08"
-    writer = SummaryWriter('tensorboard/experiment5')
+    writer = SummaryWriter('tensorboard/experiment8')
 
-    model_path_src = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_2.pt"
+    model_path_src = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
     load_model = False
-    model_path_dst = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_2.pt"
+    model_path_dst = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
+    crop_res = (896/2, 1216/2)
+    # crop_res = (896 , 1216 )
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 2
-    num_workers = 4
+    batch_size = 8
+    num_workers = 8
     show_images = False
     shuffle = False
     half_res = True
@@ -133,16 +136,16 @@ def train():
 
     #the whole unity rendered dataset
     datasets = {
-        'train': StructureCoreDatasetRendered(dataset_path, 10, 8000, half_res),
-        'val': StructureCoreDatasetRendered(dataset_path, 8000, 9500, half_res),
-        'test': StructureCoreDatasetRendered(dataset_path, 9500, 11000, half_res)
+        'train': StructureCoreDatasetRendered(dataset_path, 10, 8000, half_res, crop_res),
+        'val': StructureCoreDatasetRendered(dataset_path, 8000, 9500, half_res, crop_res),
+        'test': StructureCoreDatasetRendered(dataset_path, 9500, 11000, half_res, crop_res)
     }
 
     #the filtered dataset
     datasets = {
-        'train': StructureCoreDatasetRendered(dataset_path, 0, 2500, half_res),
-        'val': StructureCoreDatasetRendered(dataset_path, 2500, 2600, half_res),
-        'test': StructureCoreDatasetRendered(dataset_path, 2600, 2750, half_res)
+        'train': StructureCoreDatasetRendered(dataset_path, 0, 2500, half_res, crop_res),
+        'val': StructureCoreDatasetRendered(dataset_path, 2500, 2600, half_res, crop_res),
+        'test': StructureCoreDatasetRendered(dataset_path, 2600, 2750, half_res, crop_res)
     }
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
                                                   shuffle=shuffle, num_workers=num_workers)

@@ -6,6 +6,7 @@ import numpy as np
 import numpy.matlib
 from pathlib import Path
 import cv2
+import random
 
 import matplotlib.pyplot as plt
 
@@ -13,9 +14,9 @@ import matplotlib.pyplot as plt
 
 class StructureCoreDatasetRendered(data.Dataset):
 
-    def __init__(self, root_dir, from_ind, to_ind, half_res=False):
+    def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216)):
         self.root_dir = root_dir
-
+        self.crop_res = (int(crop_res[0]), int(crop_res[1]))
         self.from_ind = from_ind
         self.to_ind = to_ind
         self.half_res = half_res
@@ -39,6 +40,8 @@ class StructureCoreDatasetRendered(data.Dataset):
 
         vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])
         vertical = np.transpose(np.matlib.repeat(vertical, image.shape[1], 0))
+        v_offset = random.uniform(-0.5, 0.5)
+        vertical = vertical + v_offset#random.uniform(-0.01, 0.01)
         image = np.array([image, vertical])
         image = image.astype(np.float32)
 
@@ -61,6 +64,15 @@ class StructureCoreDatasetRendered(data.Dataset):
         mask2 = (w-wo > 0.09)# 0.05
         mask = np.logical_and(mask1, mask2)
         mask = np.array([mask]).astype(np.float32)
+        if abs(v_offset) > 0.25:
+            mask[:] = 0
+
+        # cropping out part of the image
+        offset_x = random.randrange(0, groundtruth.shape[2] - self.crop_res[1] + 1)
+        offset_y = random.randrange(0, groundtruth.shape[1] - self.crop_res[0] + 1)
+        groundtruth = groundtruth[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
+        image = image[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
+        mask = mask[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
 
         if self.half_res:
             mask = transform.resize(mask, (mask.shape[0], mask.shape[1] / 2, mask.shape[2] / 2),)
@@ -69,7 +81,6 @@ class StructureCoreDatasetRendered(data.Dataset):
             groundtruth = \
                 transform.resize(groundtruth,
                                  (groundtruth.shape[0], groundtruth.shape[1] / 2, groundtruth.shape[2] / 2))
-
 
 
         #print(idx)
