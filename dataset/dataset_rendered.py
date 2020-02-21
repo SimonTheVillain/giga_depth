@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 
 
-class StructureCoreDatasetRendered(data.Dataset):
+class DatasetRendered(data.Dataset):
 
     def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216)):
         self.root_dir = root_dir
@@ -35,7 +35,8 @@ class StructureCoreDatasetRendered(data.Dataset):
             idx = idx.tolist()
 
         idx = idx + self.from_ind
-        image = io.imread(Path(self.root_dir)/Path(str(idx) + "_r.exr"))
+        path = Path(self.root_dir) / Path(str(idx) + "_r.exr")#putting this into a additional variable as a debug measure
+        image = io.imread(path)
         image = self.to_grey(image)
 
         vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])

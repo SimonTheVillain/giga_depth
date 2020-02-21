@@ -3,11 +3,7 @@ import torch.nn as nn
 import torch.nn.modules.loss
 import torch.optim as optim
 from dataset.dataset_rendered import DatasetRendered
-from model.model_simple_full_res import SimpleNet
-from model.model_simple_half_res import SimpleNetHalf
-from model.model_flat_full_res import FlatNet
-from model.model_flat_half_res import FlatNetHalf
-from model.model_flat_half_res_no_y import FlatNetHalfNOY
+from model.model_1 import Model1
 from torch.utils.data import DataLoader
 import numpy as np
 
@@ -16,8 +12,8 @@ import matplotlib.pyplot as plt
 
 from torch.utils.tensorboard import SummaryWriter
 
-if not torch.cuda.is_available():
-    raise Exception("No GPU found, please run without --cuda")
+#if not torch.cuda.is_available():
+#    raise Exception("No GPU found, please run without --cuda")
 
 
 def plot_disp(input, vmin, vmax, mask=None):
@@ -90,19 +86,17 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
 
 
 def train():
-    #dataset_path = "/home/simon/datasets/unity_rendered"
-    #dataset_path = "/media/simon/SSD/unity_rendered_2/unity_rendered"
-    dataset_path = "/media/simon/SSD/unity_rendered_2/reduced_0_08"
+    dataset_path = "/home/simon/datasets/unity_rendered/reduced_0_08"
     writer = SummaryWriter('tensorboard/experiment8')
 
-    model_path_src = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
+    model_path_src = "trained_models/model_1.pt"
     load_model = False
-    model_path_dst = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
-    crop_res = (896/2, 1216/2)
-    # crop_res = (896 , 1216 )
+    model_path_dst = "trained_models/model_1.pt"
+    crop_div = 2
+    crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 8
+    batch_size = 1
     num_workers = 8
     show_images = False
     shuffle = False
@@ -118,7 +112,7 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = FlatNetHalf()  # FlatNet()
+        model = Model1()  # FlatNet()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

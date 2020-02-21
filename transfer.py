@@ -3,11 +3,7 @@ import torch.nn as nn
 import torch.nn.modules.loss
 import torch.optim as optim
 from dataset.dataset_rendered import DatasetRendered
-from model.model_simple_full_res import SimpleNet
-from model.model_simple_half_res import SimpleNetHalf
-from model.model_flat_full_res import FlatNet
-from model.model_flat_half_res import FlatNetHalf
-from model.model_flat_half_res_no_y import FlatNetHalfNOY
+from model.model_1 import Model1
 from torch.utils.data import DataLoader
 import numpy as np
 
@@ -38,67 +34,22 @@ def plot_disp(input, vmin, vmax, mask=None):
 smooth_l1 = nn.SmoothL1Loss(reduction='none')
 
 
-def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
-    width = 1280
-    subpixel = 30  # targeted subpixel accuracy
-    l1_scale = width * subpixel
-    if enable_mask:
-        mean = torch.mean(mask) + 0.0001  # small epsilon for not crashing!
-        if use_smooth_l1:
-            loss = (alpha / l1_scale) * torch.mean(smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale) * mask)
-        else:
-            loss = alpha * torch.mean(((output[:, 0, :, :] - gt) * mask) ** 2)
-        loss_unweighted = loss.item()
-        loss_disparity = loss.item() / mean.item()
-        loss_mask = torch.mean(torch.abs(output[:, 1, :, :] - mask))  # todo: maybe replace this with the hinge loss
-        loss += loss_mask
-        loss_mask = loss_mask.item()
-        loss_unweighted += loss_mask
-    else:
-        # loss = alpha * torch.mean((output[:, 0, :, :] - gt) ** 2)
-        if use_smooth_l1:
-            loss = (alpha / l1_scale) * torch.mean(smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale))
-        else:
-            loss = alpha * torch.mean((output[:, 0, :, :] - gt) ** 2)
-        loss_unweighted = loss.item()
-        loss_disparity = loss
-        loss_mask = torch.mean(torch.abs(output[:, 1, :, :] - mask))  # todo: maybe replace this with the hinge loss
-        loss += loss_mask
-        loss_mask = loss_mask.item()
-        loss_unweighted += loss_mask
+def discriminator_loss(domain_label):
+    pass
 
-    # test = torch.clamp(1.0 - (output[:, 1, :, :] - 0.5) * (fmask - 0.5) * 4.0, min=0) #this should actually do what we want!
-    # loss += torch.mean(test)
-
-    # print(test.shape)#todo. debug! the hinge loss is weird
-    # loss += torch.mean(torch.max(torch.Tensor([0]).cuda(), 1.0 - (output[:, 1, :, :] - 0.5) * (fmask - 0.5) * 4.0))#hinge loss
-    # loss = torch.nn.modules.loss.SmoothL1Loss()
-
-    # print(mask.shape)
-    # plt.imshow((mask[0, 0, :] == 0).float().cpu())
-
-    # TODO: find out why this is all zero
-    # print(output.shape)
-    # plt.imshow(output[0, 0, :].cpu().detach())
-
-    # print(gt.shape)
-    # plt.imshow((gt[0, :]).cpu())
-    # plt.imshow((gt[0, 0, :] == 0).cpu())
-    # plt.show()
-
-    return loss, loss_unweighted, loss_disparity, loss_mask
 
 
 def train():
-    #dataset_path = "/home/simon/datasets/unity_rendered"
-    #dataset_path = "/media/simon/SSD/unity_rendered_2/unity_rendered"
+
+    #dataset path for the target domain
     dataset_path = "/media/simon/SSD/unity_rendered_2/reduced_0_08"
     writer = SummaryWriter('tensorboard/experiment8')
 
-    model_path_src = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
+    model_path_src = "trained_models/model1_1.pt"
     load_model = False
     model_path_dst = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
-    crop_res = (896/2, 1216/2)
+    crop_div = 2
+    crop_res = (896/crop_div, 1216/crop_div)
     # crop_res = (896 , 1216 )
     store_checkpoints = True
     num_epochs = 500
