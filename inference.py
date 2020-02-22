@@ -6,17 +6,17 @@ import numpy.matlib
 
 
 dataset_path = "/media/simon/SSD/datasets/structure_core"
-model_path = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_NOY_1.pt"
+model_path = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
 count = 46
 device = torch.device('cpu')
-model = torch.load(model_path)
+model = torch.load(model_path, map_location=device)
 model.eval()
 model.to(device)
 
 
 for i in range(0, count):
     print("image {}".format(i))
-    for offset in np.arange(-0.1, 0.1, 0.01):
+    for offset in [0]:#np.arange(-0.1, 0.1, 0.01):
         print(offset)
         scale = 1.0
         ir_path = dataset_path + "/single_shots/ir/" + str(i) + '.png'
