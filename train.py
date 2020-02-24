@@ -86,19 +86,19 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
 
 
 def train():
-    dataset_path = "/home/simon/datasets/unity_rendered/reduced_0_08"
-    writer = SummaryWriter('tensorboard/experiment8')
+    dataset_path = "/media/simon/SSD/unity_rendered_2/reduced_0_08"
+    writer = SummaryWriter('tensorboard/experiment10')
 
     model_path_src = "trained_models/model_1.pt"
-    load_model = False
+    load_model = True
     model_path_dst = "trained_models/model_1.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 1
+    batch_size = 8
     num_workers = 8
-    show_images = False
+    show_images = True
     shuffle = False
     half_res = True
     enable_mask = False
@@ -112,7 +112,7 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model1()  # FlatNet()
+        model = Model1()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -177,7 +177,7 @@ def train():
 
                 if phase == 'train':
 
-                    outputs = model(input)
+                    outputs, latent = model(input)
                     optimizer.zero_grad()
                     loss, loss_unweighted, loss_disparity, loss_mask = \
                         sqr_loss(outputs, mask.cuda(), gt.cuda(),
@@ -189,7 +189,7 @@ def train():
                     optimizer.step()
                 else:
                     with torch.no_grad():
-                        outputs = model(input.cuda())
+                        outputs, latent = model(input.cuda())
                         loss, loss_unweighted, loss_disparity, loss_mask = \
                             sqr_loss(outputs, mask.cuda(), gt.cuda(),
                                      alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)

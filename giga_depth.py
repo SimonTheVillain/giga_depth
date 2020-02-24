@@ -93,10 +93,10 @@ def train():
     #dataset_path = "/home/simon/datasets/unity_rendered"
     #dataset_path = "/media/simon/SSD/unity_rendered_2/unity_rendered"
     dataset_path = "/media/simon/SSD/unity_rendered_2/reduced_0_08"
-    writer = SummaryWriter('tensorboard/experiment8')
+    writer = SummaryWriter('tensorboard/experiment9')
 
     model_path_src = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
-    load_model = False
+    load_model = True
     model_path_dst = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
     crop_res = (896/2, 1216/2)
     # crop_res = (896 , 1216 )
@@ -104,7 +104,7 @@ def train():
     num_epochs = 500
     batch_size = 8
     num_workers = 8
-    show_images = False
+    show_images = True
     shuffle = False
     half_res = True
     enable_mask = False

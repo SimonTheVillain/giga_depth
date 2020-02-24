@@ -6,7 +6,7 @@ import numpy.matlib
 
 
 dataset_path = "/media/simon/SSD/datasets/structure_core"
-model_path = "/home/simon/pycharm/GigaDepth/trained_models/model_flat_half_no_mask_4.pt"
+model_path = "trained_models/model_1.pt"
 count = 46
 device = torch.device('cpu')
 model = torch.load(model_path, map_location=device)
@@ -33,7 +33,7 @@ for i in range(0, count):
         vertical = np.transpose(np.matlib.repeat(vertical, ir_r.shape[1], 0)) + offset
         image = np.array([[ir_r, vertical]]).astype(float)
         image = image.astype(np.float32)
-        output = model(torch.tensor(image).to(device))
+        output, latent = model(torch.tensor(image).to(device))
 
 
         output_mat = output.cpu().detach().numpy()

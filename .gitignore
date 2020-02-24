@@ -3,3 +3,4 @@
 tensorboard/*
 tensorboard
 __pycache__/
+trained_models/*

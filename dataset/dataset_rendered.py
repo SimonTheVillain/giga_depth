@@ -42,6 +42,7 @@ class DatasetRendered(data.Dataset):
         vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])
         vertical = np.transpose(np.matlib.repeat(vertical, image.shape[1], 0))
         v_offset = random.uniform(-0.5, 0.5)
+        v_offset = 0
         vertical = vertical + v_offset#random.uniform(-0.01, 0.01)
         image = np.array([image, vertical])
         image = image.astype(np.float32)

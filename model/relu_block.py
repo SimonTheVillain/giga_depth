@@ -8,7 +8,8 @@ import torch.nn.functional as F
 class ReluBlock(nn.Module):
     def __init__(self, channels, kernel_size, padding, layers=2):
         super(ReluBlock, self).__init__()
-        self.convs = [nn.Conv2d(channels, channels, kernel_size, padding=padding, padding_mode='same')] * layers
+        self.convs = \
+            nn.ModuleList([nn.Conv2d(channels, channels, kernel_size, padding=padding, padding_mode='same')] * layers)
 
     def forward(self, x):
         x_identity = x

@@ -4,6 +4,18 @@ import torch.nn.functional as F
 from model.relu_block import ReluBlock
 
 
+class ReluBlock2(nn.Module):
+    def __init__(self, channels, kernel_size, padding):
+        super(ReluBlock2, self).__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size, padding=padding, padding_mode='same')
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size, padding=padding, padding_mode='same')
+
+    def forward(self, x):
+        x_identity = x
+        x = F.leaky_relu(self.conv1(x))
+        x = F.leaky_relu(x_identity + self.conv2(x))
+
+        return x
 
 
 class Model1(nn.Module):
@@ -23,7 +35,7 @@ class Model1(nn.Module):
         self.relublock10 = ReluBlock(127, 3, 1)
         self.relublock11 = ReluBlock(128, 3, 1)
         #concatenate
-        self.conv_end_2 = nn.Conv2d(128, 2, 3, padding= 2, padding_mode='same')
+        self.conv_end_2 = nn.Conv2d(128, 2, 3, padding=1, padding_mode='same')
         # receptive field here should be about 32
 
     def forward(self, x):
@@ -37,11 +49,11 @@ class Model1(nn.Module):
         x = torch.cat((x, y), 1)
 
         x = self.relublock2(x)
-        x = torch.cat((x, y), 1)
-
-        x = self.relublock3(x)
         ### LAYER 1
         x = F.max_pool2d(x, 2) #TODO: maybe is a convolution with a certain stride better here!
+        x = torch.cat((x, y_half), 1)
+
+        x = self.relublock3(x)
         x = torch.cat((x, y_half), 1)
         x_latent = x
 
@@ -54,7 +66,7 @@ class Model1(nn.Module):
         x = self.relublock10(x)
         x = torch.cat((x, y_half), 1)#TODO: remove this! it is extremely stupid!!!!!!!!!!
         x = self.relublock11(x)
-        x_latent = torch.cat((x, x_latent),1)
+        x_latent = torch.cat((x, x_latent), 1)
 
         x = self.conv_end_2(x)
         return x, x_latent
