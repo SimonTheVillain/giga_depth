@@ -56,6 +56,10 @@ class DatasetRendered(data.Dataset):
         mask = io.imread(Path(self.root_dir)/Path(str(idx) + "_gt_r.exr"))
         groundtruth = mask[:, :, 0]
         groundtruth = np.array([groundtruth])
+        x_offset = np.asmatrix(range(0, image.shape[1])).astype(np.float32) * (1.0 / float(image.shape[1]))
+        x_offset = np.transpose(np.asarray(np.matlib.repeat(x_offset, image.shape[2], 0)))
+        x_offset = np.expand_dims(x_offset, axis=0).astype(np.float32)
+        groundtruth = groundtruth + x_offset
         mask1 = mask[:, :, 1] == 0
         #mask = np.array([mask])
 

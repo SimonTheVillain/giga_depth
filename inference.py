@@ -6,8 +6,8 @@ import numpy.matlib
 
 
 dataset_path = "/media/simon/SSD/datasets/structure_core"
-model_path = "trained_models/model_1.pt"
-count = 46
+model_path = "trained_models/model_1_2.pt"
+count = 800
 device = torch.device('cpu')
 model = torch.load(model_path, map_location=device)
 model.eval()

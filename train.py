@@ -86,19 +86,19 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
 
 
 def train():
-    dataset_path = "/media/simon/SSD/unity_rendered_2/reduced_0_08"
-    writer = SummaryWriter('tensorboard/experiment10')
+    dataset_path = "/media/simon/ssd_data/data/reduced_0_08_2"
+    writer = SummaryWriter('tensorboard/experiment13')
 
-    model_path_src = "trained_models/model_1.pt"
+    model_path_src = "trained_models/model_1_2.pt"
     load_model = True
-    model_path_dst = "trained_models/model_1.pt"
+    model_path_dst = "trained_models/model_1_3.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 8
+    batch_size = 6
     num_workers = 8
-    show_images = True
+    show_images = False
     shuffle = False
     half_res = True
     enable_mask = False
@@ -129,18 +129,19 @@ def train():
     # optimizer = optim.Adam(net.parameters(), lr=0.001)
 
     #the whole unity rendered dataset
-    datasets = {
-        'train': DatasetRendered(dataset_path, 10, 8000, half_res, crop_res),
-        'val': DatasetRendered(dataset_path, 8000, 9500, half_res, crop_res),
-        'test': DatasetRendered(dataset_path, 9500, 11000, half_res, crop_res)
-    }
 
     #the filtered dataset
     datasets = {
-        'train': DatasetRendered(dataset_path, 0, 2500, half_res, crop_res),
-        'val': DatasetRendered(dataset_path, 2500, 2600, half_res, crop_res),
-        'test': DatasetRendered(dataset_path, 2600, 2750, half_res, crop_res)
+        'train': DatasetRendered(dataset_path, 0, 12000, half_res, crop_res),
+        'val': DatasetRendered(dataset_path, 12000, 13000, half_res, crop_res),
+        'test': DatasetRendered(dataset_path, 13000, 14000, half_res, crop_res)
     }
+    datasets = {
+        'train': DatasetRendered(dataset_path, 0, 10000, half_res, crop_res),
+        'val': DatasetRendered(dataset_path, 10000, 11000, half_res, crop_res),
+        'test': DatasetRendered(dataset_path, 11000, 12000, half_res, crop_res)
+    }
+
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
                                                   shuffle=shuffle, num_workers=num_workers)
                    for x in ['train', 'val', 'test']}
