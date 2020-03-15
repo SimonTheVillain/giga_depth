@@ -35,8 +35,9 @@ class DatasetRendered(data.Dataset):
             idx = idx.tolist()
 
         idx = idx + self.from_ind
-        path = Path(self.root_dir) / Path(str(idx) + "_r.exr")#putting this into a additional variable as a debug measure
-        image = io.imread(path)
+        path = self.root_dir + "/" + str(idx) + "_r.exr"  # putting this into a additional variable as a debug measure
+        image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        #image = io.imread(path)
         image = self.to_grey(image)
 
         vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])
@@ -53,19 +54,19 @@ class DatasetRendered(data.Dataset):
         #print(image.shape)
 
         #todo:split mask up in gt and mask
-        mask = io.imread(Path(self.root_dir)/Path(str(idx) + "_gt_r.exr"))
-        groundtruth = mask[:, :, 0]
+        mask = cv2.imread(self.root_dir + "/" + str(idx) + "_gt_r.exr", cv2.IMREAD_UNCHANGED)
+        groundtruth = mask[:, :, 2]
         groundtruth = np.array([groundtruth])
-        x_offset = np.asmatrix(range(0, image.shape[1])).astype(np.float32) * (1.0 / float(image.shape[1]))
-        x_offset = np.transpose(np.asarray(np.matlib.repeat(x_offset, image.shape[2], 0)))
+        x_offset = np.asmatrix(range(0, image.shape[2])).astype(np.float32) * (1.0 / float(image.shape[2]))
+        x_offset = np.asarray(np.matlib.repeat(x_offset, image.shape[1], 0))
         x_offset = np.expand_dims(x_offset, axis=0).astype(np.float32)
         groundtruth = groundtruth + x_offset
         mask1 = mask[:, :, 1] == 0
         #mask = np.array([mask])
 
-        w = io.imread(Path(self.root_dir)/Path(str(idx) + "_r_w.exr"))
+        w = cv2.imread(self.root_dir + "/" + str(idx) + "_r_w.exr", cv2.IMREAD_UNCHANGED)
         w = self.to_grey(w)
-        wo = io.imread(Path(self.root_dir)/Path(str(idx) + "_r_wo.exr"))
+        wo = cv2.imread(self.root_dir + "/" + str(idx) + "_r_wo.exr", cv2.IMREAD_UNCHANGED)
         wo = self.to_grey(wo)
         mask2 = (w-wo > 0.09)# 0.05
         mask = np.logical_and(mask1, mask2)

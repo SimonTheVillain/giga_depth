@@ -4,7 +4,12 @@ import shutil
 
 source_dir = "/media/simon/SSD/unity_rendered_2/dataset_scaled_x/"
 target_dir = "/media/simon/ssd_data/data/reduced_0_08_2/"
-count = 25000
+#windows directories
+source_dir = "D:/dataset/"
+target_dir = "D:/dataset_filtered/"
+
+
+count = 13249
 
 ind = 0
 # just a piece of code used to fix misnamed files

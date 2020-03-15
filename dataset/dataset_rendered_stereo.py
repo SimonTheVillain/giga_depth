@@ -30,8 +30,10 @@ class DatasetRenderedStereo(data.Dataset):
             idx = idx.tolist()
 
         idx = idx + self.from_ind
-        path = Path(self.root_dir) / Path(str(idx) + "_r.exr")#putting this into a additional variable as a debug measure
-        image = io.imread(path)
+        path = self.root_dir + "/" + str(idx) + "_r.exr" #putting this into a additional variable as a debug measure
+        image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        #image = io.imread(path)
+        #image = cv2.imread(path)
         image = np.asarray(self.to_grey(image))
         vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])
         vertical = np.transpose(np.matlib.repeat(vertical, image.shape[1], 0)).astype(np.float32)
@@ -47,8 +49,9 @@ class DatasetRenderedStereo(data.Dataset):
         vertical = vertical[offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
 
 
-        path = Path(self.root_dir) / Path(str(idx) + "_l.exr")#putting this into a additional variable as a debug measure
-        image = io.imread(path)
+        path = self.root_dir + "/" + str(idx) + "_r.exr"#putting this into a additional variable as a debug measure
+        #image = io.imread(path)
+        image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
         image = np.asarray(self.to_grey(image))
         image = image.astype(np.float32)
         image_left = image[offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]

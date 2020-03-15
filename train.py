@@ -87,17 +87,18 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
 
 def train():
     dataset_path = "/media/simon/ssd_data/data/reduced_0_08_2"
+    dataset_path = "D:/dataset_filtered"
     writer = SummaryWriter('tensorboard/experiment13')
 
-    model_path_src = "trained_models/model_1_2.pt"
+    model_path_src = "trained_models/model_1_3.pt"
     load_model = True
-    model_path_dst = "trained_models/model_1_3.pt"
+    model_path_dst = "trained_models/model_1_4.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 6
-    num_workers = 8
+    batch_size = 2# 6
+    num_workers = 4# 8
     show_images = False
     shuffle = False
     half_res = True
@@ -165,6 +166,10 @@ def train():
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
                 input, mask, gt = sampled_batch["image"], sampled_batch["mask"], sampled_batch["gt"]
+                if torch.cuda.device_count() == 1:
+                    input = input.cuda()
+                    mask = mask.cuda()
+                    gt = gt.cuda()
 
                 # plt.imshow(input[0, 0, :, :])
                 # plt.show()

@@ -171,6 +171,7 @@ def reprj_loss(left, right, half_res=False, debug_right=None):
 
 def train():
     dataset_path = "/media/simon/ssd_data/data/reduced_0_08"
+    dataset_path = "D:/dataset_filtered"
     writer = SummaryWriter('tensorboard/experiment12')
 
     model_path_src = "trained_models/model_1_3.pt"
@@ -180,7 +181,7 @@ def train():
     crop_res = (896/crop_div, 1216)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 2
+    batch_size = 1
     num_workers = 1
     show_images = False
     shuffle = False
@@ -241,6 +242,10 @@ def train():
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
                 l, r, y = sampled_batch["image_left"], sampled_batch["image_right"], sampled_batch["vertical"]
+                if torch.cuda.device_count() == 1:
+                    l = l.cuda()
+                    r = r.cuda()
+                    y = y.cuda()
                 l = l[:, None, :, :]
                 r = r[:, None, :, :]
                 y = y[:, None, :, :]
