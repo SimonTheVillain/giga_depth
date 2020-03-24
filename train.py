@@ -4,6 +4,7 @@ import torch.nn.modules.loss
 import torch.optim as optim
 from dataset.dataset_rendered import DatasetRendered
 from model.model_1 import Model1
+from model.model_2 import Model2
 from torch.utils.data import DataLoader
 import numpy as np
 
@@ -32,6 +33,44 @@ def plot_disp(input, vmin, vmax, mask=None):
 
 
 smooth_l1 = nn.SmoothL1Loss(reduction='none')
+
+def depth_loss_func(right, mask, alpha, gt_depth, half_res):
+    alpha = alpha
+    device = right.device
+    fxr = 1115.44
+    cxr = 604.0
+    cxr = 608.0 #1216/2 (lets put it right in the center since we are working on
+    fxp = 1115.44
+    cxp = 640.0# put the center right in the center
+    b1 = 0.0634
+    epsilon = 0.1 #very small pixel offsets should be forbidden
+    if half_res:
+        fxr = fxr * 0.5
+        cxr = cxr * 0.5
+
+    xp = right[:, [0], :, :] * 1280.0#float(right.shape[3])
+    #xp = debug_gt_r * 1280.0 #debug
+    xr = np.asmatrix(np.array(range(0, right.shape[3]))).astype(np.float32)
+    xr = torch.tensor(np.matlib.repeat(xr, right.shape[2], 0), device=device)
+    z_ = (xp - cxp) * fxr - (xr - cxr) * fxp
+    #z_ = -z_ #todo: remove
+
+    z = torch.div(b1 * fxp * fxr,  z_)
+    z[torch.abs(z_) < epsilon] = 0
+    loss = alpha * torch.mean(torch.abs(z - gt_depth))
+
+    #mask:
+    loss_mask = alpha * torch.mean(torch.abs(right[:, 1, :, :] - mask))
+    loss += loss_mask
+    loss_mask = loss_mask.item()
+
+    loss_unweighted = loss.item()
+    loss_disparity = loss_unweighted
+
+    return loss, loss_unweighted, loss_disparity, loss_mask
+
+
+
 
 
 def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
@@ -88,11 +127,11 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
 def train():
     dataset_path = "/media/simon/ssd_data/data/reduced_0_08_2"
     dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/experiment13')
+    writer = SummaryWriter('tensorboard/experiment0')
 
-    model_path_src = "trained_models/model_1_3.pt"
-    load_model = True
-    model_path_dst = "trained_models/model_1_4.pt"
+    model_path_src = "trained_models/model_1_5.pt"
+    load_model = False
+    model_path_dst = "trained_models/model_2_1.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
@@ -105,6 +144,14 @@ def train():
     enable_mask = False
     alpha = 10
     use_smooth_l1 = True
+    learning_rate = 0.001# should be about 0.001 for disparity based learning
+    momentum = 0.9
+
+    depth_loss = False
+    if depth_loss:
+        learning_rate = 0.00001# should be about 0.001 for disparity based learning
+        momentum = 0.9
+
 
     min_test_batch_loss = 100000.0
 
@@ -113,7 +160,7 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model1()
+        model = Model2()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -126,21 +173,16 @@ def train():
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
 
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
     # optimizer = optim.Adam(net.parameters(), lr=0.001)
 
     #the whole unity rendered dataset
 
     #the filtered dataset
     datasets = {
-        'train': DatasetRendered(dataset_path, 0, 12000, half_res, crop_res),
-        'val': DatasetRendered(dataset_path, 12000, 13000, half_res, crop_res),
-        'test': DatasetRendered(dataset_path, 13000, 14000, half_res, crop_res)
-    }
-    datasets = {
-        'train': DatasetRendered(dataset_path, 0, 10000, half_res, crop_res),
-        'val': DatasetRendered(dataset_path, 10000, 11000, half_res, crop_res),
-        'test': DatasetRendered(dataset_path, 11000, 12000, half_res, crop_res)
+        'train': DatasetRendered(dataset_path, 0, 8000, half_res, crop_res),
+        'val': DatasetRendered(dataset_path, 8000, 9000, half_res, crop_res),
+        'test': DatasetRendered(dataset_path, 9000, 10000, half_res, crop_res)
     }
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
@@ -165,7 +207,8 @@ def train():
             subbatch_loss = 0.0
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
-                input, mask, gt = sampled_batch["image"], sampled_batch["mask"], sampled_batch["gt"]
+                input, mask, gt, gt_d = \
+                    sampled_batch["image"], sampled_batch["mask"], sampled_batch["gt"], sampled_batch["gt_d"]
                 if torch.cuda.device_count() == 1:
                     input = input.cuda()
                     mask = mask.cuda()
@@ -185,9 +228,15 @@ def train():
 
                     outputs, latent = model(input)
                     optimizer.zero_grad()
-                    loss, loss_unweighted, loss_disparity, loss_mask = \
-                        sqr_loss(outputs, mask.cuda(), gt.cuda(),
-                                 alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)
+                    if depth_loss:
+                        loss, loss_unweighted, loss_disparity, loss_mask = \
+                            depth_loss_func(outputs, mask.cuda(), alpha, gt_d.cuda(), half_res)
+
+                        pass
+                    else:
+                        loss, loss_unweighted, loss_disparity, loss_mask = \
+                            sqr_loss(outputs, mask.cuda(), gt.cuda(),
+                                     alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)
                     loss.backward()
                     # print(net.conv_dwn_0_1.bias)
                     # print(net.conv_dwn_0_1.bias.grad == 0)
@@ -196,9 +245,13 @@ def train():
                 else:
                     with torch.no_grad():
                         outputs, latent = model(input.cuda())
-                        loss, loss_unweighted, loss_disparity, loss_mask = \
-                            sqr_loss(outputs, mask.cuda(), gt.cuda(),
-                                     alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)
+                        if depth_loss:
+                            loss, loss_unweighted, loss_disparity, loss_mask = \
+                                depth_loss_func(outputs, mask.cuda(), alpha, gt_d.cuda(), half_res)
+                        else:
+                            loss, loss_unweighted, loss_disparity, loss_mask = \
+                                sqr_loss(outputs, mask.cuda(), gt.cuda(),
+                                         alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)
 
                 if loss_unweighted > 100:
                     print("{} loss on batch {}".format(loss_unweighted, i_batch))
@@ -206,6 +259,7 @@ def train():
                 writer.add_scalar('loss_disparity/' + phase, loss_disparity, step)
                 writer.add_scalar('loss_mask/' + phase, loss_mask, step)
 
+                #print("DEBUG: batch {} loss {}".format(i_batch, str(loss_unweighted)))
 
                 subbatch_loss += loss_unweighted
                 # if i_batch == 0:

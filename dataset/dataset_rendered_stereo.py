@@ -16,6 +16,7 @@ class DatasetRenderedStereo(data.Dataset):
         self.crop_res = (int(crop_res[0]), int(crop_res[1]))
         self.from_ind = from_ind
         self.to_ind = to_ind
+        self.half_res = True
 
 
     def __len__(self):
@@ -55,5 +56,25 @@ class DatasetRenderedStereo(data.Dataset):
         image = np.asarray(self.to_grey(image))
         image = image.astype(np.float32)
         image_left = image[offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
-        sample = {'image_left': image_left, 'image_right': image_right, 'vertical': np.asarray(vertical)}
+
+        x_o = np.asmatrix(range(0, image.shape[1])).astype(np.float32) * (1.0 / 1216.0) #float(image.shape[1]))
+        x_o = np.asarray(np.matlib.repeat(x_o, image.shape[0], 0))
+        x_o = np.expand_dims(x_o, axis=0).astype(np.float32)
+
+        gt_l = cv2.imread(self.root_dir + "/" + str(idx) + "_gt_l.exr", cv2.IMREAD_UNCHANGED)
+        gt_l_d = gt_l[:, :, 0]
+        gt_l = x_o + gt_l[:, :, 2]
+        gt_l = gt_l[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
+
+        gt_r = cv2.imread(self.root_dir + "/" + str(idx) + "_gt_r.exr", cv2.IMREAD_UNCHANGED)
+        gt_r_d = gt_r[:, :, 0]
+        gt_r = x_o + gt_r[:, :, 2]
+        gt_r = gt_r[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
+
+
+        if self.half_res:
+            gt_r = transform.resize(gt_r, (gt_r.shape[0], gt_r.shape[1] / 2, gt_r.shape[2] / 2),)
+            gt_l = transform.resize(gt_l, (gt_r.shape[0], gt_l.shape[1] / 2, gt_l.shape[2] / 2),)
+        sample = {'image_left': image_left, 'image_right': image_right, 'vertical': np.asarray(vertical),
+                  'gt_l': gt_l, 'gt_r': gt_r, 'gt_l_d': gt_l_d, 'gt_r_d': gt_r_d}
         return sample

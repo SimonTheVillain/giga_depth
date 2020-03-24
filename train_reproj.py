@@ -89,26 +89,27 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
     return loss, loss_unweighted, loss_disparity, loss_mask
 
 
-def reprj_loss(left, right, half_res=False, debug_right=None):
+def reprj_loss(left, right, half_res=False, debug_right=None, debug_gt_l=None, debug_gt_r=None, gt_l_d=None, gt_r_d=None):
     device = left.device
     fxr = 1115.44
-    cxr = 604
+    cxr = 604.0
     fxl = 1115.44
-    cxl = 604
-    cxr = cxl = 608 #1216/2 (lets put it right in the center since we are working on
+    cxl = 604.0
+    cxr = cxl = 608.0 #1216/2 (lets put it right in the center since we are working on
     fxp = 1115.44
-    cxp = 640 # put the center right in the center
-    b1 = 0.634
-    b2 = 0.7501
+    cxp = 640.0# put the center right in the center
+    b1 = 0.0634
+    b2 = 0.07501
     epsilon = 0.01 #very small pixel offsets should be forbidden
     if half_res:
         fxr = fxr * 0.5
         cxr = cxr * 0.5
         fxl = fxl * 0.5
         cxl = cxl * 0.5
-        fxp = fxp * 0.5
-        cxp = cxp * 0.5
-    xp = right[:, [0], :, :] * float(right.shape[3])
+        #fxp = fxp * 0.5
+        #cxp = cxp * 0.5
+    xp = right[:, [0], :, :] * 1280.0#float(right.shape[3])
+    #xp = debug_gt_r * 1280.0 #debug
     xr = np.asmatrix(np.array(range(0, right.shape[3]))).astype(np.float32)
     xr = torch.tensor(np.matlib.repeat(xr, right.shape[2], 0), device=device)
     y = np.asmatrix(np.array(range(0, right.shape[2]))).astype(np.float32)
@@ -116,7 +117,11 @@ def reprj_loss(left, right, half_res=False, debug_right=None):
     #print(xp.shape)
     #print(y.shape)
     #print(xr.shape)
+    #print((1280 - cxp) * fxr)
+    #print((1128 - cxr) * fxp)
+    #print((1280 - cxp) * fxr - (1128 - cxr) * fxp)
     z_ = (xp - cxp) * fxr - (xr - cxr) * fxp
+    #z_ = -z_ #todo: remove
 
     loss1 = -z_ + epsilon #torch.div(-1.0, z_)# loss one is for where the depth estimate is negative
     loss = loss1 * 0.001
@@ -126,14 +131,19 @@ def reprj_loss(left, right, half_res=False, debug_right=None):
     xl = torch.div((xr_space + b2), z) * fxl + cxl #position to read out pixel in the left image
 
     y_ex = y.unsqueeze(0).repeat([left.shape[0], 1, 1, 1])
+    y_ex = y_ex * (2.0 / float(left.shape[2]-1)) - 1.0
+    xl = xl * (2.0 / float(left.shape[3]-1)) - 1.0
     #print(y_ex.shape)
     #print(xl.shape)
     grid = torch.cat((xl.squeeze(1).unsqueeze(-1), y_ex.squeeze(1).unsqueeze(-1)), -1)
     #print(grid.shape)
-    xp_l = F.grid_sample(left[:, [0], :, :], grid, padding_mode='border') * float(right.shape[3])
-    loss2 = torch.abs(xp_l - xp) #loss 2 is for wherever the depth estimate makes the slightest of sense
+    ansn = torch.ones(xl.shape, dtype=torch.float32, device=device)
+    weights = F.grid_sample(ansn[:, [0], :, :], grid, padding_mode='zeros')
+    xp_l = F.grid_sample(left[:, [0], :, :], grid, padding_mode='border') * 1280#float(right.shape[3])
+    loss2 = torch.abs(xp_l - xp)
+    #loss2 = torch.mul(torch.abs(xp_l - xp), weights) #loss 2 is for wherever the depth estimate makes the slightest of sense
     loss[z_ > epsilon] = loss2[z_ > epsilon]
-    mask = loss * 0.0
+    mask = loss * 0.0# create a mask with zeros
     mask[z_ > epsilon] = 1
     #print(torch.any(torch.isnan(loss1)))
     #print(torch.any(torch.isnan(loss2)))
@@ -141,27 +151,39 @@ def reprj_loss(left, right, half_res=False, debug_right=None):
     debug = True
     if debug:
         fig = plt.figure()
-        fig.add_subplot(7, 1, 1)
-        plt.imshow(debug_right[0, 0, :, :].detach().cpu(), vmin=0, vmax=1)
+        count_y = 4
+        count_x = 2
+        fig.add_subplot(count_y, count_x, 1)
+        plt.imshow(debug_right[0, 0, :, :].detach().cpu(), vmin=0, vmax=0.3, cmap='gist_gray')
+        #plt.imshow(debug_right[0, 0, :, :].detach().cpu(), vmin=0, vmax=1)
         plt.title("Intensity")
-        fig.add_subplot(7, 1, 2)
+        fig.add_subplot(count_y, count_x, 2)
         plt.imshow(z[0, 0, :, :].detach().cpu(), vmin=0, vmax=10)
         plt.title("depth")
-        fig.add_subplot(7, 1, 3)
+        fig.add_subplot(count_y, count_x, 3)
         plt.imshow(xl[0, 0, :, :].detach().cpu(), vmin=0, vmax=right.shape[3])
         plt.title("x readout position")
-        fig.add_subplot(7, 1, 4)
+        fig.add_subplot(count_y, count_x, 4)
         plt.imshow(loss1[0, 0, :, :].detach().cpu())
         plt.title("loss1")
-        fig.add_subplot(7, 1, 5)
+        fig.add_subplot(count_y, count_x, 5)
         plt.imshow(loss2[0, 0, :, :].detach().cpu())
         plt.title("loss2")
-        fig.add_subplot(7, 1, 6)
+        fig.add_subplot(count_y, count_x, 6)
         plt.imshow(loss[0, 0, :, :].detach().cpu())
         plt.title("combined_loss")
-        fig.add_subplot(7, 1, 7)
+        fig.add_subplot(count_y, count_x, 7)
         plt.imshow(mask[0, 0, :, :].detach().cpu())
         plt.title("mask")
+        fig.add_subplot(count_y, count_x, 8)
+        plt.imshow(weights[0, 0, :, :].detach().cpu())
+        plt.title("weights")
+        #fig.add_subplot(count_y, count_x, 9)
+        #plt.imshow(xp_l[0, 0, :, :].detach().cpu())
+        #plt.title("reprojected")
+        #fig.add_subplot(count_y, count_x, 10)
+        #plt.imshow(gt_r_d[0, :, :].detach().cpu())
+        #plt.title("reprojected")
         plt.show()
 
     loss = torch.mean(loss)
@@ -174,9 +196,9 @@ def train():
     dataset_path = "D:/dataset_filtered"
     writer = SummaryWriter('tensorboard/experiment12')
 
-    model_path_src = "trained_models/model_1_3.pt"
+    model_path_src = "trained_models/model_1_5.pt"
     load_model = True
-    model_path_dst = "trained_models/model_1_3_reproj.pt"
+    model_path_dst = "trained_models/model_1_5_reproj.pt"
     crop_div = 4
     crop_res = (896/crop_div, 1216)
     store_checkpoints = True
@@ -215,9 +237,9 @@ def train():
 
     #the filtered dataset
     datasets = {
-        'train': DatasetRenderedStereo(dataset_path, 0, 12000, crop_res),
-        'val': DatasetRenderedStereo(dataset_path, 12000, 13000, crop_res),
-        'test': DatasetRenderedStereo(dataset_path, 13000, 14000, crop_res)
+        'train': DatasetRenderedStereo(dataset_path, 0, 8000, crop_res),
+        'val': DatasetRenderedStereo(dataset_path, 8000, 9000, crop_res),
+        'test': DatasetRenderedStereo(dataset_path, 9000, 10000, crop_res)
     }
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
                                                   shuffle=shuffle, num_workers=num_workers)
@@ -241,11 +263,17 @@ def train():
             subbatch_loss = 0.0
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
-                l, r, y = sampled_batch["image_left"], sampled_batch["image_right"], sampled_batch["vertical"]
+                l, r, y, gt_l, gt_r, gt_l_d, gt_r_d = \
+                    sampled_batch["image_left"], sampled_batch["image_right"], \
+                    sampled_batch["vertical"], sampled_batch["gt_l"], sampled_batch["gt_r"], \
+                    sampled_batch["gt_l_d"], sampled_batch["gt_r_d"]
+
                 if torch.cuda.device_count() == 1:
                     l = l.cuda()
                     r = r.cuda()
                     y = y.cuda()
+                    gt_l = gt_l.cuda()
+                    gt_r = gt_r.cuda()
                 l = l[:, None, :, :]
                 r = r[:, None, :, :]
                 y = y[:, None, :, :]
@@ -269,7 +297,7 @@ def train():
                     outputs_l, latent_l = model(l_cat)
                     outputs_r, latent_r = model(r_cat)
                     optimizer.zero_grad()
-                    loss = reprj_loss(outputs_l, outputs_r, half_res, r_cat)
+                    loss = reprj_loss(outputs_l, outputs_r, half_res, r_cat, gt_l, gt_r, gt_l_d, gt_l_d)
                     #loss, loss_unweighted, loss_disparity, loss_mask = \
                     #    sqr_loss(outputs, mask.cuda(), gt.cuda(),
                     #             alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)

@@ -9,7 +9,7 @@ source_dir = "D:/dataset/"
 target_dir = "D:/dataset_filtered/"
 
 
-count = 13249
+count = 20781
 
 ind = 0
 # just a piece of code used to fix misnamed files

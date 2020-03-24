@@ -31,6 +31,8 @@ class DatasetRendered(data.Dataset):
         return 0.2125 * image[:, :, 0] + 0.7154 * image[:, :, 1] + 0.0721 * image[:, :, 2]
 
     def __getitem__(self, idx):
+        resolutionProjector = 1280
+        resolutionIRCams = 1128
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
@@ -55,12 +57,13 @@ class DatasetRendered(data.Dataset):
 
         #todo:split mask up in gt and mask
         mask = cv2.imread(self.root_dir + "/" + str(idx) + "_gt_r.exr", cv2.IMREAD_UNCHANGED)
-        groundtruth = mask[:, :, 2]
-        groundtruth = np.array([groundtruth])
-        x_offset = np.asmatrix(range(0, image.shape[2])).astype(np.float32) * (1.0 / float(image.shape[2]))
+        gt = np.array([mask[:, :, 2]])
+        gt_d = np.array([mask[:, :, 0]])
+        x_offset = np.asmatrix(range(0, image.shape[2])).astype(np.float32)# * (1.0 / float(image.shape[2]))
         x_offset = np.asarray(np.matlib.repeat(x_offset, image.shape[1], 0))
         x_offset = np.expand_dims(x_offset, axis=0).astype(np.float32)
-        groundtruth = groundtruth + x_offset
+        #groundtruth = groundtruth + x_offset
+        gt = gt * 1.0 + x_offset * (1.0 / 1216.0)
         mask1 = mask[:, :, 1] == 0
         #mask = np.array([mask])
 
@@ -75,9 +78,10 @@ class DatasetRendered(data.Dataset):
             mask[:] = 0
 
         # cropping out part of the image
-        offset_x = random.randrange(0, groundtruth.shape[2] - self.crop_res[1] + 1)
-        offset_y = random.randrange(0, groundtruth.shape[1] - self.crop_res[0] + 1)
-        groundtruth = groundtruth[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
+        offset_x = random.randrange(0, gt.shape[2] - self.crop_res[1] + 1)
+        offset_y = random.randrange(0, gt.shape[1] - self.crop_res[0] + 1)
+        gt = gt[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
+        gt_d = gt_d[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
         image = image[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
         mask = mask[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
 
@@ -85,9 +89,12 @@ class DatasetRendered(data.Dataset):
             mask = transform.resize(mask, (mask.shape[0], mask.shape[1] / 2, mask.shape[2] / 2),)
             mask[mask != 1.0] = 0.0
 
-            groundtruth = \
-                transform.resize(groundtruth,
-                                 (groundtruth.shape[0], groundtruth.shape[1] / 2, groundtruth.shape[2] / 2))
+            gt = \
+                transform.resize(gt,
+                                 (gt.shape[0], gt.shape[1] / 2, gt.shape[2] / 2))
+            gt_d = \
+                transform.resize(gt_d,
+                                 (gt_d.shape[0], gt_d.shape[1] / 2, gt_d.shape[2] / 2))
 
 
         #print(idx)
@@ -102,8 +109,5 @@ class DatasetRendered(data.Dataset):
         #plt.imshow(groundtruth[0, :, :])
         #plt.show()
 
-        sample = {'image': image, 'mask': mask, 'gt': groundtruth}
+        sample = {'image': image, 'mask': mask, 'gt': gt, 'gt_d': gt_d}
         return sample
-
-
-        pass
