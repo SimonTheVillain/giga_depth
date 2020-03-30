@@ -5,6 +5,7 @@ import torch.optim as optim
 from dataset.dataset_rendered import DatasetRendered
 from model.model_1 import Model1
 from model.model_2 import Model2
+from model.model_3 import Model3
 from torch.utils.data import DataLoader
 import numpy as np
 import os
@@ -133,13 +134,13 @@ def train():
     writer = SummaryWriter('tensorboard/experiment3')
 
     model_path_src = "trained_models/model_2_1_lr_0005.pt"
-    load_model = True
-    model_path_dst = "trained_models/model_2_1_lr_001.pt"
+    load_model = False
+    model_path_dst = "trained_models/model_3_lr_001.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 8# 6
+    batch_size = 1# 6
     num_workers = 4# 8
     show_images = False
     shuffle = False
@@ -163,7 +164,7 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model2()
+        model = Model3()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.relu_block import ReluBlock
+from model.residual_block import ResidualBlock
 
 
 class ReluBlock2(nn.Module):
@@ -25,15 +25,15 @@ class Model1(nn.Module):
         # 1 input image channel, 6 output channels, 3x3 square convolution
         # kernel
         self.conv_start = nn.Conv2d(2, 64, 3, padding=1, padding_mode='zeros')
-        self.relublock1 = ReluBlock(65, 3, 1)
-        self.relublock2 = ReluBlock(66, 3, 1)
+        self.relublock1 = ResidualBlock(65, 3, 1)
+        self.relublock2 = ResidualBlock(66, 3, 1)
         #self.conv1 = nn.Conv2d(66, 63, 3, padding=1, padding_mode='same')
-        self.relublock3 = ReluBlock(67, 3, 1)
-        self.relublock4 = ReluBlock(68, 3, 1)
+        self.relublock3 = ResidualBlock(67, 3, 1)
+        self.relublock4 = ResidualBlock(68, 3, 1)
         #pool 2
         self.conv_end_1 = nn.Conv2d(69, 126, 5, padding=2, padding_mode='same')
-        self.relublock10 = ReluBlock(127, 3, 1)
-        self.relublock11 = ReluBlock(128, 3, 1)
+        self.relublock10 = ResidualBlock(127, 3, 1)
+        self.relublock11 = ResidualBlock(128, 3, 1)
         #concatenate
         self.conv_end_2 = nn.Conv2d(128, 2, 3, padding=1, padding_mode='same')
         # receptive field here should be about 32

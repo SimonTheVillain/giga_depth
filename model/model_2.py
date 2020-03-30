@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.relu_block import ReluBlock
+from model.residual_block import ResidualBlock
 
 
 #Model2 is Model1 without concatenating the y position at every step.
@@ -12,16 +12,16 @@ class Model2(nn.Module):
         # 1 input image channel, 6 output channels, 3x3 square convolution
         # kernel
         self.conv_start = nn.Conv2d(2, 64, 3, padding=1, padding_mode='zeros')
-        self.relublock1 = ReluBlock(64, 3, 1)
-        self.relublock2 = ReluBlock(64, 3, 1)
+        self.relublock1 = ResidualBlock(64, 3, 1)
+        self.relublock2 = ResidualBlock(64, 3, 1)
         self.strided_convolution = nn.Conv2d(64, 64, 5, stride=2, padding=2, padding_mode='same')
         #self.conv1 = nn.Conv2d(66, 63, 3, padding=1, padding_mode='same')
-        self.relublock3 = ReluBlock(64, 3, 1)
-        self.relublock4 = ReluBlock(64, 3, 1)
+        self.relublock3 = ResidualBlock(64, 3, 1)
+        self.relublock4 = ResidualBlock(64, 3, 1)
         #pool 2
         self.conv_end_1 = nn.Conv2d(64, 128, 5, padding=2, padding_mode='same')
-        self.relublock10 = ReluBlock(128, 3, 1)
-        self.relublock11 = ReluBlock(128, 3, 1)
+        self.relublock10 = ResidualBlock(128, 3, 1)
+        self.relublock11 = ResidualBlock(128, 3, 1)
         #concatenate
         self.conv_end_2 = nn.Conv2d(128, 2, 3, padding=1, padding_mode='same')
         # receptive field here should be about 32

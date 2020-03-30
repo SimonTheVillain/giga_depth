@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.relu_block import ReluBlock
+from model.residual_block import ResidualBlock
 
 
 
@@ -12,20 +12,20 @@ class Discriminator1(nn.Module):
         super(Discriminator1, self).__init__()
         #input dimensions: 67 + 128 + 2
         size = 67+128+2
-        self.relublock1 = ReluBlock(size, 3, 1, 4)
+        self.relublock1 = ResidualBlock(size, 3, 1, 4)
         #maxpool /2
         self.conv1 = nn.Conv2d(size, 128, 5, padding=2, padding_mode='same')
 
-        self.relublock2 = ReluBlock(128, 3, 1)
-        self.relublock3 = ReluBlock(128, 3, 1)
+        self.relublock2 = ResidualBlock(128, 3, 1)
+        self.relublock3 = ResidualBlock(128, 3, 1)
         #maxpool /4
 
-        self.relublock4 = ReluBlock(128, 3, 1)
-        self.relublock5 = ReluBlock(128, 3, 1)
+        self.relublock4 = ResidualBlock(128, 3, 1)
+        self.relublock5 = ResidualBlock(128, 3, 1)
         #maxpool /8
 
-        self.relublock6 = ReluBlock(128, 3, 1)
-        self.relublock7 = ReluBlock(128, 3, 1)
+        self.relublock6 = ResidualBlock(128, 3, 1)
+        self.relublock7 = ResidualBlock(128, 3, 1)
         #maxpool /16
         self.conv2 = nn.Conv2d(128, 32, 5, padding=2, padding_mode='same')
 
