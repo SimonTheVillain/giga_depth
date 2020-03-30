@@ -7,6 +7,7 @@ from model.model_1 import Model1
 from model.model_2 import Model2
 from torch.utils.data import DataLoader
 import numpy as np
+import os
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -125,18 +126,20 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
 
 
 def train():
-    dataset_path = "/media/simon/ssd_data/data/reduced_0_08_2"
-    dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/experiment0')
+    dataset_path = "/media/simon/ssd_data/data/dataset_reduced_0_08"
 
-    model_path_src = "trained_models/model_1_5.pt"
-    load_model = False
-    model_path_dst = "trained_models/model_2_1.pt"
+    if os.name == 'nt':
+        dataset_path = "D:/dataset_filtered"
+    writer = SummaryWriter('tensorboard/experiment3')
+
+    model_path_src = "trained_models/model_2_1_lr_0005.pt"
+    load_model = True
+    model_path_dst = "trained_models/model_2_1_lr_001.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 2# 6
+    batch_size = 8# 6
     num_workers = 4# 8
     show_images = False
     shuffle = False
@@ -145,7 +148,7 @@ def train():
     alpha = 10
     use_smooth_l1 = True
     learning_rate = 0.001# should be about 0.001 for disparity based learning
-    momentum = 0.9
+    momentum = 0.90
 
     depth_loss = False
     if depth_loss:
