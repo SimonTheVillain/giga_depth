@@ -133,9 +133,9 @@ def train():
         dataset_path = "D:/dataset_filtered"
     writer = SummaryWriter('tensorboard/experiment3')
 
-    model_path_src = "trained_models/model_2_1_lr_0005.pt"
+    model_path_src = "trained_models/model_1_6_adapted.pt"
     load_model = False
-    model_path_dst = "trained_models/model_3_lr_001.pt"
+    model_path_dst = "trained_models/model_1_7.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
@@ -164,7 +164,7 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model3()
+        model = Model2()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
