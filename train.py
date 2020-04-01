@@ -131,16 +131,16 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/experiment3')
+    writer = SummaryWriter('tensorboard/train_model2')
 
-    model_path_src = "trained_models/model_1_6_adapted.pt"
+    model_path_src = "trained_models/model_1_6.pt"
     load_model = False
-    model_path_dst = "trained_models/model_1_7.pt"
-    crop_div = 2
+    model_path_dst = "trained_models/model_2_lr_001.pt"
+    crop_div = 1
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 1# 6
+    batch_size = 2# 6
     num_workers = 4# 8
     show_images = False
     shuffle = False
@@ -164,7 +164,7 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model2()
+        model = Model3()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

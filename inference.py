@@ -19,7 +19,7 @@ if os.name == 'nt':
 
 
 
-model_path = "trained_models/model_1_5.pt"
+model_path = "trained_models/model_1_6.pt"
 count = 800
 device = torch.device('cpu')
 model = torch.load(model_path, map_location=device)
