@@ -208,17 +208,17 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/train_model5')
+    writer = SummaryWriter('tensorboard/train_model1_new_loss')
 
     model_path_src = "trained_models/model_2_lr_0001.pt"
-    load_model = True
-    model_path_dst = "trained_models/model_2_lr_e_5.pt"
+    load_model = False
+    model_path_dst = "trained_models/model_1_new_loss.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
-    batch_size = 2# 6
-    num_workers = 4# 8
+    batch_size = 6# 6
+    num_workers = 8# 8
     show_images = False
     shuffle = False
     half_res = True
@@ -234,14 +234,14 @@ def train():
         momentum = 0.9
 
 
-    min_test_batch_loss = 100000.0
+    min_test_epoch_loss = 100000.0
 
 
     if load_model:
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model5()
+        model = Model1()
 
 
 
@@ -297,6 +297,7 @@ def train():
                 step = step + 1
                 input, mask, gt, gt_d, offsets = sampled_batch["image"], sampled_batch["mask"], \
                                                  sampled_batch["gt"], sampled_batch["gt_d"], sampled_batch["offset"]
+                offsets = offsets.cuda()
                 if torch.cuda.device_count() == 1:
                     input = input.cuda()
                     mask = mask.cuda()
@@ -353,8 +354,8 @@ def train():
 
                 #print("DEBUG: batch {} loss {}".format(i_batch, str(loss_unweighted)))
 
-                print("batch {} loss {} , mask_loss {} , depth_loss {}".format(i_batch, loss_disparity.item(),
-                                                                                loss_mask.item(), loss_depth.item()))
+                #print("batch {} loss {} , mask_loss {} , depth_loss {}".format(i_batch, loss_disparity.item(),
+                #                                                                loss_mask.item(), loss_depth.item()))
                 loss_mask_subepoch += loss_mask.item()
                 loss_depth_subepoch += loss_depth.item()
                 loss_disparity_subepoch += loss_disparity.item()
@@ -386,11 +387,14 @@ def train():
 
                     plt.show()
                 # print("FUCK YEAH")
-                if i_epoch % 100 == 99:
-                    print("epoch {} loss {}".format(i_epoch, loss_disparity_subepoch / 100))
+                if i_batch % 100 == 99:
+                    print("batch {} loss {}".format(i_batch, loss_disparity_subepoch / 100))
                     writer.add_scalar('subepoch_{}/loss_disparity'.format(phase), loss_disparity_subepoch / 100, step)
-                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_disparity_subepoch / 100, step)
-                    writer.add_scalar('subepoch_{}/loss_deph'.format(phase), loss_disparity_subepoch / 100, step)
+                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_mask_subepoch / 100, step)
+                    writer.add_scalar('subepoch_{}/loss_deph'.format(phase), loss_depth_subepoch / 100, step)
+                    loss_disparity_subepoch = 0
+                    loss_depth_subepoch = 0
+                    loss_mask_subepoch = 0
                     subepoch_loss = 0
                     # pass
                     # print(outputs.shape)

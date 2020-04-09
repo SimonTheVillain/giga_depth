@@ -111,5 +111,6 @@ class DatasetRendered(data.Dataset):
             plt.imshow(gt[0, :, :])
             plt.show()
 
-        sample = {'image': image, 'mask': mask, 'gt': gt, 'gt_d': gt_d, 'offset': np.array([offset_x, offset_y])}
+        sample = {'image': image, 'mask': mask, 'gt': gt,
+                  'gt_d': gt_d, 'offset': np.array([offset_x, offset_y], np.float32)}
         return sample
