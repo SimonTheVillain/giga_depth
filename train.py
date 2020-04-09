@@ -6,6 +6,8 @@ from dataset.dataset_rendered import DatasetRendered
 from model.model_1 import Model1
 from model.model_2 import Model2
 from model.model_3 import Model3
+from model.model_4 import Model4
+from model.model_5 import Model5
 from torch.utils.data import DataLoader
 import numpy as np
 import os
@@ -72,19 +74,93 @@ def depth_loss_func(right, mask, alpha, gt_depth, half_res):
     return loss, loss_unweighted, loss_disparity, loss_mask
 
 
+def calc_depth_right(right, offsets, half_res=True):
+    device = right.device
+    fxr = 1115.44
+    cxr = 604.0
+    fxl = 1115.44
+    cxl = 604.0
+    cxr = cxl = 608.0 #1216/2 (lets put it right in the center since we are working on
+    fxp = 1115.44
+    cxp = 640.0# put the center right in the center
+    b1 = 0.0634
+    b2 = 0.07501
+    epsilon = 0.01 #very small pixel offsets should be forbidden
+    offsets_local = offsets
+    if half_res:
+        offsets_local = offsets * 0.5
+        fxr = fxr * 0.5
+        cxr = cxr * 0.5
+        fxl = fxl * 0.5
+        cxl = cxl * 0.5
 
 
+    xp = right[:, [0], :, :] * 1280.0#float(right.shape[3])
+    #xp = debug_gt_r * 1280.0 #debug
+    xr = np.asmatrix(np.array(range(0, right.shape[3]))).astype(np.float32)
+    xr = torch.tensor(np.matlib.repeat(xr, right.shape[2], 0), device=device)
+    xr = xr.unsqueeze(0).unsqueeze(0).repeat((right.shape[0], 1, 1, 1))
+    #print(xr.shape)
+    #print(offsets_local.shape)
+    offsets_local = offsets_local[:, [0]].unsqueeze(2).unsqueeze(3)
+    #print(offsets_local.shape)
+    xr = xr + offsets_local#offsets_local[:, 0].unsqueeze(2).unsqueeze(3)
+    z_ = (xp - cxp) * fxr - (xr - cxr) * fxp
 
-def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
+    z = torch.div(b1 * fxp * fxr, z_)
+    return z
+
+def l1_and_mask_loss(output, mask, gt, offsets, half_res=True, enable_masking=True, use_smooth_l1=False, debug_depth=None):
+    width = 1280
+    subpixel = 30
+    l1_scale = width * subpixel
+    if use_smooth_l1:
+        loss_disparity = width * (1.0 / l1_scale) * smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale)
+    else:
+        loss_disparity = width * torch.abs(output[:, [0], :, :] - gt)
+
+    if enable_masking:
+        loss_disparity = loss_disparity * mask
+
+    loss_mask = torch.mean(torch.abs(mask - output[:, [1], :, :]))
+
+    loss_disparity = torch.mean(loss_disparity)
+
+    loss_depth =  torch.mean(torch.abs(calc_depth_right(output[:, [1], :, :], offsets, half_res) -
+                                       calc_depth_right(gt, offsets, half_res)))
+    debug = False
+    if debug:
+        z_gt = calc_depth_right(gt, offsets)
+        z = calc_depth_right(output[:, [0], :, :], offsets)
+        fig = plt.figure()
+        count_y = 2
+        count_x = 2
+        fig.add_subplot(count_y, count_x, 1)
+        plt.imshow(z_gt[0, 0, :, :].detach().cpu(), vmin=0, vmax=2)#, vmin=0, vmax=10)
+        # plt.imshow(debug_right[0, 0, :, :].detach().cpu(), vmin=0, vmax=1)
+        plt.title("depth")
+        fig.add_subplot(count_y, count_x, 2)
+        plt.imshow(z[0, 0, :, :].detach().cpu(), vmin=0, vmax=10)
+        plt.title("depth_estimate")
+
+        fig.add_subplot(count_y, count_x, 3)
+        plt.imshow(debug_depth[0, 0, :, :].detach().cpu(), vmin=0, vmax=2)
+        plt.title("depth_debug")
+        plt.show()
+    return loss_disparity, loss_mask, loss_depth
+
+
+def sqr_loss(output, mask, gt, enable_masking, use_smooth_l1=False):
     width = 1280
     subpixel = 30  # targeted subpixel accuracy
     l1_scale = width * subpixel
-    if enable_mask:
-        mean = torch.mean(mask) + 0.0001  # small epsilon for not crashing!
+    if enable_masking:
+        mean = torch.mean(mask) + 0.0001  # small epsilon for not crashing! #WHY CRASHING!!!! am i stupid?
         if use_smooth_l1:
-            loss = (alpha / l1_scale) * torch.mean(smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale) * mask)
+            loss = \
+                width * (1.0 / l1_scale) * torch.mean(smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale) * mask)
         else:
-            loss = alpha * torch.mean(((output[:, 0, :, :] - gt) * mask) ** 2)
+            loss = width * 1.0 * torch.mean(((output[:, 0, :, :] - gt) * mask) ** 2)
         loss_unweighted = loss.item()
         loss_disparity = loss.item() / mean.item()
         loss_mask = torch.mean(torch.abs(output[:, 1, :, :] - mask))  # todo: maybe replace this with the hinge loss
@@ -94,15 +170,16 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
     else:
         # loss = alpha * torch.mean((output[:, 0, :, :] - gt) ** 2)
         if use_smooth_l1:
-            loss = (alpha / l1_scale) * torch.mean(smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale))
+            loss = width * (1.0 / l1_scale) * torch.mean(smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale))
         else:
-            loss = alpha * torch.mean((output[:, 0, :, :] - gt) ** 2)
+            loss = width * 1.0 * torch.mean((output[:, 0, :, :] - gt) ** 2)
         loss_unweighted = loss.item()
         loss_disparity = loss
         loss_mask = torch.mean(torch.abs(output[:, 1, :, :] - mask))  # todo: maybe replace this with the hinge loss
         loss += loss_mask
         loss_mask = loss_mask.item()
         loss_unweighted += loss_mask
+
 
     # test = torch.clamp(1.0 - (output[:, 1, :, :] - 0.5) * (fmask - 0.5) * 4.0, min=0) #this should actually do what we want!
     # loss += torch.mean(test)
@@ -112,7 +189,7 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
     # loss = torch.nn.modules.loss.SmoothL1Loss()
 
     # print(mask.shape)
-    # plt.imshow((mask[0, 0, :] == 0).float().cpu())
+     #plt.imshow((mask[0, 0, :] == 0).float().cpu())
 
     # TODO: find out why this is all zero
     # print(output.shape)
@@ -122,8 +199,8 @@ def sqr_loss(output, mask, gt, alpha, enable_mask, use_smooth_l1=True):
     # plt.imshow((gt[0, :]).cpu())
     # plt.imshow((gt[0, 0, :] == 0).cpu())
     # plt.show()
-
-    return loss, loss_unweighted, loss_disparity, loss_mask
+    return loss_disparity, loss_mask
+    #return loss, loss_unweighted, loss_disparity, loss_mask
 
 
 def train():
@@ -131,12 +208,12 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/train_model2')
+    writer = SummaryWriter('tensorboard/train_model5')
 
-    model_path_src = "trained_models/model_1_6.pt"
-    load_model = False
-    model_path_dst = "trained_models/model_2_lr_001.pt"
-    crop_div = 1
+    model_path_src = "trained_models/model_2_lr_0001.pt"
+    load_model = True
+    model_path_dst = "trained_models/model_2_lr_e_5.pt"
+    crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 500
@@ -146,9 +223,9 @@ def train():
     shuffle = False
     half_res = True
     enable_mask = False
-    alpha = 10
-    use_smooth_l1 = True
-    learning_rate = 0.001# should be about 0.001 for disparity based learning
+    alpha = 0.0
+    use_smooth_l1 = False
+    learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
 
     depth_loss = False
@@ -164,7 +241,9 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model3()
+        model = Model5()
+
+
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -207,16 +286,22 @@ def train():
             else:
                 model.eval()  # Set model to evaluate mode
 
-            running_loss = 0.0
-            subbatch_loss = 0.0
+            loss_disparity_running = 0.0
+            loss_mask_running = 0.0
+            loss_depth_running = 0.0
+
+            loss_mask_subepoch = 0.0
+            loss_depth_subepoch = 0.0
+            loss_disparity_subepoch = 0.0
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
-                input, mask, gt, gt_d = \
-                    sampled_batch["image"], sampled_batch["mask"], sampled_batch["gt"], sampled_batch["gt_d"]
+                input, mask, gt, gt_d, offsets = sampled_batch["image"], sampled_batch["mask"], \
+                                                 sampled_batch["gt"], sampled_batch["gt_d"], sampled_batch["offset"]
                 if torch.cuda.device_count() == 1:
                     input = input.cuda()
                     mask = mask.cuda()
                     gt = gt.cuda()
+                    offsets = offsets.cuda()
 
                 # plt.imshow(input[0, 0, :, :])
                 # plt.show()
@@ -235,12 +320,14 @@ def train():
                     if depth_loss:
                         loss, loss_unweighted, loss_disparity, loss_mask = \
                             depth_loss_func(outputs, mask.cuda(), alpha, gt_d.cuda(), half_res)
-
                         pass
                     else:
-                        loss, loss_unweighted, loss_disparity, loss_mask = \
-                            sqr_loss(outputs, mask.cuda(), gt.cuda(),
-                                     alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)
+                        loss_disparity, loss_mask, loss_depth = \
+                            l1_and_mask_loss(outputs, mask.cuda(), gt.cuda(), offsets,
+                                    enable_masking=enable_mask, use_smooth_l1=use_smooth_l1, debug_depth=gt_d)
+                        loss = loss_disparity + alpha * loss_mask
+                        #loss = loss_mask
+
                     loss.backward()
                     # print(net.conv_dwn_0_1.bias)
                     # print(net.conv_dwn_0_1.bias.grad == 0)
@@ -250,23 +337,28 @@ def train():
                     with torch.no_grad():
                         outputs, latent = model(input.cuda())
                         if depth_loss:
-                            loss, loss_unweighted, loss_disparity, loss_mask = \
+                            loss_disparity, loss_mask, loss_depth = \
                                 depth_loss_func(outputs, mask.cuda(), alpha, gt_d.cuda(), half_res)
                         else:
-                            loss, loss_unweighted, loss_disparity, loss_mask = \
-                                sqr_loss(outputs, mask.cuda(), gt.cuda(),
-                                         alpha=alpha, enable_mask=enable_mask, use_smooth_l1=use_smooth_l1)
+                            loss_disparity, loss_mask, loss_depth = \
+                                l1_and_mask_loss(outputs, mask.cuda(), gt.cuda(), offsets,
+                                         enable_masking=enable_mask, use_smooth_l1=use_smooth_l1, debug_depth=gt_d)
+                            loss = loss_disparity + alpha * loss_mask
 
-                if loss_unweighted > 100:
-                    print("{} loss on batch {}".format(loss_unweighted, i_batch))
 
-                writer.add_scalar('loss_disparity/' + phase, loss_disparity, step)
-                writer.add_scalar('loss_mask/' + phase, loss_mask, step)
+                writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item(), step)
+                writer.add_scalar('batch_{}/loss_disparity'.format(phase), loss_disparity.item(), step)
+                writer.add_scalar('batch_{}/loss_mask'.format(phase), loss_mask.item(), step)
+                writer.add_scalar('batch_{}/loss_depth'.format(phase), loss_depth.item(), step)
 
                 #print("DEBUG: batch {} loss {}".format(i_batch, str(loss_unweighted)))
 
-                subbatch_loss += loss_unweighted
-                # if i_batch == 0:
+                print("batch {} loss {} , mask_loss {} , depth_loss {}".format(i_batch, loss_disparity.item(),
+                                                                                loss_mask.item(), loss_depth.item()))
+                loss_mask_subepoch += loss_mask.item()
+                loss_depth_subepoch += loss_depth.item()
+                loss_disparity_subepoch += loss_disparity.item()
+                # if i_epoch == 0:
 
                 if show_images:
                     fig = plt.figure()
@@ -294,10 +386,12 @@ def train():
 
                     plt.show()
                 # print("FUCK YEAH")
-                if i_batch % 100 == 99:
-                    print("batch {} loss {}".format(i_batch, str(subbatch_loss / 100)))
-                    writer.add_scalar('loss/' + phase, subbatch_loss / 100, step)
-                    subbatch_loss = 0
+                if i_epoch % 100 == 99:
+                    print("epoch {} loss {}".format(i_epoch, loss_disparity_subepoch / 100))
+                    writer.add_scalar('subepoch_{}/loss_disparity'.format(phase), loss_disparity_subepoch / 100, step)
+                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_disparity_subepoch / 100, step)
+                    writer.add_scalar('subepoch_{}/loss_deph'.format(phase), loss_disparity_subepoch / 100, step)
+                    subepoch_loss = 0
                     # pass
                     # print(outputs.shape)
                     # test = torch.cat((input[0, :, :, :], input[0, :, :, :], input[0, :, :, :]),0)
@@ -314,14 +408,17 @@ def train():
                 #    print(var_name, "\t", optimizer.state_dict()[var_name])
                 # https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
 
-                running_loss += loss_unweighted * input.size(0)  # loss.item() * input.size(0)
+                loss_disparity_running += loss_disparity.item() * input.size(0)
+                loss_mask_running += loss_disparity.item() * input.size(0)
+                loss_depth_running += loss_depth.item() * input.size(0)
 
             print("size of dataset " + str(dataset_sizes[phase]))
-            epoch_loss = running_loss / dataset_sizes[phase]  # dataset_sizes[phase]
 
-            writer.add_scalar('epoch_loss/' + phase, epoch_loss, step)
-            print('{} Loss: {:.4f}'.format(
-                phase, epoch_loss))
+            epoch_loss = (loss_disparity_running + loss_mask_running) / dataset_sizes[phase]
+            writer.add_scalar('epoch_{}/loss_disparity'.format(phase), loss_disparity_running / dataset_sizes[phase], step)
+            writer.add_scalar('epoch_{}/loss_mask'.format(phase), loss_mask_running / dataset_sizes[phase], step)
+            writer.add_scalar('epoch_{}/loss_depth'.format(phase), loss_depth_running / dataset_sizes[phase], step)
+            print('{} Loss: {:.4f}'.format( phase, loss_disparity_running / dataset_sizes[phase]))
 
             # print(net.conv_dwn_0_1.bias)
             # print(net.conv_dwn_0_1.bias.grad == 0)
@@ -329,9 +426,9 @@ def train():
 
             # store at the end of a epoch
             if phase == 'val' and store_checkpoints:
-                if epoch_loss < min_test_batch_loss:
+                if epoch_loss < min_test_epoch_loss:
                     print("storing network")
-                    min_test_batch_loss = epoch_loss
+                    min_test_epoch_loss = epoch_loss
                     if isinstance(model, nn.DataParallel):
                         torch.save(model.module, model_path_dst)
                     else:

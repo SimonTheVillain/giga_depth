@@ -196,7 +196,7 @@ def train():
     dataset_path = "D:/dataset_filtered"
     writer = SummaryWriter('tensorboard/experiment12')
 
-    model_path_src = "trained_models/model_1_5.pt"
+    model_path_src = "trained_models/model_2_lr_0001.pt"
     load_model = True
     model_path_dst = "trained_models/model_1_5_reproj.pt"
     crop_div = 4

@@ -5,10 +5,10 @@ from model.residual_block import ResidualBlock
 
 
 #Model2 is Model1 without concatenating the y position at every step.
-class Model3(nn.Module):
+class Model4(nn.Module):
 
     def __init__(self):
-        super(Model3, self).__init__()
+        super(Model4, self).__init__()
         # 1 input image channel, 6 output channels, 3x3 square convolution
         # kernel
 
@@ -54,9 +54,9 @@ class Model3(nn.Module):
 
         # 1/2
         self.conv_decode_6 = nn.Conv2d(256, 256, 3, padding=1, padding_mode='same')
-        self.conv_decode_7 = nn.Conv2d(256, 128, 3, padding=1, padding_mode='same')
-        self.conv_decode_8 = nn.Conv2d(128, 128, 3, padding=1, padding_mode='same')
-        self.conv_decode_9 = nn.Conv2d(128, 2, 3, padding=1, padding_mode='same')
+        self.conv_decode_7 = nn.Conv2d(256, 256, 3, padding=1, padding_mode='same')
+        self.conv_decode_8 = nn.Conv2d(256, 256, 3, padding=1, padding_mode='same')
+        self.conv_decode_9 = nn.Conv2d(256, 2, 3, padding=1, padding_mode='same')
 
     def forward(self, x):
         #full
@@ -107,7 +107,7 @@ class Model3(nn.Module):
         x = F.leaky_relu(self.conv_decode_6(x))
         x = F.leaky_relu(self.conv_decode_7(x))
         x = F.leaky_relu(self.conv_decode_8(x))
-        x = F.leaky_relu(self.conv_decode_8(x))
+        x = F.leaky_relu(self.conv_decode_9(x))
 
         return x, x_latent
 

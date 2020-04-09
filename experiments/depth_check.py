@@ -20,7 +20,7 @@ if half_res:
     fxl = fxl * 0.5
     cxl = cxl * 0.5
 
-ind = 3
+ind = 2
 
 path = "D:/dataset/"
 

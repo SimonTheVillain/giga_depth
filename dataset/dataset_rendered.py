@@ -64,7 +64,7 @@ class DatasetRendered(data.Dataset):
         x_offset = np.expand_dims(x_offset, axis=0).astype(np.float32)
         #groundtruth = groundtruth + x_offset
         gt = gt * 1.0 + x_offset * (1.0 / 1216.0)
-        mask1 = mask[:, :, 1] == 0
+        mask1 = mask[:, :, 1] == 2.0
         #mask = np.array([mask])
 
         w = cv2.imread(self.root_dir + "/" + str(idx) + "_r_w.exr", cv2.IMREAD_UNCHANGED)
@@ -87,6 +87,7 @@ class DatasetRendered(data.Dataset):
 
         if self.half_res:
             mask = transform.resize(mask, (mask.shape[0], mask.shape[1] / 2, mask.shape[2] / 2),)
+            mask[mask == 2.0] = 1.0
             mask[mask != 1.0] = 0.0
 
             gt = \
@@ -98,16 +99,17 @@ class DatasetRendered(data.Dataset):
 
 
         #print(idx)
-        #fig = plt.figure()
-        #fig.add_subplot(3, 1, 1)
-        #plt.imshow(image[0, :, :])
+        if False:
+            fig = plt.figure()
+            fig.add_subplot(3, 1, 1)
+            plt.imshow(image[0, :, :])
 
-        #fig.add_subplot(3, 1, 2)
-        #plt.imshow(mask[0, :, :])
+            fig.add_subplot(3, 1, 2)
+            plt.imshow(mask[0, :, :], vmin=0, vmax=1)
 
-        #fig.add_subplot(3, 1, 3)
-        #plt.imshow(groundtruth[0, :, :])
-        #plt.show()
+            fig.add_subplot(3, 1, 3)
+            plt.imshow(gt[0, :, :])
+            plt.show()
 
-        sample = {'image': image, 'mask': mask, 'gt': gt, 'gt_d': gt_d}
+        sample = {'image': image, 'mask': mask, 'gt': gt, 'gt_d': gt_d, 'offset': np.array([offset_x, offset_y])}
         return sample
