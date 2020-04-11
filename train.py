@@ -115,9 +115,9 @@ def l1_and_mask_loss(output, mask, gt, offsets, half_res=True, enable_masking=Tr
     subpixel = 30
     l1_scale = width * subpixel
     if use_smooth_l1:
-        loss_disparity = width * (1.0 / l1_scale) * smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale)
+        loss_disparity = (1.0 / l1_scale) * smooth_l1(output[:, [0], :, :] * l1_scale, gt * l1_scale)
     else:
-        loss_disparity = width * torch.abs(output[:, [0], :, :] - gt)
+        loss_disparity = torch.abs(output[:, [0], :, :] - gt)
 
     if enable_masking:
         loss_disparity = loss_disparity * mask
@@ -126,8 +126,8 @@ def l1_and_mask_loss(output, mask, gt, offsets, half_res=True, enable_masking=Tr
 
     loss_disparity = torch.mean(loss_disparity)
 
-    loss_depth =  torch.mean(torch.abs(calc_depth_right(output[:, [1], :, :], offsets, half_res) -
-                                       calc_depth_right(gt, offsets, half_res)))
+    loss_depth = torch.mean(torch.abs(calc_depth_right(output[:, [0], :, :], offsets, half_res) -
+                                      calc_depth_right(gt, offsets, half_res)))
     debug = False
     if debug:
         z_gt = calc_depth_right(gt, offsets)
@@ -208,11 +208,11 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/train_model1_new_loss')
+    writer = SummaryWriter('tensorboard/train_model1_new_loss_rescaled')
 
     model_path_src = "trained_models/model_2_lr_0001.pt"
     load_model = False
-    model_path_dst = "trained_models/model_1_new_loss.pt"
+    model_path_dst = "trained_models/model_1_new_loss_old_scale_lr.pt"
     crop_div = 2
     crop_res = (896/crop_div, 1216/crop_div)
     store_checkpoints = True
@@ -223,10 +223,12 @@ def train():
     shuffle = False
     half_res = True
     enable_mask = False
-    alpha = 0.0
+    alpha = 0.1
     use_smooth_l1 = False
-    learning_rate = 0.00001# should be about 0.001 for disparity based learning
+    learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
+    #learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
+    projector_width = 1280
 
     depth_loss = False
     if depth_loss:
@@ -347,8 +349,9 @@ def train():
                             loss = loss_disparity + alpha * loss_mask
 
 
-                writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item(), step)
-                writer.add_scalar('batch_{}/loss_disparity'.format(phase), loss_disparity.item(), step)
+                writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item() , step)
+                writer.add_scalar('batch_{}/loss_disparity'.format(phase),
+                                  loss_disparity.item() * projector_width, step)
                 writer.add_scalar('batch_{}/loss_mask'.format(phase), loss_mask.item(), step)
                 writer.add_scalar('batch_{}/loss_depth'.format(phase), loss_depth.item(), step)
 
@@ -389,8 +392,9 @@ def train():
                 # print("FUCK YEAH")
                 if i_batch % 100 == 99:
                     print("batch {} loss {}".format(i_batch, loss_disparity_subepoch / 100))
-                    writer.add_scalar('subepoch_{}/loss_disparity'.format(phase), loss_disparity_subepoch / 100, step)
-                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_mask_subepoch / 100, step)
+                    writer.add_scalar('subepoch_{}/loss_disparity'.format(phase),
+                                      loss_disparity_subepoch / 100.0 * projector_width, step)
+                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_mask_subepoch / 100.0, step)
                     writer.add_scalar('subepoch_{}/loss_deph'.format(phase), loss_depth_subepoch / 100, step)
                     loss_disparity_subepoch = 0
                     loss_depth_subepoch = 0
@@ -413,13 +417,14 @@ def train():
                 # https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
 
                 loss_disparity_running += loss_disparity.item() * input.size(0)
-                loss_mask_running += loss_disparity.item() * input.size(0)
+                loss_mask_running += loss_mask.item() * input.size(0)
                 loss_depth_running += loss_depth.item() * input.size(0)
 
             print("size of dataset " + str(dataset_sizes[phase]))
 
             epoch_loss = (loss_disparity_running + loss_mask_running) / dataset_sizes[phase]
-            writer.add_scalar('epoch_{}/loss_disparity'.format(phase), loss_disparity_running / dataset_sizes[phase], step)
+            writer.add_scalar('epoch_{}/loss_disparity'.format(phase),
+                              loss_disparity_running / dataset_sizes[phase] * projector_width, step)
             writer.add_scalar('epoch_{}/loss_mask'.format(phase), loss_mask_running / dataset_sizes[phase], step)
             writer.add_scalar('epoch_{}/loss_depth'.format(phase), loss_depth_running / dataset_sizes[phase], step)
             print('{} Loss: {:.4f}'.format( phase, loss_disparity_running / dataset_sizes[phase]))
