@@ -6,10 +6,10 @@ from model.residual_block import ResidualBlock_shrink
 
 
 
-class Model_Lines_C_1(nn.Module):
+class Model_Lines_C_n(nn.Module):
 
-    def __init__(self):
-        super(Model_Lines_C_1, self).__init__()
+    def __init__(self, classes):
+        super(Model_Lines_C_n, self).__init__()
         # 1 input image channel, 6 output channels, 3x3 square convolution
         # kernel
         self.conv_start = nn.Conv2d(1, 64, 3, padding=0, padding_mode='none') #1
@@ -24,7 +24,7 @@ class Model_Lines_C_1(nn.Module):
         self.resi_block11 = ResidualBlock_shrink(128, 1, 0, depadding=0) #0
         #concatenate
         self.conv_end_2 = nn.Conv2d(128, 1024, 1, padding=0, padding_mode='same')
-        self.conv_end_3 = nn.Conv2d(1024, 129, 1, padding=0, padding_mode='same') #0
+        self.conv_end_3 = nn.Conv2d(1024, classes+1, 1, padding=0, padding_mode='same') #0
         # receptive field here should be about 32
 
     def forward(self, x):
@@ -48,7 +48,7 @@ class Model_Lines_C_1(nn.Module):
 
         x = F.leaky_relu(self.conv_end_2(x))
         x = F.leaky_relu(self.conv_end_3(x))
-        mask = x[:, [128], :, :]
+        mask = x[:, [-1], :, :]
         x = F.softmax(x[:, :-1, :, :], dim=1)
         #test = torch.sum(x, axis=1)
         #print(test)

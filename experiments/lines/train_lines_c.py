@@ -1,9 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.modules.loss
+import torch.nn.functional as F
 import torch.optim as optim
 from experiments.lines.dataset_lines import DatasetLines
 from experiments.lines.model_lines_c_1 import Model_Lines_C_1
+from experiments.lines.model_lines_c_n import Model_Lines_C_n
 from torch.utils.data import DataLoader
 import numpy as np
 import os
@@ -65,7 +67,7 @@ def calc_depth_right(right, half_res=False):
     return z
 
 def l1_class_loss(output, mask, gt, enable_masking=True, debug_depth=None):
-    class_count = 1024
+    class_count = 128
     width = 1280
 
     pot_est = np.array([range(0, class_count)], dtype=np.float32) * (1.0 / class_count)
@@ -105,17 +107,44 @@ def l1_class_loss(output, mask, gt, enable_masking=True, debug_depth=None):
         plt.show()
     return loss_disparity, loss_mask, loss_depth, loss_disp_pure
 
+
+def class_loss(output, mask, gt, enable_masking=True, class_count=0):
+    #class_count = 128
+    width = 1280
+
+    pot_est = np.array([range(0, class_count)], dtype=np.float32) * (1.0 / class_count)
+    pot_est = torch.tensor(pot_est, device=mask.device).unsqueeze(2).unsqueeze(3)
+    #pot_disp = torch.abs(pot_est - gt)
+    #loss_disparity = torch.sum(torch.mul(pot_disp, output[:, :-1, :, :]), dim=
+    target = (gt * class_count).type(torch.int64)#i know 64 bit is a waste!
+    target = torch.clamp(target,  0, class_count-1)
+    target = target.squeeze(1)
+    loss_class = F.cross_entropy(output[:, :-1, :, :], target, reduction='none')
+    disp_pure = torch.argmax(output[:, :-1, :, :], dim=1) * (1.0 / class_count)
+    disp_pure = disp_pure.unsqueeze(1)
+    loss_disp_pure = torch.mean(torch.abs(disp_pure - gt))
+    if enable_masking:
+        loss_class = loss_class * mask
+
+    loss_mask = torch.mean(torch.abs(mask - output[:, [class_count], :, :]))
+
+    loss_disparity = torch.mean(loss_class)
+
+    loss_depth = torch.mean(torch.abs(calc_depth_right(disp_pure) -
+                                      calc_depth_right(gt)))
+    return loss_disparity, loss_mask, loss_depth, loss_disp_pure
+
 def train():
     dataset_path = 'D:/dataset_filtered_strip_100_31'
 
     if os.name == 'nt':
         dataset_path = 'D:/dataset_filtered_strip_100_31'
 
-    writer = SummaryWriter('tensorboard/train_lines_c_1')
+    writer = SummaryWriter('tensorboard/train_lines_c_512_lr_01')
 
-    model_path_src = "../../trained_models/model_stripe_c_1.pt"
-    load_model = False
-    model_path_dst = "../../trained_models/model_stripe_c_1.pt"
+    model_path_src = "../../trained_models/model_stripe_c_512.pt"
+    load_model = True
+    model_path_dst = "../../trained_models/model_stripe_c_512_lr_01.pt"
     store_checkpoints = True
     num_epochs = 500
     batch_size = 16# 16
@@ -126,10 +155,13 @@ def train():
     alpha = 0.1
     use_smooth_l1 = False
     learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
+    learning_rate = 0.1
+    learning_rate = 1.0
     #learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
     projector_width = 1280
     batch_accumulation = 1
+    class_count = 512
 
 
     min_test_epoch_loss = 100000.0
@@ -139,7 +171,7 @@ def train():
         model = torch.load(model_path_src)
         model.eval()
     else:
-        model = Model_Lines_C_1()
+        model = Model_Lines_C_n(class_count)
 
 
 
@@ -215,9 +247,10 @@ def train():
                     outputs, latent = model(image_r)
                     if (i_batch - 1) % batch_accumulation == 0:
                         optimizer.zero_grad()
+
                     loss_disparity, loss_mask, loss_depth, loss_disp_pure = \
-                        l1_class_loss(outputs, mask.cuda(), gt.cuda(),
-                                enable_masking=enable_mask)
+                        class_loss(outputs, mask.cuda(), gt.cuda(),
+                                enable_masking=enable_mask, class_count=class_count)
                     loss = loss_disparity + alpha * loss_mask
                         #loss = loss_mask
                     loss.backward()
@@ -230,8 +263,8 @@ def train():
                     with torch.no_grad():
                         outputs, latent = model(image_r.cuda())
                         loss_disparity, loss_mask, loss_depth, loss_disp_pure = \
-                            l1_class_loss(outputs, mask.cuda(), gt.cuda(),
-                                     enable_masking=enable_mask)
+                            class_loss(outputs, mask.cuda(), gt.cuda(),
+                                     enable_masking=enable_mask, class_count=class_count)
                         loss = loss_disparity + alpha * loss_mask
 
                 writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item() , step)
