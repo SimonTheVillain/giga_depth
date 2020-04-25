@@ -2,8 +2,8 @@ import cv2
 import os
 import numpy as np
 
-source_path = ''
-tgt_path = ''
+source_path = '/media/simon/ssd_data/data/dataset_reduced_0_08'
+tgt_path = '/media/simon/ssd_data/data/dataset_filtered_strip_100_31'
 if os.name == 'nt':
     source_path = "D:/dataset_filtered"
     tgt_path = "D:/dataset_filtered_strip_100_31"

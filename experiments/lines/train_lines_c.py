@@ -120,8 +120,10 @@ def class_loss(output, mask, gt, enable_masking=True, class_count=0):
     target = torch.clamp(target,  0, class_count-1)
     target = target.squeeze(1)
     loss_class = F.cross_entropy(output[:, :-1, :, :], target, reduction='none')
-    disp_pure = torch.argmax(output[:, :-1, :, :], dim=1) * (1.0 / class_count)
+    disp_pure = torch.argmax(output[:, :-1, :, :], dim=1).type(torch.float32) * (1.0 / class_count)
     disp_pure = disp_pure.unsqueeze(1)
+    #print(disp_pure.dtype)
+    #print(gt.dtype)
     loss_disp_pure = torch.mean(torch.abs(disp_pure - gt))
     if enable_masking:
         loss_class = loss_class * mask
@@ -135,20 +137,20 @@ def class_loss(output, mask, gt, enable_masking=True, class_count=0):
     return loss_disparity, loss_mask, loss_depth, loss_disp_pure
 
 def train():
-    dataset_path = 'D:/dataset_filtered_strip_100_31'
+    dataset_path = '/media/simon/ssd_data/data/dataset_filtered_strip_100_31'
 
     if os.name == 'nt':
         dataset_path = 'D:/dataset_filtered_strip_100_31'
 
     writer = SummaryWriter('tensorboard/train_lines_c_512_lr_01')
 
-    model_path_src = "../../trained_models/model_stripe_c_512.pt"
+    model_path_src = "../../trained_models/model_stripe_c_512_lr_01.pt"
     load_model = True
     model_path_dst = "../../trained_models/model_stripe_c_512_lr_01.pt"
     store_checkpoints = True
-    num_epochs = 500
-    batch_size = 16# 16
-    num_workers = 4# 8
+    num_epochs = 5000
+    batch_size = 60# 16
+    num_workers = 8
     show_images = False
     shuffle = False
     enable_mask = True
@@ -156,7 +158,7 @@ def train():
     use_smooth_l1 = False
     learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
     learning_rate = 0.1
-    learning_rate = 1.0
+    learning_rate = 0.1
     #learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
     projector_width = 1280
