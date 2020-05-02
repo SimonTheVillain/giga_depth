@@ -114,13 +114,13 @@ def train():
     writer = SummaryWriter('tensorboard/train_lines3')
 
     model_path_src = "../../trained_models/model_stripe_3.pt"
-    load_model = False
+    load_model = True
     model_path_dst = "../../trained_models/model_stripe_3.pt"
     store_checkpoints = True
     num_epochs = 500
     batch_size = 16# 6
     num_workers = 4# 8
-    show_images = False
+    show_images = True
     shuffle = False
     enable_mask = True
     alpha = 0.1
@@ -249,29 +249,22 @@ def train():
 
                 if show_images:
                     fig = plt.figure()
+                    fig.add_subplot(2, 1, 1)
+                    plt.imshow(image_r[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
 
-                    fig.add_subplot(2, 3, 1)
-                    plt.imshow(input[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
+                    fig.add_subplot(2, 1, 2)
+                    data_1 = gt[0, 0, 0, :].cpu().detach().numpy().flatten()
+                    data_2 = outputs[0, 0, 0, :].cpu().detach().numpy()
+                    x = np.array(range(0, data_1.shape[0]))
+                    plt.plot(x, data_2, x, data_1)
+                    # plt.show()
 
-                    fig.add_subplot(2, 3, 4)
-                    plt.imshow(input[0, 1, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-
-                    fig.add_subplot(2, 3, 2)
-                    # plt.imshow(gt[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-                    plot_disp(gt[0, 0, :, :].cpu().detach().numpy(), -0.04, 0.04)
-
-                    fig.add_subplot(2, 3, 5)
-                    plt.imshow(mask[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-
-                    fig.add_subplot(2, 3, 3)
-                    # plt.imshow(outputs[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-                    plot_disp(outputs[0, 0, :, :].cpu().detach().numpy(), -0.04, 0.04,
-                              mask=mask[0, 0, :, :].cpu().detach().numpy())
-
-                    fig.add_subplot(2, 3, 6)
-                    plt.imshow(outputs[0, 1, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-
+                    depth_1 = calc_depth_right(gt[:, [0], :, :], half_res=False)[0, 0, 0, :].cpu().detach().numpy()
+                    depth_2 = calc_depth_right(outputs[:, [0], :, :])[0, 0, 0, :].cpu().detach().numpy()
+                    fig = plt.figure()
+                    plt.plot(x, depth_1, x, depth_2)
                     plt.show()
+
                 # print("FUCK YEAH")
                 if i_batch % 100 == 99:
                     print("batch {} loss {}".format(i_batch, loss_disparity_subepoch / 100))

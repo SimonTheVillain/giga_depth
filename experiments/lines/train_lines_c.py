@@ -109,7 +109,6 @@ def l1_class_loss(output, mask, gt, enable_masking=True, debug_depth=None):
 
 
 def class_loss(output, mask, gt, enable_masking=True, class_count=0):
-    #class_count = 128
     width = 1280
 
     pot_est = np.array([range(0, class_count)], dtype=np.float32) * (1.0 / class_count)
@@ -142,28 +141,28 @@ def train():
     if os.name == 'nt':
         dataset_path = 'D:/dataset_filtered_strip_100_31'
 
-    writer = SummaryWriter('tensorboard/train_lines_c_512_lr_01')
+    writer = SummaryWriter('tensorboard/train_lines_c_256_lr_01')
 
-    model_path_src = "../../trained_models/model_stripe_c_512_lr_01.pt"
+    model_path_src = "../../trained_models/model_stripe_c_256_lr_01.pt"
     load_model = True
-    model_path_dst = "../../trained_models/model_stripe_c_512_lr_01.pt"
+    model_path_dst = "../../trained_models/model_stripe_c_256_lr_01.pt"
     store_checkpoints = True
     num_epochs = 5000
-    batch_size = 60# 16
-    num_workers = 8
-    show_images = False
+    batch_size = 16# 16
+    num_workers = 4# 8
+    show_images = True
     shuffle = False
     enable_mask = True
     alpha = 0.1
     use_smooth_l1 = False
     learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
     learning_rate = 0.1
-    learning_rate = 0.1
+    #learning_rate = 1.0
     #learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
     projector_width = 1280
     batch_accumulation = 1
-    class_count = 512
+    class_count = 256
 
 
     min_test_epoch_loss = 100000.0
@@ -288,29 +287,25 @@ def train():
 
                 if show_images:
                     fig = plt.figure()
+                    fig.add_subplot(2, 1, 1)
+                    plt.imshow(image_r[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
 
-                    fig.add_subplot(2, 3, 1)
-                    plt.imshow(input[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
+                    fig.add_subplot(2, 1, 2)
+                    data_1 = gt[0, 0, 0, :].cpu().detach().numpy().flatten()
+                    data_2 = (torch.argmax(outputs[0, :-1, :, :], dim=0) * (1.0 / class_count)).cpu().detach().numpy()
+                    data_2 = data_2.flatten()
+                    x = np.array(range(0, data_1.shape[0]))
+                    plt.plot(x, data_2, x, data_1)
+                    #plt.show()
 
-                    fig.add_subplot(2, 3, 4)
-                    plt.imshow(input[0, 1, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-
-                    fig.add_subplot(2, 3, 2)
-                    # plt.imshow(gt[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-                    plot_disp(gt[0, 0, :, :].cpu().detach().numpy(), -0.04, 0.04)
-
-                    fig.add_subplot(2, 3, 5)
-                    plt.imshow(mask[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-
-                    fig.add_subplot(2, 3, 3)
-                    # plt.imshow(outputs[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-                    plot_disp(outputs[0, 0, :, :].cpu().detach().numpy(), -0.04, 0.04,
-                              mask=mask[0, 0, :, :].cpu().detach().numpy())
-
-                    fig.add_subplot(2, 3, 6)
-                    plt.imshow(outputs[0, 1, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
-
+                    depth_1 = calc_depth_right(gt[:, [0], :, :], half_res=False)[0, 0, 0, :].cpu().detach().numpy()
+                    depth_2 = torch.argmax(outputs[:, :-1, :, :], dim=1) * (1.0 / class_count)
+                    depth_2 = depth_2.unsqueeze(dim=1)
+                    depth_2 = calc_depth_right(depth_2)[0, 0, 0, :].cpu().detach().numpy()
+                    fig = plt.figure()
+                    plt.plot(x, depth_1, x, depth_2)
                     plt.show()
+
                 # print("FUCK YEAH")
                 if i_batch % 100 == 99:
                     print("batch {} loss {}".format(i_batch, loss_disparity_subepoch / 100))
