@@ -26,7 +26,7 @@ class ResidualBlock_shrink(nn.Module):
         self.depadding = depadding
         self.convs = \
             nn.ModuleList(
-                [nn.Conv2d(channels, channels, kernel_size, padding=padding, padding_mode='same')] * layers)
+                [nn.Conv2d(channels, channels, kernel_size, padding=padding, padding_mode='replicate')] * layers)
 
     def forward(self, x):
         x_identity = x

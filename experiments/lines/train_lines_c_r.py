@@ -41,7 +41,7 @@ smooth_l1 = nn.SmoothL1Loss(reduction='none')
 
 def calc_x_pos(class_inds, regressions, class_count):
     regressions = torch.gather(regressions, dim=1, index=class_inds)
-    regressions = regressions * (1.0 / (class_count * 3.0)) + 1.0 / 3.0
+    regressions = (regressions * (1.0/3.0) - 1.0/3.0) * (1.0 / class_count)
     x = class_inds * (1.0 / class_count) + regressions
     return x
 
@@ -117,23 +117,23 @@ def train():
     if os.name == 'nt':
         dataset_path = 'D:/dataset_filtered_strip_100_31'
 
-    writer = SummaryWriter('tensorboard/train_lines_c_r_128')
+    writer = SummaryWriter('tensorboard/train_lines_c_r_128_lr_1_no_reg')
 
-    model_path_src = "../../trained_models/model_stripe_c_r_128.pt"
-    load_model = False
-    model_path_dst = "../../trained_models/model_stripe_c_r_128.pt"
+    model_path_src = "../../trained_models/model_stripe_c_r_128_lr_1.pt"
+    load_model = True
+    model_path_dst = "../../trained_models/model_stripe_c_r_128_lr_1_no_reg.pt"
     store_checkpoints = True
     num_epochs = 5000
-    batch_size = 16  # 16
-    num_workers = 4  # 8
+    batch_size = 40# 16
+    num_workers = 8  # 8
     show_images = False
     shuffle = False
     enable_mask = True
-    alpha = 0.1
-    alpha_regression = 0.1 # TODO: find proper value for this
+    alpha_mask = 0.01 * 0.0
+    alpha_regression = 0.01 * 0.0 # TODO: find proper value for this
     use_smooth_l1 = False
-    learning_rate = 0.01  # formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
-    learning_rate = 1
+    learning_rate = 0.01  # formerly it was 0.001 but alpha_mask used to be 10 # maybe after this we could use 0.01 / 1280.0
+    learning_rate = 0.1
     # learning_rate = 1.0
     # learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
@@ -216,7 +216,7 @@ def train():
                     loss_class, loss_reg, loss_mask, loss_depth, loss_disp = \
                         combo_loss(class_output, regression_output, mask_output, mask_gt.cuda(), gt.cuda(),
                                    enable_masking=enable_mask, class_count=class_count)
-                    loss = loss_class + alpha_regression * loss_reg + alpha * loss_mask
+                    loss = loss_class + alpha_regression * loss_reg + alpha_mask * loss_mask
                     loss.backward()
                     if i_batch % batch_accumulation == 0:
                         optimizer.step()
@@ -226,7 +226,7 @@ def train():
                         loss_class, loss_reg, loss_mask, loss_depth, loss_disp = \
                             combo_loss(class_output, regression_output, mask_output, mask_gt.cuda(), gt.cuda(),
                                        enable_masking=enable_mask, class_count=class_count)
-                        loss = loss_class + alpha_regression * loss_reg + alpha * loss_mask
+                        loss = loss_class + alpha_regression * loss_reg + alpha_mask * loss_mask
 
                 writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item(), step)
                 writer.add_scalar('batch_{}/loss_class'.format(phase), loss_class.item(), step)
@@ -292,7 +292,7 @@ def train():
                 loss_depth_running += loss_depth.item() * batch_size
                 loss_disp_running += loss_disp.item() * batch_size
 
-            epoch_loss = (loss_class_running + alpha_regression * loss_reg_running + alpha * loss_mask_running) / \
+            epoch_loss = (loss_class_running + alpha_regression * loss_reg_running + alpha_mask * loss_mask_running) / \
                          dataset_sizes[phase]
 
             writer.add_scalar('epoch_{}/loss_class'.format(phase), loss_class_running / dataset_sizes[phase], step)

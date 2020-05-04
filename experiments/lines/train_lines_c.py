@@ -136,6 +136,7 @@ def class_loss(output, mask, gt, enable_masking=True, class_count=0):
     return loss_disparity, loss_mask, loss_depth, loss_disp_pure
 
 def train():
+    print(torch.__version__)
     dataset_path = '/media/simon/ssd_data/data/dataset_filtered_strip_100_31'
 
     if os.name == 'nt':
@@ -268,7 +269,7 @@ def train():
                                      enable_masking=enable_mask, class_count=class_count)
                         loss = loss_disparity + alpha * loss_mask
 
-                writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item() , step)
+                writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item(), step)
                 writer.add_scalar('batch_{}/loss_disparity'.format(phase),
                                   loss_disparity.item() * projector_width, step)
                 writer.add_scalar('batch_{}/loss_mask'.format(phase), loss_mask.item(), step)
