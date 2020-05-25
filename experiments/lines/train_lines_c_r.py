@@ -7,6 +7,12 @@ from experiments.lines.dataset_lines import DatasetLines
 from experiments.lines.model_lines_c_1 import Model_Lines_C_1
 from experiments.lines.model_lines_c_n import Model_Lines_C_n
 from experiments.lines.model_lines_c_r_n import Model_Lines_C_R_n
+from experiments.lines.model_lines_CR2_n import Model_Lines_CR2_n
+from experiments.lines.model_lines_CR3_n import Model_Lines_CR3_n
+from experiments.lines.model_lines_CR4_n import Model_Lines_CR4_n
+from experiments.lines.model_lines_CR5_n import Model_Lines_CR5_n
+from experiments.lines.model_lines_CR6_n import Model_Lines_CR6_n
+from experiments.lines.model_lines_CR7_n import Model_Lines_CR7_n
 from torch.utils.data import DataLoader
 import numpy as np
 import os
@@ -39,15 +45,21 @@ def plot_disp(input, vmin, vmax, mask=None):
 smooth_l1 = nn.SmoothL1Loss(reduction='none')
 
 
-def calc_x_pos(class_inds, regressions, class_count):
+def calc_x_pos(class_inds, regressions, class_count, neighbourhood_regression):
+    #print(class_inds.shape)
+    #print(regressions.shape)
     regressions = torch.gather(regressions, dim=1, index=class_inds)
-    regressions = (regressions * (1.0/3.0) - 1.0/3.0) * (1.0 / class_count)
+    if neighbourhood_regression:
+        regressions = (regressions * (1.0/3.0) - 1.0/3.0) * (1.0 / class_count)
+    else:
+        regressions = regressions * (1.0 / class_count)
     x = class_inds * (1.0 / class_count) + regressions
     return x
 
 
 def calc_depth_right(right_x_pos, half_res=False):
     device = right_x_pos.device
+    projector_width = 1280.0
     fxr = 1115.44
     cxr = 604.0
     fxl = 1115.44
@@ -64,7 +76,7 @@ def calc_depth_right(right_x_pos, half_res=False):
         fxl = fxl * 0.5
         cxl = cxl * 0.5
 
-    xp = right_x_pos[:, [0], :, :] * 1280.0  # float(right.shape[3])
+    xp = right_x_pos[:, [0], :, :] * projector_width  # float(right.shape[3])
     # xp = debug_gt_r * 1280.0 #debug
     xr = np.asmatrix(np.array(range(0, right_x_pos.shape[3]))).astype(np.float32)
     xr = torch.tensor(np.matlib.repeat(xr, right_x_pos.shape[2], 0), device=device)
@@ -75,11 +87,25 @@ def calc_depth_right(right_x_pos, half_res=False):
     return z
 
 
-def combo_loss(classes, regressions, mask, gt_mask, gt, enable_masking=True, class_count=0):
+def combo_loss(classes, regressions, mask, gt_mask, gt, neighbourhood_regression, enable_masking=True, class_count=0):
     # calculate the regression loss on the groundtruth label
     gt_class_label = torch.clamp((gt * class_count).type(torch.int64), 0, class_count - 1)
-    reg = calc_x_pos(gt_class_label, regressions, class_count)
+    reg = calc_x_pos(gt_class_label,
+                     regressions, class_count, neighbourhood_regression)
     loss_reg = torch.abs(reg - gt)
+    if neighbourhood_regression:
+        #neighbour left and right
+        reg = calc_x_pos(torch.clamp(gt_class_label - 1, 0, class_count-1).type(torch.int64),
+                         regressions, class_count, neighbourhood_regression)
+        loss_reg += torch.abs(reg - gt)
+        reg = calc_x_pos(torch.clamp(gt_class_label + 1, 0, class_count-1).type(torch.int64),
+                         regressions, class_count, neighbourhood_regression)
+        loss_reg += torch.abs(reg - gt)
+    # other idea: regression only where class is correct:
+    #create mask :
+    #class_pred = torch.argmax(classes, dim=1).unsqueeze(dim=1)
+    #class_hit_mask = (classes == gt_class_label).type(torch.float32)
+    #loss_reg = loss_reg * class_hit_mask
     # TODO: add regression loss for neighbouring labels
 
     # Calculate the class loss:
@@ -90,7 +116,7 @@ def combo_loss(classes, regressions, mask, gt_mask, gt, enable_masking=True, cla
 
     # calculate the true offset in disparity
     class_pred = torch.argmax(classes, dim=1).unsqueeze(dim=1)
-    disp_pure = calc_x_pos(class_pred, regressions, class_count)
+    disp_pure = calc_x_pos(class_pred, regressions, class_count, neighbourhood_regression)
     loss_disp = torch.abs(gt - disp_pure)
     if enable_masking:
         loss_class = loss_class * gt_mask
@@ -112,42 +138,51 @@ def combo_loss(classes, regressions, mask, gt_mask, gt, enable_masking=True, cla
 
 
 def train():
+    projector_width = 1280.0
     dataset_path = '/media/simon/ssd_data/data/dataset_filtered_strip_100_31'
 
     if os.name == 'nt':
         dataset_path = 'D:/dataset_filtered_strip_100_31'
 
-    writer = SummaryWriter('tensorboard/train_lines_c_r_128_lr_1_no_reg')
+    writer = SummaryWriter('tensorboard/Model_Lines_CR7_256_no_nb')#model_stripe_c_r_256_lr_1_no_nb_3')
+    #writer = SummaryWriter('tensorboard/dump')#model_stripe_c_r_256_lr_1_no_nb_3')
 
-    model_path_src = "../../trained_models/model_stripe_c_r_128_lr_1.pt"
+    model_path_src = "../../trained_models/Model_Lines_CR7_256_chckpt.pt"
     load_model = True
-    model_path_dst = "../../trained_models/model_stripe_c_r_128_lr_1_no_reg.pt"
+    model_path_dst = "../../trained_models/Model_Lines_CR7_256_no_nb.pt"
     store_checkpoints = True
+    model_path_unconditional = "../../trained_models/Model_Lines_CR7_256_chckpt.pt"
+    unconditional_chckpts = True
     num_epochs = 5000
-    batch_size = 40# 16
+    batch_size = 32# 16
     num_workers = 8  # 8
     show_images = False
     shuffle = False
     enable_mask = True
-    alpha_mask = 0.01 * 0.0
-    alpha_regression = 0.01 * 0.0 # TODO: find proper value for this
+    alpha_mask = 0.01
+    alpha_regression = 500 # TODO: check this out for even faster training of subpixel accuracy
+    alpha_regression = 100 # 10 is a good value to improve subpixel accuracy only 1 is tested to train classification
     use_smooth_l1 = False
+    neighbourhood_regression = False
     learning_rate = 0.01  # formerly it was 0.001 but alpha_mask used to be 10 # maybe after this we could use 0.01 / 1280.0
-    learning_rate = 0.1
-    # learning_rate = 1.0
+    learning_rate = 0.1 #0.1 for best convergence at the initial iterations (getting the classification going)
+    learning_rate = 0.01 # get some extra regression performance later on
+    #learning_rate = 1.0
     # learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
     projector_width = 1280
     batch_accumulation = 1
-    class_count = 128
+    class_count = 256
 
     min_test_epoch_loss = 100000.0
 
     if load_model:
         model = torch.load(model_path_src)
         model.eval()
+        # copy over parameter of old model
+        #model = Model_Lines_C_R_n(class_count, model)
     else:
-        model = Model_Lines_C_R_n(class_count)
+        model = Model_Lines_CR7_n(class_count)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if torch.cuda.device_count() > 1:
@@ -176,7 +211,7 @@ def train():
                    for x in ['train', 'val', 'test']}
     dataset_sizes = {x: len(datasets[x]) for x in ['train', 'val', 'test']}
 
-    step = 0
+    step = 225900
     for epoch in range(1, num_epochs):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -215,7 +250,7 @@ def train():
 
                     loss_class, loss_reg, loss_mask, loss_depth, loss_disp = \
                         combo_loss(class_output, regression_output, mask_output, mask_gt.cuda(), gt.cuda(),
-                                   enable_masking=enable_mask, class_count=class_count)
+                                   neighbourhood_regression, enable_masking=enable_mask, class_count=class_count)
                     loss = loss_class + alpha_regression * loss_reg + alpha_mask * loss_mask
                     loss.backward()
                     if i_batch % batch_accumulation == 0:
@@ -225,7 +260,7 @@ def train():
                         class_output, regression_output, mask_output, latent = model(image_r)
                         loss_class, loss_reg, loss_mask, loss_depth, loss_disp = \
                             combo_loss(class_output, regression_output, mask_output, mask_gt.cuda(), gt.cuda(),
-                                       enable_masking=enable_mask, class_count=class_count)
+                                       neighbourhood_regression, enable_masking=enable_mask, class_count=class_count)
                         loss = loss_class + alpha_regression * loss_reg + alpha_mask * loss_mask
 
                 writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item(), step)
@@ -253,19 +288,27 @@ def train():
                     plt.imshow(image_r[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
 
                     fig.add_subplot(2, 1, 2)
-                    #data_1 = gt[0, 0, 0, :].cpu().detach().numpy().flatten()
-                    #data_2 = (torch.argmax(outputs[0, :-1, :, :], dim=0) * (1.0 / class_count)).cpu().detach().numpy()
-                    #data_2 = data_2.flatten()
-                    #x = np.array(range(0, data_1.shape[0]))
-                    #plt.plot(x, data_2, x, data_1)
-                    # plt.show()
+                    disp = calc_x_pos(torch.argmax(class_output, dim=1).unsqueeze(1),
+                                      regression_output, class_count, neighbourhood_regression)
+                    data_1 = disp[0, 0, 0, :].cpu().detach().numpy().flatten()
+                    data_2 = (torch.argmax(class_output, dim=1) * (1.0 / class_count)).cpu().detach().numpy()
+                    data_2 = data_2[0, 0, :].flatten()
+                    x = np.array(range(0, data_1.shape[0]))
+                    data_gt = gt[0, 0, 0, :].cpu().detach().numpy()
+                    plt.plot(x, data_gt * projector_width,
+                             x, data_2 * projector_width,
+                             x, data_1 * projector_width)
+                    plt.legend(["groundtruth", "class", "class+regression"])
+                    plt.show()
 
-                    #depth_1 = calc_depth_right(gt[:, [0], :, :], half_res=False)[0, 0, 0, :].cpu().detach().numpy()
-                    #depth_2 = torch.argmax(outputs[:, :-1, :, :], dim=1) * (1.0 / class_count)
-                    #depth_2 = depth_2.unsqueeze(dim=1)
-                    #depth_2 = calc_depth_right(depth_2)[0, 0, 0, :].cpu().detach().numpy()
-                    #fig = plt.figure()
-                    #plt.plot(x, depth_1, x, depth_2)
+                    depth_1 = calc_depth_right(gt[:, [0], :, :], half_res=False)[0, 0, 0, :].cpu().detach().numpy()
+                    depth_2 = torch.argmax(class_output, dim=1) * (1.0 / class_count)
+                    depth_2 = depth_2.unsqueeze(dim=1)
+                    depth_2 = calc_depth_right(depth_2, half_res=False)[0, 0, 0, :].cpu().detach().numpy()
+                    depth_3 = calc_depth_right(disp, half_res=False)[0, 0, 0, :].cpu().detach().numpy()
+                    fig = plt.figure()
+                    plt.plot(x, depth_1, x, depth_2, x, depth_3)
+                    plt.legend(["groundtruth", "class", "class+regression"])
                     plt.show()
 
                 # print("FUCK YEAH")
@@ -312,6 +355,11 @@ def train():
             # print(net.conv_dwn_0_1.weight.grad == 0)
 
             # store at the end of a epoch
+            if phase == 'val' and unconditional_chckpts:
+                if isinstance(model, nn.DataParallel):
+                    torch.save(model.module, model_path_unconditional)
+                else:
+                    torch.save(model, model_path_unconditional)
             if phase == 'val' and store_checkpoints:
                 if epoch_loss < min_test_epoch_loss:
                     print("storing network")
