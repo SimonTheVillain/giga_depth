@@ -14,12 +14,16 @@ import matplotlib.pyplot as plt
 
 class DatasetRendered(data.Dataset):
 
-    def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216)):
+    def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216), npy_files=False,
+                 crop_gt_top=0, crop_gt_bottom=0):
         self.root_dir = root_dir
         self.crop_res = (int(crop_res[0]), int(crop_res[1]))
         self.from_ind = from_ind
         self.to_ind = to_ind
         self.half_res = half_res
+        self.npy_files = npy_files
+        self.crop_top = crop_gt_top
+        self.crop_bottom = crop_gt_bottom
         pass
         #if partition =='train':
 
@@ -37,10 +41,13 @@ class DatasetRendered(data.Dataset):
             idx = idx.tolist()
 
         idx = idx + self.from_ind
-        path = self.root_dir + "/" + str(idx) + "_r.exr"  # putting this into a additional variable as a debug measure
-        image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-        #image = io.imread(path)
-        image = self.to_grey(image)
+        if self.npy_files:
+            path = self.root_dir + "/" + str(idx) + "_r.npy"  # putting this into a additional variable as a debug measure
+            image = np.load(path)
+        else:
+            path = self.root_dir + "/" + str(idx) + "_r.exr"  # putting this into a additional variable as a debug measure
+            image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+            image = self.to_grey(image)
 
         vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])
         vertical = np.transpose(np.matlib.repeat(vertical, image.shape[1], 0))
@@ -56,9 +63,14 @@ class DatasetRendered(data.Dataset):
         #print(image.shape)
 
         #todo:split mask up in gt and mask
-        mask = cv2.imread(self.root_dir + "/" + str(idx) + "_gt_r.exr", cv2.IMREAD_UNCHANGED)
-        gt = np.array([mask[:, :, 2]])
-        gt_d = np.array([mask[:, :, 0]])
+        if self.npy_files:
+            mask = np.load(self.root_dir + "/" + str(idx) + "_gt_r.npy")
+            gt = np.array([mask[:, :, 2]])
+            gt_d = np.array([mask[:, :, 0]])
+        else:
+            mask = cv2.imread(self.root_dir + "/" + str(idx) + "_gt_r.exr", cv2.IMREAD_UNCHANGED)
+            gt = np.array([mask[:, :, 2]])
+            gt_d = np.array([mask[:, :, 0]])
         x_offset = np.asmatrix(range(0, image.shape[2])).astype(np.float32)# * (1.0 / float(image.shape[2]))
         x_offset = np.asarray(np.matlib.repeat(x_offset, image.shape[1], 0))
         x_offset = np.expand_dims(x_offset, axis=0).astype(np.float32)
@@ -66,16 +78,18 @@ class DatasetRendered(data.Dataset):
         gt = gt * 1.0 + x_offset * (1.0 / 1216.0)
         mask1 = mask[:, :, 1] == 2.0
         #mask = np.array([mask])
-
-        w = cv2.imread(self.root_dir + "/" + str(idx) + "_r_w.exr", cv2.IMREAD_UNCHANGED)
-        w = self.to_grey(w)
-        wo = cv2.imread(self.root_dir + "/" + str(idx) + "_r_wo.exr", cv2.IMREAD_UNCHANGED)
-        wo = self.to_grey(wo)
-        mask2 = (w-wo > 0.09)# 0.05
-        mask = np.logical_and(mask1, mask2)
-        mask = np.array([mask]).astype(np.float32)
-        if abs(v_offset) > 0.25:
-            mask[:] = 0
+        if self.npy_files:
+            mask = np.array([mask1]).astype(np.float32)
+        else:
+            w = cv2.imread(self.root_dir + "/" + str(idx) + "_r_w.exr", cv2.IMREAD_UNCHANGED)
+            w = self.to_grey(w)
+            wo = cv2.imread(self.root_dir + "/" + str(idx) + "_r_wo.exr", cv2.IMREAD_UNCHANGED)
+            wo = self.to_grey(wo)
+            mask2 = (w-wo > 0.09)# 0.05
+            mask = np.logical_and(mask1, mask2)
+            mask = np.array([mask]).astype(np.float32)
+            if abs(v_offset) > 0.25:
+                mask[:] = 0
 
         # cropping out part of the image
         offset_x = random.randrange(0, gt.shape[2] - self.crop_res[1] + 1)
@@ -85,6 +99,11 @@ class DatasetRendered(data.Dataset):
         image = image[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
         mask = mask[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
 
+        if self.crop_top != 0 or self.crop_bottom != 0:
+            mask = mask[:, self.crop_top:-self.crop_bottom, :]
+            gt = gt[:, self.crop_top:-self.crop_bottom, :]
+            gt_d = gt_d[:, self.crop_top:-self.crop_bottom, :]
+
         if self.half_res:
             mask = transform.resize(mask, (mask.shape[0], mask.shape[1] / 2, mask.shape[2] / 2),)
             mask[mask == 2.0] = 1.0
@@ -92,7 +111,9 @@ class DatasetRendered(data.Dataset):
 
             gt = \
                 transform.resize(gt,
-                                 (gt.shape[0], gt.shape[1] / 2, gt.shape[2] / 2))
+                                 (gt.shape[0], gt.shape[1] / 2, gt.shape[2] / 2)) - \
+                0.5/resolutionProjector # not a hundred percent sure why this is necessary (why projector and not IRCam
+            #TODO: find out why this 0.5/resolutionProjector is limited to half_res
             gt_d = \
                 transform.resize(gt_d,
                                  (gt_d.shape[0], gt_d.shape[1] / 2, gt_d.shape[2] / 2))
