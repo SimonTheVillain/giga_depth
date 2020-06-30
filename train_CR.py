@@ -10,6 +10,7 @@ from model.model_CR8hs import Model_CR8_hsn
 from model.model_CR8s import Model_CR8_sn
 from model.model_CR9hs import Model_CR9_hsn
 from model.model_CR10hs import Model_CR10_hsn
+from model.model_CR10_1hs import Model_CR10_1_hsn
 from torch.utils.data import DataLoader
 import numpy as np
 import os
@@ -273,19 +274,19 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/CR_10hs')
+    writer = SummaryWriter('tensorboard/CR_10_1hs_2')
     #writer = SummaryWriter('tensorboard/dump')
 
-    model_path_src = "trained_models/CR_10hs_chckpt.pt"
-    load_model = False
-    model_path_dst = "trained_models/CR_10hs.pt"
-    model_path_unconditional = "trained_models/CR_10hs_chckpt.pt"
+    model_path_src = "trained_models/CR_10_1hs_chckpt.pt"
+    load_model = True
+    model_path_dst = "trained_models/CR_10_1hs.pt"
+    model_path_unconditional = "trained_models/CR_10_1hs_chckpt.pt"
     unconditional_chckpts = True
     crop_div = 1
     crop_res = (896, 1216/crop_div)
     store_checkpoints = True
     num_epochs = 5000
-    batch_size = 28
+    batch_size = 2
     num_workers = 8# 8
     show_images = False
     shuffle = False
@@ -296,7 +297,7 @@ def train():
     alpha_regression = 100#TODO: go back to a weight of 100 for the regression part
     use_smooth_l1 = False
     neighbourhood_regression = False
-    learning_rate = 0.1
+    learning_rate = 0.1 #0.1 for the coarse part
     momentum = 0.90
     projector_width = 1280
     batch_accumulation = 1
@@ -322,6 +323,15 @@ def train():
         pad_top = False
         pad_bottom = False
         half_res = True
+
+        #all for model 10.1
+        slice_height = 142
+        core_image_height = 142
+        padding = 0
+        crop_top = padding
+        crop_bottom = padding
+        crop_res = (142, 1216 / crop_div)  # 56
+
         batch_size = 12
 
 
@@ -335,7 +345,8 @@ def train():
         model.eval()
     else:
         #model = Model_CR8_n(class_count, crop_res[0])
-        model = Model_CR10_hsn(slices, class_count, core_image_height, pad_top, pad_bottom)
+        #model = Model_CR10_hsn(slices, class_count, core_image_height, pad_top, pad_bottom)
+        model = Model_CR10_1_hsn(slices, class_count, core_image_height)
 
     speed_test = True
     if speed_test:
