@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.modules.loss
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.cuda.amp.grad_scaler import GradScaler
+#from torch.cuda.amp.autocast import autocast
 from dataset.dataset_rendered import DatasetRendered
 from model.model_CR7 import Model_CR7_n
 from model.model_CR8h import Model_CR8_hn
@@ -270,17 +272,20 @@ def combo_loss(classes, regressions, mask, gt_mask, gt, neighbourhood_regression
     return loss_class, loss_reg, loss_mask, loss_depth, loss_disp
 
 def train():
+
+    half_precision = False
+    single_gpu = True
     dataset_path = "/media/simon/ssd_data/data/dataset_reduced_0_08"
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/CR_10_1hs_2')
+    writer = SummaryWriter('tensorboard/CR_10_1hs_half')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = "trained_models/CR_10_1hs_chckpt.pt"
-    load_model = True
+    load_model = False
     model_path_dst = "trained_models/CR_10_1hs.pt"
-    model_path_unconditional = "trained_models/CR_10_1hs_chckpt.pt"
+    model_path_unconditional = "trained_models/CR_10_1hs_half_chckpt.pt"
     unconditional_chckpts = True
     crop_div = 1
     crop_res = (896, 1216/crop_div)
@@ -332,7 +337,7 @@ def train():
         crop_bottom = padding
         crop_res = (142, 1216 / crop_div)  # 56
 
-        batch_size = 12
+        batch_size = 6#12
 
 
 
@@ -367,11 +372,16 @@ def train():
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    if torch.cuda.device_count() > 1:
+    if torch.cuda.device_count() > 1 and not single_gpu:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
         model = nn.DataParallel(model)
 
     model.to(device)
+
+    if half_precision:
+        model.half()
+        #https: // pytorch.org / docs / stable / notes / amp_examples.html
+        scaler = GradScaler()
 
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
@@ -440,11 +450,16 @@ def train():
                     plt.show()
 
                 offsets = offsets.cuda()
-                if torch.cuda.device_count() == 1:
+                if torch.cuda.device_count() == 1 or single_gpu:
                     image_r = image_r.cuda()
                     mask_gt = mask_gt.cuda()
                     gt = gt.cuda()
                     offsets = offsets.cuda()
+                if half_precision:
+                    image_r = image_r.half()
+                    mask_gt = mask_gt.half()
+                    gt = gt.half()
+                    offsets = offsets.half()
 
                 # plt.imshow(input[0, 0, :, :])
                 # plt.show()
@@ -458,17 +473,29 @@ def train():
 
                 if phase == 'train':
                     class_output, regression_output, mask_output, latent = model(image_r)
-                    if (i_batch - 1) % batch_accumulation == 0:
+
+                    #for half precision we probably need autocast
+                    #with torch.cuda.amp.autocast():
+                    if (i_batch - 1) % batch_accumulation == 0 or half_precision:
                         optimizer.zero_grad()
 
                     loss_class, loss_reg, loss_mask, loss_depth, loss_disp = \
                         combo_loss(class_output, regression_output, mask_output, mask_gt.cuda(), gt.cuda(),
                                    neighbourhood_regression,
                                    enable_masking=enable_mask, class_count=class_count, half_res=half_res)
+
                     loss = loss_class + alpha_regression * loss_reg + alpha_mask * loss_mask
-                    loss.backward()
-                    if i_batch % batch_accumulation == 0:
+
+                    if half_precision:
+                        scaler.scale(loss).backward()
+                        scaler.unscale_(optimizer)
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        loss.backward()
                         optimizer.step()
+
                 else:
                     with torch.no_grad():
                         class_output, regression_output, mask_output, latent = model(image_r)
