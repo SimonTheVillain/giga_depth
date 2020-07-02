@@ -309,7 +309,7 @@ def train():
         crop_res = (142, 1216 / crop_div)  # 56
         core_image_height = 142
 
-        batch_size = 20#12
+        batch_size = 16#12
 
 
 
