@@ -245,7 +245,7 @@ def combo_loss(classes, regression, mask, gt_mask, gt,
     return loss_class, loss_reg, loss_mask, loss_depth, loss_disp
 
 def train():
-    path = expanduser("~/giga_depth_results")
+    path = expanduser("~/giga_depth_results/")
 
 
     half_precision = False
@@ -254,7 +254,7 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/CR_10_1hs_half')
+    writer = SummaryWriter(path + 'tensorboard/CR_10_2hs')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/CR_10_2hs_chckpt.pt"
@@ -309,7 +309,7 @@ def train():
         crop_res = (142, 1216 / crop_div)  # 56
         core_image_height = 142
 
-        batch_size = 12#12
+        batch_size = 20#12
 
 
 
