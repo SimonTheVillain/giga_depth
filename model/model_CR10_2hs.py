@@ -44,12 +44,9 @@ class Model_CR10_2_hsn(nn.Module):
             self.conv_5 = nn.Conv2d(64, 128, 3, padding=1, stride=1)  # + 2 x 1 = 13
             self.conv_6 = nn.Conv2d(128, 128, 3, padding=1, stride=1, groups=1 + 0 * 128)  # + 2 x 1 = 17
 
-
-        self.conv_end_shared = nn.ModuleList()
         self.conv_end_c = nn.ModuleList()
 
         for i in range(0, self.slices):
-            self.conv_end_shared.append(nn.Conv2d(128, 256, 1, padding=0, stride=1, groups=1 + 0 * 128))
             self.conv_end_c.append(nn.Conv2d(128, self.classes, 1, padding=0, groups=1))
 
         # if this does not work... add one more 1x1 convolutional layer here
