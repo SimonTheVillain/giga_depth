@@ -7,6 +7,7 @@ from torch.cuda.amp.grad_scaler import GradScaler
 #from torch.cuda.amp.autocast import autocast
 from dataset.dataset_rendered import DatasetRendered
 from model.model_CR10_2hs import Model_CR10_2_hsn
+from model.model_CR10_3hs import Model_CR10_3_hsn
 from torch.utils.data import DataLoader
 import numpy as np
 import os
@@ -254,13 +255,13 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter(path + 'tensorboard/CR_10_2hs')
+    writer = SummaryWriter(path + 'tensorboard/CR_10_3hs')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/CR_10_2hs_chckpt.pt"
-    load_model = False
-    model_path_dst = path + "trained_models/CR_10_2hs.pt"
-    model_path_unconditional = path + "trained_models/CR_10_2hs_chckpt.pt"
+    load_model = True
+    model_path_dst = path + "trained_models/CR_10_3hs.pt"
+    model_path_unconditional = path + "trained_models/CR_10_3hs_chckpt.pt"
     unconditional_chckpts = True
     crop_div = 1
     crop_res = (896, 1216/crop_div)
@@ -287,7 +288,7 @@ def train():
     if single_slice:
         dataset_path = "/media/simon/ssd_data/data/dataset_filtered_slice_142"
         slices = 1
-        padding = Model_CR10_2_hsn.padding()
+        padding = Model_CR10_3_hsn.padding()
         crop_top = padding
         crop_bottom = padding
         #full resolution slice height
@@ -309,7 +310,7 @@ def train():
         crop_res = (142, 1216 / crop_div)  # 56
         core_image_height = 142
 
-        batch_size = 16#12
+        batch_size = 12#12
 
 
 
@@ -320,10 +321,14 @@ def train():
     if load_model:
         model = torch.load(model_path_src)
         model.eval()
+        model_old = model
+        model = Model_CR10_3_hsn(class_count, core_image_height)
+        model.copy_backbone(model_old)
+        model_old = None
     else:
         #model = Model_CR8_n(class_count, crop_res[0])
         #model = Model_CR10_hsn(slices, class_count, core_image_height, pad_top, pad_bottom)
-        model = Model_CR10_2_hsn(slices, class_count, core_image_height)
+        model = Model_CR10_3_hsn(slices, class_count, core_image_height)
 
     speed_test = False
     if speed_test:

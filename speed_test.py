@@ -10,6 +10,7 @@ from model.model_CR9hs import Model_CR9_hsn
 from model.model_CR10hs import Model_CR10_hsn
 from model.model_CR10_1hs import Model_CR10_1_hsn
 from model.model_CR10_2hs import Model_CR10_2_hsn
+from model.model_CR10_3hs import Model_CR10_3_hsn
 from model.model_CR11 import Model_CR11_hn
 from model.model_CR10hs_half import Model_CR10_hsn_half
 from torch.utils.data import DataLoader
@@ -43,16 +44,19 @@ half_precision = True
 slices = 8
 class_count = 128
 core_image_height = 112
-padding = Model_CR10_hsn.padding()
+padding = Model_CR10_3_hsn.padding()
 pad_top = False
 pad_bottom = False
 crop_div = 1
 crop_res = (core_image_height + 30, 1216/crop_div)
+
 core_image_height = 896
 crop_res = (core_image_height + 30 -30, 1216/crop_div)
+
 runs = 10
 #model = Model_CR10_hsn_half(slices, class_count, core_image_height, pad_top, pad_bottom)
-model = Model_CR10_2_hsn(slices, class_count, core_image_height)
+#model = Model_CR10_2_hsn(slices, class_count, core_image_height)
+model = Model_CR10_3_hsn(class_count, core_image_height)
 #model = Model_CR11_hn(core_image_height, class_count)
 #model = Model_test()
 input_channels = 1
