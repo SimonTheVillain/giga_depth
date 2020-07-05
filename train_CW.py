@@ -255,7 +255,7 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter(path + 'tensorboard/CR_10_3hs')
+    writer = SummaryWriter(path + 'tensorboard/CR_10_3hs_2')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/CR_10_2hs_chckpt.pt"
