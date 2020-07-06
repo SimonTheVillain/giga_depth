@@ -8,6 +8,7 @@ from torch.cuda.amp.grad_scaler import GradScaler
 from dataset.dataset_rendered import DatasetRendered
 from model.model_CR10_2hs import Model_CR10_2_hsn
 from model.model_CR10_3hs import Model_CR10_3_hsn
+from model.model_CR10_4hs import Model_CR10_4_hsn
 from torch.utils.data import DataLoader
 import numpy as np
 import os
@@ -255,13 +256,13 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter(path + 'tensorboard/CR_10_2hs')
+    writer = SummaryWriter(path + 'tensorboard/CR_10_4hs')
     #writer = SummaryWriter('tensorboard/dump')
 
-    model_path_src = path + "trained_models/CR_10_2hs_chckpt.pt"
+    model_path_src = path + "trained_models/CR_10_4hs_chckpt.pt"
     load_model = False
-    model_path_dst = path + "trained_models/CR_10_2hs.pt"
-    model_path_unconditional = path + "trained_models/CR_10_2hs_chckpt.pt"
+    model_path_dst = path + "trained_models/CR_10_4hs.pt"
+    model_path_unconditional = path + "trained_models/CR_10_4hs_chckpt.pt"
     unconditional_chckpts = True
     crop_div = 1
     crop_res = (896, 1216/crop_div)
@@ -328,8 +329,8 @@ def train():
     else:
         #model = Model_CR8_n(class_count, crop_res[0])
         #model = Model_CR10_hsn(slices, class_count, core_image_height, pad_top, pad_bottom)
-        model = Model_CR10_2_hsn(slices, class_count, core_image_height)
-        #model = Model_CR10_3_hsn(class_count, core_image_height)
+        #model = Model_CR10_2_hsn(slices, class_count, core_image_height)
+        model = Model_CR10_4_hsn(class_count, core_image_height)
 
     speed_test = False
     if speed_test:
