@@ -4,22 +4,14 @@ import torch.nn.functional as F
 from model.residual_block import ResidualBlock_shrink
 
 
-# in case we subsample rather later:
-# 640×480×4×(1024+513+ 128+4×(128*4 + 64×7 + 1)) would result in a bit below 7GB of video memory.
-# in case we subsaple at the first pissible position:
-# 640×480×4×(1024+513+ 128*5+4×(64×7 + 1)) would result in a bit below 5GB of video memory.
-# (conv_ch_up_1 would have a stride of 2)
 class Model_CR10_3_hsn(nn.Module):
     @staticmethod
     def padding():
-        return 0  # 15 when striding at first opportunity 27 when at second
+        return 0
 
     def __init__(self, classes, image_height, shallow=False):
         super(Model_CR10_3_hsn, self).__init__()
         self.classes = classes
-        self.r = self.padding()
-        self.r_top = 0
-        self.r_bottom = 0
         self.height = int(image_height)
         # 1 input image channel, 6 output channels, 3x3 square convolution
         # kernel

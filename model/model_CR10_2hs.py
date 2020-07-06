@@ -114,8 +114,8 @@ class Model_CR10_2_hsn(nn.Module):
         inds = inds + offset * self.classes
         inds = inds.reshape(-1)
 
-        b = self.reg_b_1.data.index_select(0, inds)
-        w = self.reg_w_1.data.index_select(0, inds)
+        b = self.reg_b_1.index_select(0, inds)
+        w = self.reg_w_1.index_select(0, inds)
         b = b.reshape((ind_shape[0], ind_shape[2], ind_shape[3], b.shape[1], b.shape[2]))
         w = w.reshape((ind_shape[0], ind_shape[2], ind_shape[3], w.shape[1], w.shape[2]))
 

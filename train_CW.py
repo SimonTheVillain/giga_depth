@@ -255,13 +255,13 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter(path + 'tensorboard/CR_10_3hs_2')
+    writer = SummaryWriter(path + 'tensorboard/CR_10_2hs')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/CR_10_2hs_chckpt.pt"
-    load_model = True
-    model_path_dst = path + "trained_models/CR_10_3hs.pt"
-    model_path_unconditional = path + "trained_models/CR_10_3hs_chckpt.pt"
+    load_model = False
+    model_path_dst = path + "trained_models/CR_10_2hs.pt"
+    model_path_unconditional = path + "trained_models/CR_10_2hs_chckpt.pt"
     unconditional_chckpts = True
     crop_div = 1
     crop_res = (896, 1216/crop_div)
@@ -328,7 +328,8 @@ def train():
     else:
         #model = Model_CR8_n(class_count, crop_res[0])
         #model = Model_CR10_hsn(slices, class_count, core_image_height, pad_top, pad_bottom)
-        model = Model_CR10_3_hsn(slices, class_count, core_image_height)
+        model = Model_CR10_2_hsn(slices, class_count, core_image_height)
+        #model = Model_CR10_3_hsn(class_count, core_image_height)
 
     speed_test = False
     if speed_test:
