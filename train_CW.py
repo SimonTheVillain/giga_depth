@@ -256,13 +256,13 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter(path + 'tensorboard/CR_10_4hs')
+    writer = SummaryWriter(path + 'tensorboard/CR_10_4hs_2')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/CR_10_4hs_chckpt.pt"
     load_model = True
-    model_path_dst = path + "trained_models/CR_10_4hs.pt"
-    model_path_unconditional = path + "trained_models/CR_10_4hs_chckpt.pt"
+    model_path_dst = path + "trained_models/CR_10_4hs_2.pt"
+    model_path_unconditional = path + "trained_models/CR_10_4hs_2_chckpt.pt"
     unconditional_chckpts = True
     crop_div = 1
     crop_res = (896, 1216/crop_div)
@@ -276,8 +276,8 @@ def train():
     enable_mask = False
     alpha_mask = 0.1
     alpha_regression = 100 # 10 is a good value to improve subpixel accuracy only 1 is tested to train classification
-    alpha_regression = 100#TODO: go back to a weight of 100 for the regression part
-    learning_rate = 0.1 #0.1 for the coarse part
+    alpha_regression = 1#TODO: go back to a weight of 100 for the regression part
+    learning_rate = 1.1 #0.1 for the coarse part
     momentum = 0.90
     projector_width = 1280
     batch_accumulation = 1
@@ -337,7 +337,7 @@ def train():
         model.cuda()
         model.eval()
         with torch.no_grad():
-            test = torch.rand((1, 1, int(crop_res[0]), int(crop_res[1])), dtype=torch.float32).cuda()
+            test = torch.rand((1, 1, int(crop_res[0]), crop_res[1]), dtype=torch.float32).cuda()
             torch.cuda.synchronize()
             tsince = int(round(time.time() * 1000))
             for i in range(0, 100):
