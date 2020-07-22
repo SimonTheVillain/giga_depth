@@ -1,0 +1,44 @@
+import math
+from torch import nn
+from torch.autograd import Function
+import torch
+
+installed = False
+if installed:
+    import cond_mul_cuda
+else:
+    #jit version of this!!!
+    from torch.utils.cpp_extension import load
+    cond_mul_cuda = load(
+        'cond_mul_cuda', ['cuda_cond_mul/cond_mul_cuda.cpp', 'cuda_cond_mul/cond_mul_cuda_kernel.cu'], verbose=True)
+
+torch.manual_seed(42)
+
+
+class Cond_Mul_Function(Function):
+    @staticmethod
+    def forward(ctx, input, inds, weights, bias):
+        outputs = cond_mul_cuda.forward(input, inds, weights, bias)
+        variables = [input] + [inds] + [weights]
+        ctx.save_for_backward(*variables)
+
+        return outputs[0]
+
+    @staticmethod
+    def backward(ctx, grad_h):
+        outputs = cond_mul_cuda.backward(
+            grad_h.contiguous(), *ctx.saved_variables)
+        grad_input, grad_weights, grad_bias = outputs
+        return grad_input, None, grad_weights, grad_bias # what to do about the inds
+
+
+class CondMul(nn.Module):
+    def __init__(self, classes, input_features, output_features):
+        super(CondMul, self).__init__()
+        self.input_features = input_features
+        self.output_features = output_features
+        self.register_parameter(name='w', param=nn.Parameter(torch.randn((classes, input_features, output_features))))
+        self.register_parameter(name='b', param=nn.Parameter(torch.randn((classes, 1, output_features))))
+
+    def forward(self, input, inds):
+        return Cond_Mul_Function.apply(input, inds, self.w, self.b)
