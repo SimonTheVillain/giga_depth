@@ -260,7 +260,7 @@ def train():
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/CR_10_4hs_chckpt.pt"
-    load_model = False
+    load_model = True
     model_path_dst = path + "trained_models/CR_10_4hs.pt"
     model_path_unconditional = path + "trained_models/CR_10_4hs_chckpt.pt"
     unconditional_chckpts = True
@@ -322,10 +322,10 @@ def train():
     if load_model:
         model = torch.load(model_path_src)
         model.eval()
-        model_old = model
-        model = Model_CR10_3_hsn(class_count, core_image_height)
-        model.copy_backbone(model_old)
-        model_old = None
+        #model_old = model
+        #model = Model_CR10_3_hsn(class_count, core_image_height)
+        #model.copy_backbone(model_old)
+        #model_old = None
     else:
         #model = Model_CR8_n(class_count, crop_res[0])
         #model = Model_CR10_hsn(slices, class_count, core_image_height, pad_top, pad_bottom)
