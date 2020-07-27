@@ -185,14 +185,14 @@ def compare_models(model1, model2, type_ind, width, height, classes):
     model1.w.data = model2.w.data.clone()
     model1.b.data = model2.b.data.clone()
     test = torch.rand((width * height, model1.w.shape[1]), dtype=torch.float32).cuda()
-    #test[:] = 1
+    test[:] = 1
 
     test_ind = torch.randint(0, classes * height, (int(width * height),), dtype=type_ind).cuda()
     with torch.no_grad():
         y1 = model1(test, test_ind)
         y2 = model2(test, test_ind)
-        #print(y1)
-        #print(y2)
+        print(y1)
+        print(y2)
         print(torch.max(torch.abs(y1-y2)))
 
 #sys.exit(0)
@@ -200,12 +200,12 @@ width = 608
 height = 448
 classes = 128 # (classes per line)
 m = 128
-n = 8
+n = 16
 absolute_random = True
 #width = 1 #TODO: remove these debug measures
 #height = 1
-#m = 32
-#n = 2
+#m = 64
+#n = 1
 
 linear_ref = RefCondMul(classes * height, m, n).cuda(device) # 32 as output wouldn't work here
 linear_custom = CondMul(classes * height, m, n).cuda(device)

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 class DatasetRendered(data.Dataset):
 
-    def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216), npy_files=False,
+    def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216), noise=0.0, npy_files=False,
                  crop_gt_top=0, crop_gt_bottom=0):
         self.root_dir = root_dir
         self.crop_res = (int(crop_res[0]), int(crop_res[1]))
@@ -24,6 +24,7 @@ class DatasetRendered(data.Dataset):
         self.npy_files = npy_files
         self.crop_top = crop_gt_top
         self.crop_bottom = crop_gt_bottom
+        self.noise = noise
         pass
         #if partition =='train':
 
@@ -131,6 +132,8 @@ class DatasetRendered(data.Dataset):
             fig.add_subplot(3, 1, 3)
             plt.imshow(gt[0, :, :])
             plt.show()
+
+        image[0, :, :] = image[0, :, :] + np.random.rand(image.shape[1], image.shape[2]).astype(np.float32) * self.noise
 
         sample = {'image': image, 'mask': mask, 'gt': gt,
                   'gt_d': gt_d, 'offset': np.array([offset_x, offset_y], np.float32)}

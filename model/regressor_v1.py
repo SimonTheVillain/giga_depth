@@ -1,54 +1,52 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import cuda_cond_mul.cond_mul.CondMul as CondMul
-from model.residual_block import ResidualBlock_shrink
 
 
-#https://gist.github.com/sonots/5abc0bccec2010ac69ff74788b265086
-# same as CR10_4 but with better per weight
-class Regressor_v1(nn.Module):
-    @staticmethod
-    def padding():
-        return 0
-
-    def __init__(self, classes=128, ):
-        super(Regressor_v1, self).__init__()
+# basic regressor... hopefully not anything you would
+class Regressor1(nn.Module):
+    def __init__(self, classes=128, height=448, width=608):
+        super(Regressor1, self).__init__()
         #per line weights for classes
-        self.classifier = nn.Conv2d(128 * half_height, self.classes * half_height, 1, padding=0, groups=half_height)
+        half_height = int(height)
+        self.classes = classes
+        self.conv_c = nn.Conv2d(128 * half_height, self.classes * half_height, 1, padding=0, groups=half_height)
+        self.conv_r = nn.Conv2d(128 * half_height, self.classes * half_height, 1, padding=0, groups=half_height)
 
-    def copy_backbone(self, other):
-        if self.shallow != other.shallow:
-            return
+        self.conv_m = nn.Conv2d(128, 1, 1)
 
-        self.conv_start.weight.data = other.conv_start.weight.data
-        self.conv_start.bias.data = other.conv_start.bias.data
-        self.conv_ds1.weight.data = other.conv_ds1.weight.data
-        self.conv_ds1.bias.data = other.conv_ds1.bias.data
-        self.conv_1.weight.data = other.conv_1.weight.data
-        self.conv_1.bias.data = other.conv_1.bias.data
-        self.conv_2.weight.data = other.conv_2.weight.data
-        self.conv_2.bias.data = other.conv_2.bias.data
-        self.conv_3.weight.data = other.conv_3.weight.data
-        self.conv_3.bias.data = other.conv_3.bias.data
-        self.conv_4.weight.data = other.conv_4.weight.data
-        self.conv_4.bias.data = other.conv_4.bias.data
-        self.conv_5.weight.data = other.conv_5.weight.data
-        self.conv_5.bias.data = other.conv_5.bias.data
-        self.conv_6.weight.data = other.conv_6.weight.data
-        self.conv_6.bias.data = other.conv_6.bias.data
-
-    def forward(self, x):
-
-        x = F.leaky_relu(self.conv_start(x))
-        x = F.leaky_relu(self.conv_ds1(x)) # downsample here
-        x = F.leaky_relu(self.conv_1(x))
-        x = F.leaky_relu(self.conv_2(x))
-        x = F.leaky_relu(self.conv_3(x))
-        x = F.leaky_relu(self.conv_4(x))
-        x = F.leaky_relu(self.conv_5(x))
-        x = F.leaky_relu(self.conv_6(x))
-
+    def calc_x_pos(self, class_inds, regression, class_count):
+        regression = regression * (1.0 / class_count)
+        x = class_inds * (1.0 / class_count) + regression
         return x
+
+    def forward(self, x, x_gt=None):
+        mask = F.leaky_relu(self.conv_m(x))
+
+        half_height = int(x.shape[2])
+        x_1 = x.transpose(1, 2)
+        x_1 = x_1.reshape((x_1.shape[0], 128 * half_height, 1, x_1.shape[3]))
+        classes = F.leaky_relu(self.conv_c(x_1))
+        classes = classes.reshape((classes.shape[0], half_height, self.classes, classes.shape[3]))
+        classes = classes.transpose(1, 2)
+        classes = F.softmax(classes, dim=1)
+
+        regressions = self.conv_r(x_1)
+        regressions = regressions.reshape((regressions.shape[0], half_height, self.classes, regressions.shape[3]))
+        regressions = regressions.transpose(1, 2)
+
+        loss_class = None
+        if x_gt is None:
+            inds = classes.argmax(dim=1).unsqueeze(1)
+        else:
+
+            inds = torch.clamp((x_gt * self.classes).type(torch.int64), 0, self.classes - 1)
+            gt_class_label = inds.squeeze(1)
+            loss_class = F.cross_entropy(classes, gt_class_label, reduction='none')
+
+        #regressions = regressions.gather(1, inds)
+        regression = torch.gather(regressions, 1, inds)
+        x = self.calc_x_pos(inds, regression, self.classes)
+        return x, mask, loss_class
 
 

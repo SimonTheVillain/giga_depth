@@ -323,9 +323,27 @@ __global__ void cond_mul_cuda_forward_deep_reuse_kernel(
 * 100% occupancy can only be reached with 64 threads per block or more
 * 2048 bytes shared memory ... or less
 * and lass than 32 registers utilized
-
-
+*
+* for n==1 we only have 22 registers per thread but the same 23% occupancy and around 50% (not fully random) percent
+* of utilized memory bandwith
+* TODO:
+* Idea to reach better occupancy (50% with 32 threads for one block) for fewer output channels (lets talk about n=1):
+* no shared memory usage: reduction after every multiplication (i know this takes 6 cycles with 32, 16, 8, 4, 2, 1
+* active threads each). The results would be accumulated up in one result register and wouldn't need any shared memory.
+* For n=2 its 2 output registers but the accumulation would only take 5 cycles with 32,16,8,4,2 active threads.
+* for n=4 its 4 output registers with only 4 accumulation cycles after each round of multiplication
+* For n=8 its 8 output registers (remember its also 8 registers for weights so this might pay off but its already quite
+* big
+* For n=16 the register count probably would go towards 64 so it could still make sense (50% utilization max) but we have high memory bandwith
+* with that already
+*
+* The issue with n=1 is that we will probably only have 32 inputs and therefore 64 threads per block is hard to achieve
+* for n=2 and higher it already is easier to utilize 64 threads even with 32 inputs but still pretty hard to achieve
+* the easiest way would be to have multiple of 32 as input and each warp handle one of them.
+* The other way to achieve 64 threads would be to have each set of 32 threads work on one pixel... that might be way more efficient
+*
 * how to use nvidia profiler: (profiling needs sudo rights but python doesn't find modules with sudo)
+source venv/bin/activate
 sudo env PATH=$PATH nvprof --analysis-metrics -f -o prof.nvvp venv/bin/python test_cuda_cond_mul.py
 nvvp prof.nvvp
 */
@@ -380,66 +398,20 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
             scalar_t v = input[pix][32 * j + tid];
             int ind_w = __shfl_sync(0xffffffff, weight_index, k);
             if(ind_w != last_ind){
-                //scalar_t result = 0;//TODO: see if this is a good idea
                 for(int i=0;i<n;i++){
                     int im = j * 32 + i * blockDim.y + threadIdx.y; //index along m direction of weight / input
                     w[i] = weights[ind_w][im][threadIdx.x];
-
-                    //TODO: this is not ideal actually!!!! for proper Instruction Level Paralellism we want to have all
-                    // the load instructions here and the operations on it later
-                    //result += w[i] *//TODO: see if this is a good idea
-                    //                __shfl_sync(0xffffffff, v, i * blockDim.y + threadIdx.y);//TODO: see if this is a good idea
-
                 }
-                //acc[n * k + threadIdx.y * (32*n + n) + threadIdx.x] += result;//TODO: see if this is a good idea
                 last_ind = ind_w;
-            }//else{//TODO: see if this is a good idea
-                scalar_t result = 0;
-                for(int i=0;i<n;i++){
-                    //TODO: one could interleave loading w and multiplying
-                    result += w[i] *
-                                    __shfl_sync(0xffffffff, v, i * blockDim.y + threadIdx.y);
-                }
-                acc[n * k + threadIdx.y * (32*n + n) + threadIdx.x] += result;
-            //}//TODO: see if this is a good idea
+            }
+            scalar_t result = 0;
+            for(int i=0;i<n;i++){
+                result += w[i] *
+                                __shfl_sync(0xffffffff, v, i * blockDim.y + threadIdx.y);
+            }
+            acc[n * k + threadIdx.y * (32*n + n) + threadIdx.x] += result;
 
         }
-        /*
-        for(int i = 0;i < threads; i++){
-            int pix = base_ind + i;
-            if( pix >= overall_samples){
-                break;
-            }
-            v[i] = input[pix][threads * j + tid];
-        }
-        //each iteration 32/n lines in the mxn matrix are worked on so we need to work n lines to get trough the whole warp:
-        for(int i = 0; i < n; i++){
-            int last_ind = -1;
-            int im = j * 32 + i * blockDim.y + threadIdx.y; //index along m direction of weight / input
-            scalar_t w;
-            //run trough the 32 consecutive pixel
-            for(int k = 0; k < 32;k++){
-                if(base_ind + k >= overall_samples){
-                    break;
-                }
-                int ind_w = __shfl_sync(0xffffffff, weight_index, k);
-                if(ind_w != last_ind){
-
-                    //printf("im %d, \n",im);
-                    w = weights[ind_w][im][threadIdx.x];
-                    //w=1;
-                    last_ind = ind_w;
-                }
-                scalar_t result = w *
-                            __shfl_sync(0xffffffff, v[k], i * blockDim.y + threadIdx.y);
-                //scalar_t vau = __shfl_sync(0xffffffff, v[k], i * blockDim.y + threadIdx.y);
-                //fill the accumulator
-                //printf("i %d, k %d, thdy %d, thdx %d, result %f, w %f, v %f\n",i, k, threadIdx.y, threadIdx.x, result, w, vau);
-                //result = 1;
-                acc[n * k + threadIdx.y * (32*n + n) + threadIdx.x] += result;
-            }
-
-        }*/
     }
     __syncwarp(); // the warp should be in sync anyway (except for turing gpus... there it might differ!!!)
     for(int i=0;i<n;i++){
@@ -453,7 +425,6 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
 
         //iterate over all the accumulators for this set of values
         for(int j = 0; j < simultaneous_pix;j++){
-            //TODO: why isn't i in this
             accu += acc[ j * (n*32 + n) + n * (threadIdx.y + i * blockDim.y) + threadIdx.x];
             //accu +=1;
             /*
@@ -468,6 +439,113 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
     }
 
 }
+
+/*
+* all what has been written in the comments of the function above is applied here...
+* it improves performance for n = 1, 2 and 4.... so it's actually pretty useless!
+*/
+template <typename scalar_t, bool m_mult_32,int m_per_warp,int n>
+__global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
+    const int parts,
+    const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
+    const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds, //indices are in int32 datatype
+    const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> weights,
+    const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> bias,
+    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> output) {
+    extern __shared__ uint8_t shared[];
+
+    //TODO: rethink the meaning of threadIdx.x! It should be n
+
+    const int base_ind = 64 * blockIdx.x + 32*threadIdx.z; // the starting pixel for this block
+    const int overall_samples = input.size(0);
+    const int m = weights.size(1);
+    //const int n = blockDim.x;//weights.size(2); // should be same asblockDim.x
+    //const int in = threadIdx.x;
+    const int threads = 32; // threads in one block/warp (always 32)
+    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    const int simultaneous_pix = m_per_warp; //threads / n // same as blockDim.y
+    const int colums_per_warp = m_per_warp; //threads / n
+    const int warps_per_weight_set = n; // n
+    //const int parts = (m + threads - 1) / threads; //TODO: make this a parameter
+    scalar_t w[n];
+    //the accumulator should be exactly n*32 long
+    scalar_t *acc = (scalar_t*)&shared[sizeof(scalar_t) * 32 * n * threadIdx.z];
+    //load indices
+    int weight_index;
+    if( (base_ind + tid) < overall_samples){ //also check if we are overstepping the boundaries
+        //load inds for the next 32 pixel
+        weight_index = inds[base_ind + tid];
+    }
+    //scalar_t v[32];
+    //clear the accumulator
+    for(int i = 0;i < n; i++){
+        acc[i * 32 + tid] = 0;
+    }
+    //return;
+    //int im = tid;
+    //the input/weights of one pixel need to be split into parts
+    for(int j = 0; j < parts;j++){
+        // load the next 32 values for 32 pixel:
+        int last_ind = -1;
+        for(int k = 0; k < 32; k++){
+            int pix = base_ind + k;
+            if( pix >= overall_samples){
+                break;
+            }
+            scalar_t v = input[pix][32 * j + tid];
+            int ind_w = __shfl_sync(0xffffffff, weight_index, k);
+            if(ind_w != last_ind){
+                for(int i=0;i<n;i++){
+                    int im = j * 32 + i * blockDim.y + threadIdx.y; //index along m direction of weight / input
+                    w[i] = weights[ind_w][im][threadIdx.x];
+                }
+                last_ind = ind_w;
+            }
+            scalar_t result = 0;
+            for(int i=0;i<n;i++){
+                result += w[i] *
+                                __shfl_sync(0xffffffff, v, i * blockDim.y + threadIdx.y);
+            }
+
+            //printf("j %d, tid %d, result = %f\n",j,tid, result);
+            //now do reduction: I know. for a few clocks this will underutilize the SM
+            if(n <= 16){
+                result += __shfl_down_sync(0xffffffff, result, 16);
+                //printf("shfl 16 tid %d, result = %f\n",tid, __shfl_down_sync(0xffffffff, result, 16));
+            }
+            if(n <= 8 && tid < 16){
+                result += __shfl_down_sync(0xffffffff, result, 8);
+            }
+            if(n <= 4 && tid < 8){
+                result += __shfl_down_sync(0xffffffff, result, 4);
+            }
+            if(n <= 2 && tid < 4){
+                result += __shfl_down_sync(0xffffffff, result, 2);
+            }
+            if(n <= 1 && tid < 2){
+                result += __shfl_down_sync(0xffffffff, result, 1);
+            }
+            if(tid < n){
+                //store result in accumulator (shared memory
+                acc[tid + k * n] += result;
+            }
+
+        }
+    }
+    __syncwarp(); // the warp should be in sync anyway (except for turing gpus... there it might differ!!!)
+
+    for(int i=0;i<n;i++){
+        int pix_local = i * blockDim.y + threadIdx.y;
+        int pix = base_ind + pix_local;
+        if(pix >= overall_samples){
+            return;
+        }
+        int ind_w = __shfl_sync(0xffffffff, weight_index, pix_local);
+        output[pix][threadIdx.x] = bias[ind_w][0][threadIdx.x] + acc[pix_local * n + threadIdx.x];
+    }
+
+}
+
 
 template <typename scalar_t, bool m_mult_32>
 __global__ void cond_mul_cuda_forward_deep_small_shared_kernel(
@@ -821,7 +899,75 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
 
       //TODO: a few issues still reside: for 1 its not better than just having 128 results and then picking the right one
       //also, for 8 its not better than the version without the shared memory
-      if(((n == 1) || (n == 2) || (n == 4)  || (n == 8) || (n == 16) || (n == 32)) && // maybe templating would work
+      if(((n == 1) || (n == 2) || (n == 4)) && // maybe templating would work
+         m%32 == 0){
+            //TODO: reevaluate this implementation!!!!
+            //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
+            shared_size = 2 * sizeof(scalar_t) * 32 * n; // for the accumulator
+
+            const int per_group = 32/n;
+            const dim3 threads3(n, per_group, 2); //lets have 64 threads per group
+            const dim3 blocks((overall_samples + 64 - 1) / 64);
+            const int parts = (m + 32 - 1) / 32;
+
+            switch(n){
+                case 1:
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 32, 1><<<blocks, threads3, shared_size>>>(
+                        parts,
+                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                    break;
+                case 2:
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 16, 2><<<blocks, threads3, shared_size>>>(
+                        parts,
+                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                    break;
+                case 4:
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 8, 4><<<blocks, threads3, shared_size>>>(
+                        parts,
+                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                    break;
+                case 8:
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 4, 8><<<blocks, threads3, shared_size>>>(
+                        parts,
+                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                    break;
+                case 16:
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 2, 16><<<blocks, threads3, shared_size>>>(
+                        parts,
+                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                    break;
+                case 32:
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 1, 32><<<blocks, threads3, shared_size>>>(
+                        parts,
+                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                    break;
+
+            }
+      }else if(((n == 1) || (n == 2) || (n == 4)  || (n == 8) || (n == 16) || (n == 32)) && // maybe templating would work
          m%32 == 0){
             //TODO: reevaluate this implementation!!!!
             //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
@@ -830,7 +976,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
             const int per_group = 32/n;
             const dim3 threads3(n, per_group);
             const dim3 blocks((overall_samples + 32 - 1) / 32);
-            const int parts = (m + threads - 1) / threads;
+            const int parts = (m + 32 - 1) / 32;
 
             switch(n){
                 case 1:

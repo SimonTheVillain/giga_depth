@@ -10,7 +10,7 @@ else:
     #jit version of this!!!
     from torch.utils.cpp_extension import load
     cond_mul_cuda = load(
-        'cond_mul_cuda', ['cuda_cond_mul/cond_mul_cuda.cpp', 'cuda_cond_mul/cond_mul_cuda_kernel.cu'], verbose=True)
+        'cond_mul_cuda', ['model/cuda_cond_mul/cond_mul_cuda.cpp', 'model/cuda_cond_mul/cond_mul_cuda_kernel.cu'], verbose=True)
 
 torch.manual_seed(42)
 
