@@ -1217,14 +1217,20 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
 
     auto bias_back_zero = torch::zeros({weights.size(0), 1, weights.size(1)}, options);
     size_t overall_samples = input.size(0);
-
-
+    /*
+    std::cout << "creating tensors of size = " <<  weights.size(0) * weights.size(2) * sizeof(float) << " and " <<
+                weights.size(0) * weights.size(1) * sizeof(float) << " bytes" << std::endl;
+    */
 
 
     int32_t *sizes_gpu;
     int32_t *starting_inds_gpu;
     int32_t *counters_gpu;
     int32_t *ind_lookup_gpu;
+    /*
+    std::cout << "allocating temporary " <<
+                               sizeof(int32_t) * weights.size(0)*3 +
+                               sizeof(int32_t) * grad_output.size(0) << " bytes" << std::endl;*/
     cudaMalloc(&sizes_gpu, sizeof(int32_t) * weights.size(0));
     cudaMalloc(&starting_inds_gpu, sizeof(int32_t) * weights.size(0));
     cudaMalloc(&counters_gpu, sizeof(int32_t) * weights.size(0));
@@ -1355,6 +1361,7 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     cudaFree(starting_inds_gpu);
     cudaFree(ind_lookup_gpu);
     cudaFree(counters_gpu);
+    //std::cout << "freeing temporary memory" << std::endl;
 
   //auto d_gate_weights = d_gates.flatten(1, 2);
   //auto d_weights = d_gate_weights.t().mm(X);

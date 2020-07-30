@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 
 class DatasetRendered(data.Dataset):
 
-    def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216), noise=0.0, npy_files=False,
+    def __init__(self, root_dir, from_ind, to_ind, half_res=False, crop_res=(896, 1216), noise=0.0, vertical_jitter=0,
+                 npy_files=False,
                  crop_gt_top=0, crop_gt_bottom=0):
         self.root_dir = root_dir
         self.crop_res = (int(crop_res[0]), int(crop_res[1]))
@@ -25,6 +26,7 @@ class DatasetRendered(data.Dataset):
         self.crop_top = crop_gt_top
         self.crop_bottom = crop_gt_bottom
         self.noise = noise
+        self.vertical_jitter = vertical_jitter
         pass
         #if partition =='train':
 
@@ -35,7 +37,21 @@ class DatasetRendered(data.Dataset):
     def to_grey(image):
         return 0.2125 * image[:, :, 0] + 0.7154 * image[:, :, 1] + 0.0721 * image[:, :, 2]
 
+    def shift(self, image, y_shift):
+        height = image.shape[0]
+        image = np.pad(image, ((self.vertical_jitter, self.vertical_jitter), (0, 0)), mode='edge')
+        image = image[y_shift:y_shift+height, :]
+        return image
+
+    def shift3(self, image, y_shift):
+        height = image.shape[1]
+        image = np.pad(image, ((0, 0), (self.vertical_jitter, self.vertical_jitter), (0, 0)), mode='edge')
+        image = image[:, y_shift:y_shift+height, :]
+        return image
+
     def __getitem__(self, idx):
+        y_shift = np.random.randint(0, self.vertical_jitter*2)
+
         resolutionProjector = 1280
         resolutionIRCams = 1128
         if torch.is_tensor(idx):
@@ -49,6 +65,9 @@ class DatasetRendered(data.Dataset):
             path = self.root_dir + "/" + str(idx) + "_r.exr"  # putting this into a additional variable as a debug measure
             image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
             image = self.to_grey(image)
+
+        image = self.shift(image, y_shift)
+
 
         vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])
         vertical = np.transpose(np.matlib.repeat(vertical, image.shape[1], 0))
@@ -72,6 +91,9 @@ class DatasetRendered(data.Dataset):
             mask = cv2.imread(self.root_dir + "/" + str(idx) + "_gt_r.exr", cv2.IMREAD_UNCHANGED)
             gt = np.array([mask[:, :, 2]])
             gt_d = np.array([mask[:, :, 0]])
+
+        gt = self.shift3(gt, y_shift)
+        gt_d = self.shift3(gt_d, y_shift)
         x_offset = np.asmatrix(range(0, image.shape[2])).astype(np.float32)# * (1.0 / float(image.shape[2]))
         x_offset = np.asarray(np.matlib.repeat(x_offset, image.shape[1], 0))
         x_offset = np.expand_dims(x_offset, axis=0).astype(np.float32)
@@ -91,6 +113,8 @@ class DatasetRendered(data.Dataset):
             mask = np.array([mask]).astype(np.float32)
             if abs(v_offset) > 0.25:
                 mask[:] = 0
+
+        mask = self.shift3(mask, y_shift)
 
         # cropping out part of the image
         offset_x = random.randrange(0, gt.shape[2] - self.crop_res[1] + 1)

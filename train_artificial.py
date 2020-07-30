@@ -65,34 +65,35 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter(path + 'tensorboard/b2r2')
+    writer = SummaryWriter(path + 'tensorboard/b1r1')
     #writer = SummaryWriter('tensorboard/dump')
 
-    model_path_src = path + "trained_models/b2.pt"
+    model_path_src = path + "trained_models/b1r1.pt"
     load_model = False
-    model_path_dst = path + "trained_models/b2r2.pt"
-    model_path_unconditional = path + "trained_models/b2r2_chckpt.pt"
+    model_path_dst = path + "trained_models/b1r1.pt"
+    model_path_unconditional = path + "trained_models/b1r1_chckpt.pt"
     unconditional_chckpts = True
-    crop_div = 1
-    crop_res = (896, 1216/crop_div)
-    store_checkpoints = True
-    num_epochs = 5000
-    batch_size = 2
-    num_workers = 8# 8
-    show_images = False
+    crop_res = (896, 1216 - 432)
     shuffle = False
     half_res = True
+    dataset_noise = 0.2
+    vert_pix_jitter = 2
+    #crop_res = (100, 1216)
+    store_checkpoints = True
+    num_epochs = 5000
+    batch_size = 1
+    num_workers = 8# 8
+    show_images = False
     mask_loss = False
     alpha_mask = 0.1
     alpha_regression = 100 # 10 is a good value to improve subpixel accuracy only 1 is tested to train classification
     alpha_regression = 1#TODO: go back to a weight of 100 for the regression part
-    learning_rate = 1.1 #0.1 for the coarse part
+    learning_rate = 0.1 #0.1 for the coarse part
     momentum = 0.90
     projector_width = 1280
     batch_accumulation = 1
     class_count = 128
     single_slice = False
-    dataset_noise = 0.3
 
     core_image_height = crop_res[0]
     if single_slice:
@@ -137,7 +138,7 @@ def train():
         #model_old = None
     else:
         backbone = Backbone2()
-        regressor = Regressor1(128, 448, 608)
+        regressor = Regressor2(128, int(crop_res[0]/2), int(crop_res[1]/2))
 
         model = CompositeModel(backbone, regressor)
 
@@ -181,18 +182,18 @@ def train():
 
     #the filtered dataset
     datasets = {
-        'train': DatasetRendered(dataset_path, 0, 8000, half_res, crop_res, dataset_noise),
-        'val': DatasetRendered(dataset_path, 8000, 9000, half_res, crop_res, dataset_noise),
-        'test': DatasetRendered(dataset_path, 9000, 10000, half_res, crop_res, dataset_noise)
+        'train': DatasetRendered(dataset_path, 0, 8000, half_res, crop_res, dataset_noise, vert_pix_jitter),
+        'val': DatasetRendered(dataset_path, 8000, 9000, half_res, crop_res, dataset_noise, vert_pix_jitter),
+        'test': DatasetRendered(dataset_path, 9000, 10000, half_res, crop_res, dataset_noise, vert_pix_jitter)
     }
     if single_slice:
 
         datasets = {
-            'train': DatasetRendered(dataset_path, 0, 8000, half_res, crop_res, dataset_noise,
+            'train': DatasetRendered(dataset_path, 0, 8000, half_res, crop_res, dataset_noise, vert_pix_jitter,
                                      single_slice, crop_top, crop_bottom),
-            'val': DatasetRendered(dataset_path, 8000, 9000, half_res, crop_res, dataset_noise,
+            'val': DatasetRendered(dataset_path, 8000, 9000, half_res, crop_res, dataset_noise, vert_pix_jitter,
                                    single_slice, crop_top, crop_bottom),
-            'test': DatasetRendered(dataset_path, 9000, 10000, half_res, crop_res, dataset_noise,
+            'test': DatasetRendered(dataset_path, 9000, 10000, half_res, crop_res, dataset_noise, vert_pix_jitter,
                                     single_slice, crop_top, crop_bottom)
         }
 
@@ -252,7 +253,7 @@ def train():
                     gt = gt.half()
                     offsets = offsets.half()
 
-                # plt.imshow(input[0, 0, :, :])
+                # plt.imshow(image_r[0, 0, :, :].cpu().detach())
                 # plt.show()
 
                 # plt.imshow(input[0, 1, :, :])
@@ -291,6 +292,7 @@ def train():
                         scaler.step(optimizer)
                         scaler.update()
                     else:
+                        #print("going backward")
                         loss.backward()
                         optimizer.step()
 
@@ -311,7 +313,7 @@ def train():
                         loss_class = torch.mean(loss_class)
                         loss_mask = torch.mean(loss_mask)
                         loss_reg_relative = torch.mean(loss_reg_relative)
-                        loss_reg_absolute = torch.mean(x_pos_absolute)
+                        loss_reg_absolute = torch.mean(loss_reg_absolute)
 
                         loss = loss_class + alpha_regression * loss_reg_relative + alpha_mask * loss_mask
 
@@ -339,6 +341,7 @@ def train():
                     fig = plt.figure()
                     fig.add_subplot(2, 1, 1)
                     plt.imshow(image_r[0, 0, :, :].cpu().detach().numpy(), vmin=0, vmax=1)
+                    plot.show()
 
                     fig.add_subplot(2, 1, 2)
                     disp = calc_x_pos(torch.argmax(class_output, dim=1).unsqueeze(1),
@@ -427,10 +430,6 @@ def train():
                         torch.save(model, model_path_dst)
 
     writer.close()
-
-    # TODO: test at end of epoch
-
-    # TODO: at the end of all validate
 
 
 if __name__ == '__main__':
