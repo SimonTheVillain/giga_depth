@@ -56,24 +56,25 @@ def plot_disp(input, vmin, vmax, mask=None):
 
 def train():
     path = expanduser("~/giga_depth_results/")
-
+    path = "/workspace/giga_depth_results/"
 
     half_precision = False
     single_gpu = False
     dataset_path = "/media/simon/ssd_data/data/dataset_reduced_0_08"
     dataset_path = "/home/simon/datasets/dataset_filtered"
+    dataset_path = "/workspace/datasets/dataset_filtered"
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter(path + 'tensorboard/b1r1')
+    writer = SummaryWriter(path + 'tensorboard/b2r2')
     #writer = SummaryWriter('tensorboard/dump')
 
-    model_path_src = path + "trained_models/b1r1.pt"
+    model_path_src = path + "trained_models/b2r2.pt"
     load_model = False
-    model_path_dst = path + "trained_models/b1r1.pt"
-    model_path_unconditional = path + "trained_models/b1r1_chckpt.pt"
+    model_path_dst = path + "trained_models/b2r2.pt"
+    model_path_unconditional = path + "trained_models/b2r2_chckpt.pt"
     unconditional_chckpts = True
-    crop_res = (896, 1216 - 432)
+    crop_res = (896, 1216 - 432)# - 432)
     shuffle = False
     half_res = True
     dataset_noise = 0.2
@@ -81,7 +82,7 @@ def train():
     #crop_res = (100, 1216)
     store_checkpoints = True
     num_epochs = 5000
-    batch_size = 1
+    batch_size = 2
     num_workers = 8# 8
     show_images = False
     mask_loss = False
@@ -242,6 +243,7 @@ def train():
                     plt.show()
 
                 offsets = offsets.cuda()
+                mask_gt = mask_gt.cuda()
                 if torch.cuda.device_count() == 1 or single_gpu:
                     image_r = image_r.cuda()
                     mask_gt = mask_gt.cuda()
@@ -264,9 +266,13 @@ def train():
                 # print(np.sum(np.array((input != input).cpu()).astype(np.int), dtype=np.int32))
 
                 if phase == 'train':
+                    #print(image_r.device)
+                    #print(gt.device)
                     x_pos, mask, loss_class = model(image_r, gt[:, [0], :, :])
-
+                    #print(mask_gt.device)
+                    #print(mask.device)
                     loss_mask = torch.abs(mask - mask_gt)
+                    gt = gt.cuda()
                     loss_reg = torch.abs(x_pos - gt)
                     if mask_loss:
                         loss_class = loss_class * mask_gt
