@@ -307,7 +307,7 @@ def train():
                         x_pos_absolute, mask, _ = model(image_r)
                         #to still measure the classification loss we need to run the network once more:
                         x_pos_relative, _, loss_class = model(image_r, gt[:, [0], :, :])
-
+                        gt = gt.cuda()
                         loss_mask = torch.abs(mask - mask_gt)
                         loss_reg_relative = torch.abs(x_pos_relative - gt)
                         loss_reg_absolute = torch.abs(x_pos_absolute - gt)
