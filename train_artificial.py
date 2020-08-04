@@ -53,17 +53,24 @@ class CompositeLossModel(nn.Module):
         self.regressor = regressor
         self.mask_loss = mask_loss
 
-    def forward(self, x, x_gt=None, mask_gt=None):
+    def forward(self, x, x_gt=None, mask_gt=None, use_gt_classes=True):
         x = self.backbone(x)
-        if x_gt == None and mask_gt == None:
+        if x_gt == None or mask_gt == None:
             x, mask, _ = self.regressor(x)
             return x, mask
         else:
-            x, mask, loss_class = self.regressor(x, x_gt)
+            if use_gt_classes:
+                x, mask, loss_class = self.regressor(x, x_gt)
+            else:
+                x, mask, loss_class = self.regressor(x, None)
             loss_mask = torch.abs(mask - mask_gt)
             loss_reg = torch.abs(x - x_gt)
             if self.mask_loss:
-                loss_class = loss_class * mask_gt
+                if use_gt_classes:
+                    loss_class = torch.mean(loss_class * mask_gt)
+                else:
+                    loss_class = None
+                #loss_class = loss_class * mask_gt
                 loss_reg = loss_reg * mask_gt
 
             #print(torch.max(mask))
@@ -75,7 +82,7 @@ class CompositeLossModel(nn.Module):
             #print(torch.min(loss_mask))
             loss_mask = torch.mean(loss_mask)
             loss_reg = torch.mean(loss_reg)
-            loss_class = torch.mean(loss_class)
+            #loss_class = torch.mean(loss_class)
             return loss_class, loss_reg, loss_mask
 
 
@@ -369,7 +376,7 @@ def train():
                 else: # evaluation
                     with torch.no_grad():
                         loss_class, loss_reg_relative, loss_mask = model(image_r, gt, mask_gt)
-                        _, loss_reg_absolute, _ = model(image_r, None, mask_gt)
+                        _, loss_reg_absolute, _ = model(image_r, gt, mask_gt, False)# the same without using the GT classes
 
 
                         loss_class = torch.mean(loss_class)
