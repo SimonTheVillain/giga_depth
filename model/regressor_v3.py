@@ -6,17 +6,18 @@ from model.residual_block import ResidualBlock_shrink
 
 
 #TODO: this regressor
-class Regressor2(nn.Module):
+class Regressor3(nn.Module):
 
     def __init__(self, classes=128, height=448, width=608):
-        super(Regressor2, self).__init__()
+        super(Regressor3, self).__init__()
         #per line weights for classes
         self.half_height = int(height)
         self.half_width = width
         self.classes = classes
         self.conv_c = nn.Conv2d(128 * self.half_height, self.classes * self.half_height, 1, padding=0, groups=self.half_height)
-        self.conv_1 = CondMul(self.classes * self.half_height, 128, 32)
-        self.conv_2 = CondMul(self.classes * self.half_height, 32, 32)
+        # lets reduce the number of parameters by using the same weights for 4 lines and 2 classes
+        self.conv_1 = CondMul(int(self.classes * self.half_height / 8), 128, 32)
+        self.conv_2 = CondMul(int(self.classes * self.half_height / 2), 32, 32)
         self.conv_rc = CondMul(self.classes * self.half_height, 32, 2)
 
 
@@ -26,6 +27,16 @@ class Regressor2(nn.Module):
         x = class_inds * (1.0 / class_count) + regression
         return x
 
+    def calc_inds(self, height, inds, div_h, div_inds):
+        device = inds.device
+        offset = torch.arange(0, int(height//div_h), device=device)
+        offset = offset.unsqueeze(1).repeat(1, div_h).flatten()
+        offset = offset.unsqueeze(0).unsqueeze(0).unsqueeze(3)
+        #ind_shape = inds.shape
+        #inds_original = inds
+        inds = (inds + offset * self.classes) // div_inds
+        inds = inds.reshape(-1).type(torch.int32)
+        return inds
     def forward(self, x, x_gt):
         batches = x.shape[0]
         device = x.device
@@ -49,23 +60,26 @@ class Regressor2(nn.Module):
             gt_class_label = inds.squeeze(1)
             loss_class = F.cross_entropy(classes, gt_class_label, reduction='none')
 
-        offset = torch.arange(0, self.half_height, device=device)
-        offset = offset.unsqueeze(0).unsqueeze(0).unsqueeze(3)
-        ind_shape = inds.shape
+        #offset = torch.arange(0, self.half_height, device=device)
+        #offset = offset.unsqueeze(0).unsqueeze(0).unsqueeze(3)
+        #ind_shape = inds.shape
+        #inds_original = inds
+        #inds = inds + offset * self.classes
+        #inds = inds.reshape(-1).type(torch.int32)
         inds_original = inds
-        inds = inds + offset * self.classes
-        inds = inds.reshape(-1).type(torch.int32)
-
+        inds_4_2 = self.calc_inds(self.half_height, inds, 4, 2)
+        inds_2_1 = self.calc_inds(self.half_height, inds, 2, 1)
+        inds = self.calc_inds(self.half_height, inds, 1, 1)
 
         x_2 = x.permute([0, 2, 3, 1])
         x_2 = x_2.reshape((x_2.shape[0] * x_2.shape[1] * x_2.shape[2], x_2.shape[3]))
-        x_2 = F.leaky_relu(self.conv_1(x_2.contiguous(), inds))
-        x_2 = F.leaky_relu(self.conv_2(x_2, inds))
+        x_2 = F.leaky_relu(self.conv_1(x_2.contiguous(), inds_4_2))
+        x_2 = F.leaky_relu(self.conv_2(x_2, inds_2_1))
         x_2 = F.leaky_relu(self.conv_rc(x_2, inds))
         x_2 = x_2.reshape((batches, self.half_height, self.half_width, 2))
         x = x_2.permute([0, 3, 1, 2])
 
-        mask = x[:, 1, :, :]
+        mask = F.sigmoid(x[:, 1, :, :])
         x = x[:, 0, :, :]
 
         x = self.calc_x_pos(inds_original, x, self.classes)

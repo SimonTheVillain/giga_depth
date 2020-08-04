@@ -9,6 +9,7 @@ from dataset.dataset_rendered import DatasetRendered
 
 from model.regressor_v1 import Regressor1
 from model.regressor_v2 import Regressor2
+from model.regressor_v3 import Regressor3
 from model.backbone_v1 import Backbone1
 from model.backbone_v2 import Backbone2
 from torch.utils.data import DataLoader
@@ -21,6 +22,15 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from torch.utils.tensorboard import SummaryWriter
+
+import gc
+def print_cuda_data():
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                print("{},{}".format(type(obj), obj.size()))
+        except:
+            pass
 
 #if not torch.cuda.is_available():
 #    raise Exception("No GPU found, please run without --cuda")
@@ -35,6 +45,38 @@ class CompositeModel(nn.Module):
         x = self.backbone(x)
         x, mask, class_loss = self.regressor(x, x_gt)
         return x, mask, class_loss
+
+class CompositeLossModel(nn.Module):
+    def __init__(self, backbone, regressor, mask_loss=True):
+        super(CompositeLossModel, self).__init__()
+        self.backbone = backbone
+        self.regressor = regressor
+        self.mask_loss = mask_loss
+
+    def forward(self, x, x_gt=None, mask_gt=None):
+        x = self.backbone(x)
+        if x_gt == None and mask_gt == None:
+            x, mask, _ = self.regressor(x)
+            return x, mask
+        else:
+            x, mask, loss_class = self.regressor(x, x_gt)
+            loss_mask = torch.abs(mask - mask_gt)
+            loss_reg = torch.abs(x - x_gt)
+            if self.mask_loss:
+                loss_class = loss_class * mask_gt
+                loss_reg = loss_reg * mask_gt
+
+            #print(torch.max(mask))
+            #print(torch.max(mask_gt))
+            #print(torch.max(loss_mask))
+
+            #print(torch.min(mask))
+            #print(torch.min(mask_gt))
+            #print(torch.min(loss_mask))
+            loss_mask = torch.mean(loss_mask)
+            loss_reg = torch.mean(loss_reg)
+            loss_class = torch.mean(loss_class)
+            return loss_class, loss_reg, loss_mask
 
 
 def plot_disp(input, vmin, vmax, mask=None):
@@ -66,15 +108,19 @@ def train():
 
     if os.name == 'nt':
         dataset_path = "D:/dataset_filtered"
+
+    if torch.cuda.device_count() == 1:
+        # Mainly this means we are working on my laptop and not in a docker
+        path = expanduser("~/giga_depth_results/")
     writer = SummaryWriter(path + 'tensorboard/b2r2')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/b2r2.pt"
-    load_model = False
-    model_path_dst = path + "trained_models/b2r2.pt"
-    model_path_unconditional = path + "trained_models/b2r2_chckpt.pt"
+    load_model = True
+    model_path_dst = path + "trained_models/b2r3.pt"
+    model_path_unconditional = path + "trained_models/b2r3_chckpt.pt"
     unconditional_chckpts = True
-    crop_res = (896, 1216 - 432)# - 432)
+    crop_res = (896, 1216)# - 432)
     shuffle = False
     half_res = True
     dataset_noise = 0.2
@@ -95,6 +141,17 @@ def train():
     batch_accumulation = 1
     class_count = 128
     single_slice = False
+
+    if torch.cuda.device_count() == 1:
+        # Mainly this means we are working on my laptop and not in a docker
+        path = expanduser("~/giga_depth_results/")
+        dataset_path = "/home/simon/datasets/dataset_filtered"
+        batch_size = 2
+        model_path_src = path + "trained_models/b2r2.pt"
+        load_model = False
+        model_path_dst = path + "trained_models/b2r2.pt"
+        model_path_unconditional = path + "trained_models/b2r2_chckpt.pt"
+
 
     core_image_height = crop_res[0]
     if single_slice:
@@ -133,15 +190,23 @@ def train():
     if load_model:
         model = torch.load(model_path_src)
         model.eval()
-        #model_old = model
         #model = Model_CR10_3_hsn(class_count, core_image_height)
         #model.copy_backbone(model_old)
         #model_old = None
+
+        backbone = Backbone2()
+        regressor = Regressor3(128, int(crop_res[0]/2), int(crop_res[1]/2))
+
+        model_old = model
+        model = CompositeLossModel(backbone, regressor)
+        #copy over some of the pretrained bits
+        model.backbone = model_old.backbone
+        model.regressor.conv_c = model_old.regressor.conv_c
     else:
         backbone = Backbone2()
-        regressor = Regressor2(128, int(crop_res[0]/2), int(crop_res[1]/2))
+        regressor = Regressor3(128, int(crop_res[0]/2), int(crop_res[1]/2))
 
-        model = CompositeModel(backbone, regressor)
+        model = CompositeLossModel(backbone, regressor)
 
     speed_test = False
     if speed_test:
@@ -167,6 +232,9 @@ def train():
         model = nn.DataParallel(model)
 
     model.to(device)
+    #cuda_devices = ["cuda:{}".format(i) for i in range(torch.cuda.device_count())]
+    #no cpu allowed in dataparallel !?
+    #model = nn.DataParallel(model, device_ids=cuda_devices, output_device=torch.device("cpu"))
 
     if half_precision:
         model.half()
@@ -242,8 +310,8 @@ def train():
                     plt.legend(["groundtruth", "groundtruth 2"])
                     plt.show()
 
-                offsets = offsets.cuda()
-                mask_gt = mask_gt.cuda()
+                #offsets = offsets.cuda()
+                #mask_gt = mask_gt.cuda()
                 if torch.cuda.device_count() == 1 or single_gpu:
                     image_r = image_r.cuda()
                     mask_gt = mask_gt.cuda()
@@ -268,28 +336,20 @@ def train():
                 if phase == 'train':
                     #print(image_r.device)
                     #print(gt.device)
-                    x_pos, mask, loss_class = model(image_r, gt[:, [0], :, :])
-                    #print(mask_gt.device)
-                    #print(mask.device)
-                    loss_mask = torch.abs(mask - mask_gt)
-                    gt = gt.cuda()
-                    loss_reg = torch.abs(x_pos - gt)
-                    if mask_loss:
-                        loss_class = loss_class * mask_gt
-                        loss_reg = loss_reg * mask_gt
+                    loss_class, loss_reg_relative, loss_mask = model(image_r, gt, mask_gt)
 
                     loss_class = torch.mean(loss_class)
                     loss_mask = torch.mean(loss_mask)
-                    loss_reg = torch.mean(loss_reg)
-                    loss_reg_relative = loss_reg
+                    loss_reg_relative = torch.mean(loss_reg_relative)
 
+                    #print_cuda_data()
                     #for half precision we probably need autocast
                     #with torch.cuda.amp.autocast():
                     if (i_batch - 1) % batch_accumulation == 0 or half_precision:
                         optimizer.zero_grad()
 
 
-                    loss = loss_class + alpha_regression * loss_reg + alpha_mask * loss_mask
+                    loss = loss_class + alpha_regression * loss_reg_relative + alpha_mask * loss_mask
 
                     if half_precision:
                         scaler.scale(loss).backward()
@@ -300,21 +360,14 @@ def train():
                     else:
                         #print("going backward")
                         loss.backward()
+                        #print_cuda_data()
                         optimizer.step()
 
                 else: # evaluation
                     with torch.no_grad():
-                        x_pos_absolute, mask, _ = model(image_r)
-                        #to still measure the classification loss we need to run the network once more:
-                        x_pos_relative, _, loss_class = model(image_r, gt[:, [0], :, :])
-                        gt = gt.cuda()
-                        loss_mask = torch.abs(mask - mask_gt)
-                        loss_reg_relative = torch.abs(x_pos_relative - gt)
-                        loss_reg_absolute = torch.abs(x_pos_absolute - gt)
-                        if mask_loss:
-                            loss_class = loss_class * mask_gt
-                            loss_reg_relative = loss_reg_relative * mask_gt
-                            loss_reg_absolute = loss_reg_absolute * mask_gt
+                        loss_class, loss_reg_relative, loss_mask = model(image_r, gt, mask_gt)
+                        _, loss_reg_absolute, _ = model(image_r, None, mask_gt)
+
 
                         loss_class = torch.mean(loss_class)
                         loss_mask = torch.mean(loss_mask)
@@ -404,13 +457,13 @@ def train():
                 loss_mask_running += loss_mask.item() * batch_size
                 loss_running += loss.item() * batch_size
                 loss_reg_relative_running += loss_reg_relative.item() * batch_size
-                if phase == "eval":
+                if phase == "val":
                     loss_reg_absolute_running += loss_reg_absolute.item() * batch_size
 
             writer.add_scalar('epoch_{}/loss_class'.format(phase), loss_class_running / dataset_sizes[phase], step)
             writer.add_scalar('epoch_{}/loss_reg_relative'.format(phase),
                               loss_reg_relative_running / dataset_sizes[phase] * projector_width, step)
-            if phase == "eval":
+            if phase == "val":
                 writer.add_scalar('epoch_{}/loss_reg_absolute'.format(phase),
                                 loss_reg_absolute_running / dataset_sizes[phase] * projector_width, step)
 

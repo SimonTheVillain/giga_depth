@@ -743,7 +743,7 @@ __global__ void count_classes(
     }
     int ind_w = inds[ind];
     if(ind_w > class_count){
-        printf("something is seriously off here ind_w %d, class_count%d \n",ind_w, class_count);
+        printf("[count_classes]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
     //printf("result for: %d \n", ind_w);
     atomicAdd(&counters[ind_w], 1);
@@ -763,7 +763,7 @@ __global__ void setup_indices(
     }
     int ind_w = inds[ind];
     if(ind_w > class_count){
-        printf("something is seriously off here \n");
+        printf("[setup_indices]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
     int count_old = atomicAdd(&counters[ind_w], 1);
     int start_ind = start_inds[ind_w];
@@ -1222,6 +1222,10 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
                 weights.size(0) * weights.size(1) * sizeof(float) << " bytes" << std::endl;
     */
 
+    if(grad_output.size(0) == 0){
+        //this is not supposed to happen but it happened once so lets keep it here
+        assert(0);
+    }
 
     int32_t *sizes_gpu;
     int32_t *starting_inds_gpu;
@@ -1256,9 +1260,9 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     int threads = 256;
     dim3 blocks((overall_samples + threads - 1) / threads);
 
-    count_classes<<<blocks, threads>>>(grad_output.size(0),
+    count_classes<<<blocks, threads>>>(weights.size(0),//nr of different classes //grad_output.size(0),
                                     inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),
-                                    sizes_gpu);
+                                    sizes_gpu); //the counts for each class
 
     //download to cpu
     std::vector<int32_t> sizes_cpu(weights.size(0));
@@ -1280,12 +1284,12 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     cudaMemcpy(starting_inds_gpu, &starting_inds_cpu[0], sizeof(int32_t) * weights.size(0), cudaMemcpyHostToDevice);
 
     //setup lookup buffer
-    setup_indices<<<blocks, threads>>>( grad_output.size(0),
+    setup_indices<<<blocks, threads>>>( weights.size(0),//nr of different classes//grad_output.size(0),
                                     inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),
                                     sizes_gpu,
                                     starting_inds_gpu,
                                     ind_lookup_gpu,
-                                    counters_gpu);
+                                    counters_gpu); // the counters for each individiual class
 
 
     //TODO: calc gradients for input, w and b
