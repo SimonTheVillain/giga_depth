@@ -112,7 +112,7 @@ def train():
     if torch.cuda.device_count() == 1:
         # Mainly this means we are working on my laptop and not in a docker
         path = expanduser("~/giga_depth_results/")
-    writer = SummaryWriter(path + 'tensorboard/b2r2')
+    writer = SummaryWriter(path + 'tensorboard/b2r3')
     #writer = SummaryWriter('tensorboard/dump')
 
     model_path_src = path + "trained_models/b2r2.pt"
@@ -128,8 +128,8 @@ def train():
     #crop_res = (100, 1216)
     store_checkpoints = True
     num_epochs = 5000
-    batch_size = 2
-    num_workers = 8# 8
+    batch_size = 6
+    num_workers = 16# 8
     show_images = False
     mask_loss = False
     alpha_mask = 0.1
@@ -338,6 +338,9 @@ def train():
                     #print(gt.device)
                     loss_class, loss_reg_relative, loss_mask = model(image_r, gt, mask_gt)
 
+                    #print(loss_class.shape)
+                    #print(loss_mask.shape)
+                    #print(loss_reg_relative.shape)
                     loss_class = torch.mean(loss_class)
                     loss_mask = torch.mean(loss_mask)
                     loss_reg_relative = torch.mean(loss_reg_relative)
