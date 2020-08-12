@@ -447,15 +447,15 @@ def train():
                     print("batch {} loss {}".format(i_batch, loss_subepoch / 100))
 
                     writer.add_scalar('subepoch_{}/loss_class'.format(phase),
-                                      loss_class_subepoch / 100.0, epoch)
+                                      loss_class_subepoch / 100.0, step)
 
                     writer.add_scalar('subepoch_{}/loss_reg_relative'.format(phase),
-                                          loss_reg_relative_subepoch / 100.0 * projector_width, epoch)
+                                          loss_reg_relative_subepoch / 100.0 * projector_width, step)
                     if phase == "eval":
                         writer.add_scalar('subepoch_{}/loss_reg_absolute'.format(phase),
-                                          loss_reg_absolute_subepoch / 100.0 * projector_width, epoch)
-                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_mask_subepoch / 100.0, epoch)
-                    writer.add_scalar('subepoch_{}/loss_combined'.format(phase), loss_subepoch / 100.0, epoch)
+                                          loss_reg_absolute_subepoch / 100.0 * projector_width, step)
+                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_mask_subepoch / 100.0, step)
+                    writer.add_scalar('subepoch_{}/loss_combined'.format(phase), loss_subepoch / 100.0, step)
                     loss_class_subepoch = 0.0
                     loss_reg_relative_subepoch = 0.0
                     loss_reg_absolute_subepoch = 0.0
