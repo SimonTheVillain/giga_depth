@@ -119,13 +119,13 @@ def train():
     if torch.cuda.device_count() == 1:
         # Mainly this means we are working on my laptop and not in a docker
         path = expanduser("~/giga_depth_results/")
-    writer = SummaryWriter(path + 'tensorboard/b2r3')
+    writer = SummaryWriter(path + 'tensorboard/b2r1')
     #writer = SummaryWriter('tensorboard/dump')
 
-    model_path_src = path + "trained_models/b2r2.pt"
+    model_path_src = path + "trained_models/b2r3.pt"
     load_model = True
-    model_path_dst = path + "trained_models/b2r3.pt"
-    model_path_unconditional = path + "trained_models/b2r3_chckpt.pt"
+    model_path_dst = path + "trained_models/b2r1.pt"
+    model_path_unconditional = path + "trained_models/b2r1_chckpt.pt"
     unconditional_chckpts = True
     crop_res = (896, 1216)# - 432)
     shuffle = False
@@ -148,16 +148,16 @@ def train():
     batch_accumulation = 1
     class_count = 128
     single_slice = False
-
+    log_steps = False # log every step with tensorboard... is overkill in the most cases
     if torch.cuda.device_count() == 1:
         # Mainly this means we are working on my laptop and not in a docker
         path = expanduser("~/giga_depth_results/")
         dataset_path = "/home/simon/datasets/dataset_filtered"
         batch_size = 2
-        model_path_src = path + "trained_models/b2r2.pt"
+        model_path_src = path + "trained_models/b2r3.pt"
         load_model = False
-        model_path_dst = path + "trained_models/b2r2.pt"
-        model_path_unconditional = path + "trained_models/b2r2_chckpt.pt"
+        model_path_dst = path + "trained_models/b2r1.pt"
+        model_path_unconditional = path + "trained_models/b2r1_chckpt.pt"
 
 
     core_image_height = crop_res[0]
@@ -202,7 +202,7 @@ def train():
         #model_old = None
 
         backbone = Backbone2()
-        regressor = Regressor3(128, int(crop_res[0]/2), int(crop_res[1]/2))
+        regressor = Regressor1(128, int(crop_res[0]/2), int(crop_res[1]/2))
 
         model_old = model
         model = CompositeLossModel(backbone, regressor)
@@ -211,7 +211,7 @@ def train():
         model.regressor.conv_c = model_old.regressor.conv_c
     else:
         backbone = Backbone2()
-        regressor = Regressor3(128, int(crop_res[0]/2), int(crop_res[1]/2))
+        regressor = Regressor1(128, int(crop_res[0]/2), int(crop_res[1]/2))
 
         model = CompositeLossModel(backbone, regressor)
 
@@ -386,14 +386,15 @@ def train():
 
                         loss = loss_class + alpha_regression * loss_reg_relative + alpha_mask * loss_mask
 
-                        writer.add_scalar('batch_{}/loss_reg_absolute'.format(phase), loss_reg_absolute.item() * projector_width, step)
+                        if log_steps:
+                            writer.add_scalar('batch_{}/loss_reg_absolute'.format(phase), loss_reg_absolute.item() * projector_width, step)
                         loss_reg_absolute_subepoch += loss_reg_absolute.item()
 
-
-                writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item(), step)
-                writer.add_scalar('batch_{}/loss_class'.format(phase), loss_class.item(), step)
-                writer.add_scalar('batch_{}/loss_mask'.format(phase), loss_mask.item(), step)
-                writer.add_scalar('batch_{}/loss_reg_relative'.format(phase), loss_reg_relative.item() * projector_width, step)
+                if log_steps:
+                    writer.add_scalar('batch_{}/loss_combined'.format(phase), loss.item(), step)
+                    writer.add_scalar('batch_{}/loss_class'.format(phase), loss_class.item(), step)
+                    writer.add_scalar('batch_{}/loss_mask'.format(phase), loss_mask.item(), step)
+                    writer.add_scalar('batch_{}/loss_reg_relative'.format(phase), loss_reg_relative.item() * projector_width, step)
                 loss_reg_relative_subepoch += loss_reg_relative.item()
 
                 if False:
@@ -446,15 +447,15 @@ def train():
                     print("batch {} loss {}".format(i_batch, loss_subepoch / 100))
 
                     writer.add_scalar('subepoch_{}/loss_class'.format(phase),
-                                      loss_class_subepoch / 100.0, step)
+                                      loss_class_subepoch / 100.0, epoch)
 
                     writer.add_scalar('subepoch_{}/loss_reg_relative'.format(phase),
-                                          loss_reg_relative_subepoch / 100.0 * projector_width, step)
+                                          loss_reg_relative_subepoch / 100.0 * projector_width, epoch)
                     if phase == "eval":
                         writer.add_scalar('subepoch_{}/loss_reg_absolute'.format(phase),
-                                          loss_reg_absolute_subepoch / 100.0 * projector_width, step)
-                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_mask_subepoch / 100.0, step)
-                    writer.add_scalar('subepoch_{}/loss_combined'.format(phase), loss_subepoch / 100.0, step)
+                                          loss_reg_absolute_subepoch / 100.0 * projector_width, epoch)
+                    writer.add_scalar('subepoch_{}/loss_mask'.format(phase), loss_mask_subepoch / 100.0, epoch)
+                    writer.add_scalar('subepoch_{}/loss_combined'.format(phase), loss_subepoch / 100.0, epoch)
                     loss_class_subepoch = 0.0
                     loss_reg_relative_subepoch = 0.0
                     loss_reg_absolute_subepoch = 0.0
@@ -470,17 +471,17 @@ def train():
                 if phase == "val":
                     loss_reg_absolute_running += loss_reg_absolute.item() * batch_size
 
-            writer.add_scalar('epoch_{}/loss_class'.format(phase), loss_class_running / dataset_sizes[phase], step)
+            writer.add_scalar('epoch_{}/loss_class'.format(phase), loss_class_running / dataset_sizes[phase], epoch)
             writer.add_scalar('epoch_{}/loss_reg_relative'.format(phase),
-                              loss_reg_relative_running / dataset_sizes[phase] * projector_width, step)
+                              loss_reg_relative_running / dataset_sizes[phase] * projector_width, epoch)
             if phase == "val":
                 writer.add_scalar('epoch_{}/loss_reg_absolute'.format(phase),
-                                loss_reg_absolute_running / dataset_sizes[phase] * projector_width, step)
+                                loss_reg_absolute_running / dataset_sizes[phase] * projector_width, epoch)
 
-            writer.add_scalar('epoch_{}/loss_mask'.format(phase), loss_mask_running / dataset_sizes[phase], step)
+            writer.add_scalar('epoch_{}/loss_mask'.format(phase), loss_mask_running / dataset_sizes[phase], epoch)
 
             writer.add_scalar('epoch_{}/loss_combined'.format(phase),
-                              loss_running / dataset_sizes[phase], step)
+                              loss_running / dataset_sizes[phase], epoch)
             print('{} Loss: {:.4f}'.format(phase, loss_running / dataset_sizes[phase]))
             # print(net.conv_dwn_0_1.weight.grad == 0)
             # store at the end of a epoch
