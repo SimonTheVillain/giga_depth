@@ -18,11 +18,21 @@ from model.model_CR10hs_half import Model_CR10_hsn_half
 
 from model.backbone_v1 import Backbone1
 from model.backbone_v2 import Backbone2
+from model.backbone_6_64 import Backbone6_64
 from model.regressor_v1 import Regressor1
 from model.regressor_v2 import Regressor2
+from model.regressor_2Stage import Regressor2Stage
 from torch.utils.data import DataLoader
 import time
 
+def get_n_params(model):
+    pp=0
+    for p in list(model.parameters()):
+        nn=1
+        for s in list(p.size()):
+            nn = nn*s
+        pp += nn
+    return pp
 
 class Model_test(nn.Module):
 
@@ -58,7 +68,6 @@ class CompositeModel(nn.Module):
         x, mask, class_loss = self.regressor(x, x_gt)
         return x, mask, class_loss
 
-half_precision = True
 slices = 8
 class_count = 128
 core_image_height = 112
@@ -77,18 +86,19 @@ runs = 10
 #model = Model_CR10_3_hsn(class_count, core_image_height)
 model = Model_CR10_5_hsn(class_count, core_image_height)
 
-backbone = Backbone2()
-regressor = Regressor1(128, 448, 608)
-regressor = Regressor2(128, 448, 608)
+backbone = Backbone6_64()
+regressor = Regressor2Stage(64, 448, 608)
 model = CompositeModel(backbone, regressor)
 #model = Model_CR11_hn(core_image_height, class_count)
 #model = Model_test()
 input_channels = 1
+batches = 2
 warm_up = True
 torch.backends.cudnn.benchmark = True
 
 
 model.cuda()
+print(f"nr model params: {get_n_params(model)}")
 
 for half_precision in [False]:#, True]:
 
@@ -99,7 +109,7 @@ for half_precision in [False]:#, True]:
     model.eval()
 
     with torch.no_grad():
-        test = torch.rand((1, input_channels, int(crop_res[0]), int(crop_res[1])), dtype=torch.float32).cuda()
+        test = torch.rand((batches, input_channels, int(crop_res[0]), int(crop_res[1])), dtype=torch.float32).cuda()
         if half_precision:
             test = test.half()
         else:

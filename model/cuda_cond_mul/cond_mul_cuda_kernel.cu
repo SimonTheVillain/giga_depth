@@ -8,41 +8,8 @@
 #include <iostream>
 
 namespace {
-/*
-template <typename scalar_t>
-__device__ __forceinline__ scalar_t sigmoid(scalar_t z) {
-  return 1.0 / (1.0 + exp(-z));
-}
 
-template <typename scalar_t>
-__device__ __forceinline__ scalar_t d_sigmoid(scalar_t z) {
-  const auto s = sigmoid(z);
-  return (1.0 - s) * s;
-}
 
-template <typename scalar_t>
-__device__ __forceinline__ scalar_t d_tanh(scalar_t z) {
-  const auto t = tanh(z);
-  return 1 - (t * t);
-}
-
-template <typename scalar_t>
-__device__ __forceinline__ scalar_t elu(scalar_t z, scalar_t alpha = 1.0) {
-  return fmaxf(0.0, z) + fminf(0.0, alpha * (exp(z) - 1.0));
-}
-
-template <typename scalar_t>
-__device__ __forceinline__ scalar_t d_elu(scalar_t z, scalar_t alpha = 1.0) {
-  const auto e = exp(z);
-  const auto d_relu = z < 0.0 ? 0.0 : 1.0;
-  return d_relu + (((alpha * (e - 1.0)) < 0.0) ? (alpha * e) : 0.0);
-}
-*/
-template <typename scalar_t>
-__global__ void test_kernel(const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
-                            const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds){
-    //printf("this is not working\n");
-};
 
 //extremely slow kernel... TODO: delete!!!
 /*
@@ -77,6 +44,7 @@ __global__ void cond_mul_cuda_forward_kernel(
 */
 
 
+//pretty trivial kernel that has as many threads in the x-dimension of a block as output channels
 template <typename scalar_t>
 __global__ void cond_mul_cuda_forward_wide_kernel(
     const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
@@ -86,9 +54,9 @@ __global__ void cond_mul_cuda_forward_wide_kernel(
     torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> output) {
     //extern __shared__ uint8_t shared[];
     const int ind = blockIdx.x * blockDim.y + threadIdx.y;
-    const int m = weights.size(1);
-    const int n = weights.size(2);
-    const int in = threadIdx.x;
+    const int m = weights.size(1);//m input channels
+    const int n = weights.size(2);//n output channels
+    const int in = threadIdx.x;//index for the output is the thread index
 
     //scalar_t *v = (scalar_t*)&shared[0 * sizeof(scalar_t)];//TODO: this! if it is necessary
     //int32_t *is = (int32_t*)&shared[n * blockDim.y * sizeof(scalar_t)];
@@ -105,6 +73,8 @@ __global__ void cond_mul_cuda_forward_wide_kernel(
     output[ind][in] = result;
 }
 
+
+//TODO: find out if the m_mult_32 overload really is used!!! (and if it really works in both cases)
 template <typename scalar_t, bool m_mult_32>
 __global__ void cond_mul_cuda_forward_deep_kernel(
     const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
@@ -209,6 +179,7 @@ __global__ void cond_mul_cuda_forward_deep_kernel(
 }
 
 
+//TODO: find out if the m_mult_32 overload really is used!!! (and if it really works in both cases)
 template <typename scalar_t, bool m_mult_32>
 __global__ void cond_mul_cuda_forward_deep_reuse_kernel(
     const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
@@ -347,7 +318,10 @@ source venv/bin/activate
 sudo env PATH=$PATH nvprof --analysis-metrics -f -o prof.nvvp venv/bin/python test_cuda_cond_mul.py
 nvvp prof.nvvp
 */
-template <typename scalar_t, bool m_mult_32,int m_per_warp,int n>
+
+//Kernel for m multiple of 32 and n <=32
+//reuse means it is trying not to reload weights at every pixel.
+template <typename scalar_t,int m_per_warp,int n>
 __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
     const int parts,
     const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
@@ -369,7 +343,8 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
     const int simultaneous_pix = m_per_warp; //threads / n // same as blockDim.y
     const int colums_per_warp = m_per_warp; //threads / n
     const int warps_per_weight_set = n; // n
-    //const int parts = (m + threads - 1) / threads; //TODO: make this a parameter
+
+    //buffer for the weights of the n outputs (for big n this will use too many registers)
     scalar_t w[n];
 
     scalar_t *acc = (scalar_t*)&shared[0];
@@ -397,6 +372,8 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
             }
             scalar_t v = input[pix][32 * j + tid];
             int ind_w = __shfl_sync(0xffffffff, weight_index, k);
+
+            // in case of a new index for loading, we reload new weights
             if(ind_w != last_ind){
                 for(int i=0;i<n;i++){
                     int im = j * 32 + i * blockDim.y + threadIdx.y; //index along m direction of weight / input
@@ -405,6 +382,9 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
                 last_ind = ind_w;
             }
             scalar_t result = 0;
+
+            //TODO: document this part
+
             for(int i=0;i<n;i++){
                 result += w[i] *
                                 __shfl_sync(0xffffffff, v, i * blockDim.y + threadIdx.y);
@@ -442,11 +422,12 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
 
 /*
 * all what has been written in the comments of the function above is applied here...
-* it improves performance for n = 1, 2 and 4.... so it's actually pretty useless!
+* it improves performance for n = 1, 2 and 4 so it's actually pretty useless! For bigger n, it uses too many registers
 */
-template <typename scalar_t, bool m_mult_32,int m_per_warp,int n>
+
+template <typename scalar_t,int m_per_warp,int n>
 __global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
-    const int parts,
+    const int parts, //the parts in which the input/weights get loaded. for each part all outputs are calculated simultanously
     const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
     const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds, //indices are in int32 datatype
     const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> weights,
@@ -454,22 +435,29 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
     torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> output) {
     extern __shared__ uint8_t shared[];
 
-    //TODO: rethink the meaning of threadIdx.x! It should be n
+    //gridDim.x == (nr_pixel + 64 - 1) / 64
+    //gridDim.y == 1
+    //gridDim.z == 1
 
+	//blockDim.x == n
+	//blockDim.y == samples of the input can be processed at once in the same warp (32/n)
+	//blockDim.z == 2
+
+	//each block has 64 threads in this version, each warp of 32 is processing 32 "pixel"
     const int base_ind = 64 * blockIdx.x + 32*threadIdx.z; // the starting pixel for this block
     const int overall_samples = input.size(0);
     const int m = weights.size(1);
-    //const int n = blockDim.x;//weights.size(2); // should be same asblockDim.x
-    //const int in = threadIdx.x;
     const int threads = 32; // threads in one block/warp (always 32)
-    const int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    const int tid = threadIdx.y * blockDim.x + threadIdx.x; //thread index within a warp
     const int simultaneous_pix = m_per_warp; //threads / n // same as blockDim.y
     const int colums_per_warp = m_per_warp; //threads / n
     const int warps_per_weight_set = n; // n
     //const int parts = (m + threads - 1) / threads; //TODO: make this a parameter
+
+    //lets store weights for the processing in a register vairable
     scalar_t w[n];
     //the accumulator should be exactly n*32 long
-    scalar_t *acc = (scalar_t*)&shared[sizeof(scalar_t) * 32 * n * threadIdx.z];
+    scalar_t *acc = (scalar_t*)&shared[sizeof(scalar_t) * 32 * n * threadIdx.z]; //TODO: find out if threadIdx.z really is used!!!
     //load indices
     int weight_index;
     if( (base_ind + tid) < overall_samples){ //also check if we are overstepping the boundaries
@@ -481,21 +469,31 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
     for(int i = 0;i < n; i++){
         acc[i * 32 + tid] = 0;
     }
-    //return;
-    //int im = tid;
-    //the input/weights of one pixel need to be split into parts
+
+
+    //the input/weights of each pixel need to be split into parts (of size 32)
+    //TODO: think why we are buffering the weights and not input values + output accumulators?
     for(int j = 0; j < parts;j++){
         // load the next 32 values for 32 pixel:
         int last_ind = -1;
         for(int k = 0; k < 32; k++){
             int pix = base_ind + k;
+
+            //stop when we are out of pixel!
             if( pix >= overall_samples){
                 break;
             }
+            //load the value we need
             scalar_t v = input[pix][32 * j + tid];
+            //get the current index we are at from other threads within the warp.(loaded in the beginning)
             int ind_w = __shfl_sync(0xffffffff, weight_index, k);
             if(ind_w != last_ind){
                 for(int i=0;i<n;i++){
+                	//TODO: is 32 really right?
+                	//im consists of a few things
+                	//the threadIdx.y... the "lane" of weights/values since only blockDim.y input channels can be processed at once
+                	//i... as blockDim.y "lanes" are processed at once a block of 32 needs to be split into n (blockDim.x) parts
+                	//j... the part we are at.
                     int im = j * 32 + i * blockDim.y + threadIdx.y; //index along m direction of weight / input
                     w[i] = weights[ind_w][im][threadIdx.x];
                 }
@@ -509,22 +507,29 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
 
             //printf("j %d, tid %d, result = %f\n",j,tid, result);
             //now do reduction: I know. for a few clocks this will underutilize the SM
+			/*
             if(n <= 16){
-                result += __shfl_down_sync(0xffffffff, result, 16);
+                result += __shfl_down_sync(0x0000ffff, result, 16);
                 //printf("shfl 16 tid %d, result = %f\n",tid, __shfl_down_sync(0xffffffff, result, 16));
             }
             if(n <= 8 && tid < 16){
-                result += __shfl_down_sync(0xffffffff, result, 8);
+                result += __shfl_down_sync(0x000000ff, result, 8);
             }
             if(n <= 4 && tid < 8){
-                result += __shfl_down_sync(0xffffffff, result, 4);
+                result += __shfl_down_sync(0x0000000f, result, 4);
             }
             if(n <= 2 && tid < 4){
-                result += __shfl_down_sync(0xffffffff, result, 2);
+                result += __shfl_down_sync(0x00000004, result, 2);
             }
             if(n <= 1 && tid < 2){
-                result += __shfl_down_sync(0xffffffff, result, 1);
+                result += __shfl_down_sync(0x00000001, result, 1);
             }
+            */
+
+			//proper reduction, we don't need to close down threads since they all are synced (the inneccessary additions are not too bad)
+			for (int offset = 16; offset >= n; offset /= 2)
+				result += __shfl_down_sync(0xffffffff, result, offset);
+
             if(tid < n){
                 //store result in accumulator (shared memory
                 acc[tid + k * n] += result;
@@ -533,7 +538,7 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
         }
     }
     __syncwarp(); // the warp should be in sync anyway (except for turing gpus... there it might differ!!!)
-
+	//return;
     for(int i=0;i<n;i++){
         int pix_local = i * blockDim.y + threadIdx.y;
         int pix = base_ind + pix_local;
@@ -822,6 +827,8 @@ __global__ void cond_mul_cuda_backward_w_kernel(
     }
     grad_w[ind_w][im][in] = accu;
 }
+
+//TODO: why is this commented out? was it because it was too slow?
  /*
 template <typename scalar_t>
 __global__ void cond_mul_cuda_backward_kernel(
@@ -899,20 +906,24 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
 
       //TODO: a few issues still reside: for 1 its not better than just having 128 results and then picking the right one
       //also, for 8 its not better than the version without the shared memory
-      if(((n == 1) || (n == 2) || (n == 4)) && // maybe templating would work
-         m%32 == 0){
+      if(((n == 1) || (n == 2) || (n == 4)) && m%32 == 0){
+
+      		std::cout << "Running the high occupancy kernel(cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel)" << std::endl;
             //TODO: reevaluate this implementation!!!!
             //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
             shared_size = 2 * sizeof(scalar_t) * 32 * n; // for the accumulator
 
             const int per_group = 32/n;
-            const dim3 threads3(n, per_group, 2); //lets have 64 threads per group
+            const dim3 threads3(n, per_group, 2); //lets have 64 threads per group (doubles the use of shared memory)
             const dim3 blocks((overall_samples + 64 - 1) / 64);
+            std::cout << threads3.x << ", " << threads3.y << ", " << threads3.z << std::endl;
+
+            std::cout << blocks.x << ", " << blocks.y << ", " << blocks.z << std::endl;
             const int parts = (m + 32 - 1) / 32;
 
             switch(n){
                 case 1:
-                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 32, 1><<<blocks, threads3, shared_size>>>(
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, 32, 1><<<blocks, threads3, shared_size>>>(
                         parts,
                         input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                         inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
@@ -921,7 +932,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                         output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
                     break;
                 case 2:
-                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 16, 2><<<blocks, threads3, shared_size>>>(
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, 16, 2><<<blocks, threads3, shared_size>>>(
                         parts,
                         input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                         inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
@@ -930,7 +941,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                         output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
                     break;
                 case 4:
-                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 8, 4><<<blocks, threads3, shared_size>>>(
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, 8, 4><<<blocks, threads3, shared_size>>>(
                         parts,
                         input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                         inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
@@ -939,7 +950,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                         output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
                     break;
                 case 8:
-                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 4, 8><<<blocks, threads3, shared_size>>>(
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, 4, 8><<<blocks, threads3, shared_size>>>(
                         parts,
                         input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                         inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
@@ -948,7 +959,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                         output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
                     break;
                 case 16:
-                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 2, 16><<<blocks, threads3, shared_size>>>(
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, 2, 16><<<blocks, threads3, shared_size>>>(
                         parts,
                         input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                         inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
@@ -957,7 +968,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                         output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
                     break;
                 case 32:
-                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, true, 1, 32><<<blocks, threads3, shared_size>>>(
+                    cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel<scalar_t, 1, 32><<<blocks, threads3, shared_size>>>(
                         parts,
                         input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                         inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
@@ -967,72 +978,73 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                     break;
 
             }
-      }else if(((n == 1) || (n == 2) || (n == 4)  || (n == 8) || (n == 16) || (n == 32)) && // maybe templating would work
-         m%32 == 0){
-            //TODO: reevaluate this implementation!!!!
-            //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
-            shared_size = sizeof(scalar_t) * threads * (threads + 1); // for the accumulator
+      }else if(((n == 8) || (n == 16) || (n == 32)) && m%32 == 0){
 
-            const int per_group = 32/n;
-            const dim3 threads3(n, per_group);
-            const dim3 blocks((overall_samples + 32 - 1) / 32);
-            const int parts = (m + 32 - 1) / 32;
+		  std::cout << "Running the deep_reuse kernel(cond_mul_cuda_forward_deep_reuse32_kernel) n,m: " << n << ", " << m << std::endl;
+      	//TODO: reevaluate this implementation!!!!
+		//neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
+		shared_size = sizeof(scalar_t) * threads * (threads + 1); // for the accumulator
+		//std::cout << "parts: " << parts << ", n: " << n << std::endl;
 
-            switch(n){
-                case 1:
-                    cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, true, 32, 1><<<blocks, threads3, shared_size>>>(
-                        parts,
-                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-                    break;
-                case 2:
-                    cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, true, 16, 2><<<blocks, threads3, shared_size>>>(
-                        parts,
-                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-                    break;
-                case 4:
-                    cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, true, 8, 4><<<blocks, threads3, shared_size>>>(
-                        parts,
-                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-                    break;
-                case 8:
-                    cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, true, 4, 8><<<blocks, threads3, shared_size>>>(
-                        parts,
-                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-                    break;
-                case 16:
-                    cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, true, 2, 16><<<blocks, threads3, shared_size>>>(
-                        parts,
-                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-                    break;
-                case 32:
-                    cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, true, 1, 32><<<blocks, threads3, shared_size>>>(
-                        parts,
-                        input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-                        inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-                        weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-                        output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-                    break;
+		const int per_group = 32/n;
+		const dim3 threads3(n, per_group);
+		const dim3 blocks((overall_samples + 32 - 1) / 32);
+		const int parts = (m + 32 - 1) / 32;
+		switch(n){
+		case 1:
+			cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, 32, 1><<<blocks, threads3, shared_size>>>(
+				parts,
+				input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+				inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+				weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+			break;
+		case 2:
+			cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, 16, 2><<<blocks, threads3, shared_size>>>(
+				parts,
+				input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+				inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+				weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+			break;
+		case 4:
+			cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, 8, 4><<<blocks, threads3, shared_size>>>(
+				parts,
+				input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+				inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+				weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+			break;
+		case 8:
+			cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, 4, 8><<<blocks, threads3, shared_size>>>(
+				parts,
+				input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+				inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+				weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+			break;
+		case 16:
+			cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, 2, 16><<<blocks, threads3, shared_size>>>(
+				parts,
+				input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+				inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+				weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+			break;
+		case 32:
+			cond_mul_cuda_forward_deep_reuse32_kernel<scalar_t, 1, 32><<<blocks, threads3, shared_size>>>(
+				parts,
+				input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+				inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+				weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+				output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+			break;
 
             }
 
@@ -1040,6 +1052,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
       }else if(((n == 1) || (n == 2) || (n == 4)  || (n == 8) || (n == 16)) && // maybe templating would work
                 m%32 == 0 &&
                 shared_size < 16000){
+      	//TODO: check if this is something we want to keep!?
         //terrible performance at n = 32 (next one is 2 times faster)
         //better performance for n = 16 if the weights are shared for consecutive frames
         //same if they are not shared. Alltogether, it is same / better than
@@ -1065,6 +1078,8 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
       }else if(((n == 1) || (n == 2) || (n == 4)  || (n == 8) || (n == 16)) && //TODO: find something that works better for 8!!! (templating?)
                 m%32 == 0 &&
                 shared_size < 16000){
+
+      	//TODO: check if this is still something we want to keep!?
         //version with less use of shared memory
         //same or better than the next one
 
@@ -1089,6 +1104,8 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
       else if(((n == 1) || (n == 2) || (n == 4)  || (n == 8)) &&// || (n == 16)) &&  //TODO: find something that works better for 8!!! (templating?)
          m%32 == 0 &&
          shared_size < 16000){
+
+      	//TODO: check if this is still something we want to keep!?
          //version with shared memory
          //same or batter than the one without shared memory in  only in a few cases
 
@@ -1106,14 +1123,15 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
 
       }else{
          //version without shared memory
+         //TODO: fix the cases in which this fails!!!
          //std::cout << "wide branch" << std::endl;
 
          size_t per_group = 256/n;// it actually doesn't matter if this were 32 threads. works just the same
+         assert(n * per_group == 256);
          const dim3 threads3(n, per_group);
-
-         //shared size could be useful but isn't seemingly
-         //shared_size = sizeof(scalar_t) * m * per_group;// + sizeof(int32_t) * per_group;
          const dim3 blocks((overall_samples + per_group - 1) / per_group);
+
+
          cond_mul_cuda_forward_wide_kernel<scalar_t><<<blocks, threads3>>>(
             input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
             inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
@@ -1121,76 +1139,6 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
             bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
             output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
       }
-      /*
-      if(n >= 8 || shared_size > 32000){//n%8 == 0){ // maybe this is preferrable for all n bigger than 8 or 16 (not only multiple of n
-        std::cout << "wide branch" << std::endl;
-
-        size_t per_group = 256/n;
-        const dim3 threads3(n, per_group);
-
-        //shared size could be useful but isn't seemingly
-        //shared_size = sizeof(scalar_t) * m * per_group;// + sizeof(int32_t) * per_group;
-        const dim3 blocks((overall_samples + per_group - 1) / per_group);
-        cond_mul_cuda_forward_wide_kernel<scalar_t><<<blocks, threads3>>>(
-            input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-            weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-      }
-      else if(shared_size > 48000 && false){ // 48000 is the smalles supported shared memory size (i think)
-        //TODO: remove! this is slow
-        threads = 1024;
-        const dim3 blocks((overall_samples + threads - 1) / threads);
-        cond_mul_cuda_forward_kernel<scalar_t><<<blocks, threads>>>(
-            input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-            weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-      }else if(true){
-        std::cout << "deep branch with " << shared_size << "bytes of shared memory" << std::endl;
-
-        const int per_group = 32/n;
-        const dim3 threads3(n, per_group);
-        const dim3 blocks((overall_samples + per_group - 1) / per_group);
-        cond_mul_cuda_forward_deep_kernel<scalar_t><<<blocks, threads3, shared_size>>>(
-            input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-            weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-
-      }else{
-        //TODO: REMOVE! this is slow
-        std::cout << "fast branch" << std::endl;
-        //the fast branch that tries to utilize shared memory as good as possible
-        //unfortunately the fast branch is not really faster in most cases but just in some
-
-        threads = m;
-        threads = 32;
-        if(threads>1024){
-          threads = 128;
-        }
-        size_t shared_size = sizeof(scalar_t) * (m*n + n + m + n*threads);
-        int group_size = 1;
-        dim3 blocks(overall_samples);
-        if(overall_samples > 128){
-            group_size = overall_samples / 128;
-            blocks.x = (overall_samples + group_size - 1) / group_size;
-        }
-
-        cond_mul_cuda_forward_fast_kernel<scalar_t><<<blocks, threads, shared_size>>>(
-            group_size,
-            input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
-            inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-            weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
-            output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
-
-
-      }
-      */
   }));
 
   return {output};

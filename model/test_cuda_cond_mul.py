@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from cuda_cond_mul.cond_mul import CondMul
-from cuda_cond_mul.reference_cond_mul import RefCondMul
-from cuda_cond_mul.reference_cond_mul import Ref2CondMul
+from .cuda_cond_mul.cond_mul import CondMul
+from .cuda_cond_mul.reference_cond_mul import RefCondMul
+from .cuda_cond_mul.reference_cond_mul import Ref2CondMul
 import time
 import sys
 
@@ -200,7 +200,7 @@ width = 608
 height = 448
 classes = 128 # (classes per line)
 m = 128
-n = 16
+n = 1
 absolute_random = True
 #width = 1 #TODO: remove these debug measures
 #height = 1
@@ -214,7 +214,7 @@ linear_custom = CondMul(classes * height, m, n).cuda(device)
 #linear_custom.w.data[:] = 1
 #linear_custom.b.data[:] = 0
 compare_models(linear_custom, linear_ref, torch.int32, width, height, classes)
-#sys.exit(0)
+sys.exit(0)
 print("time used by inference (custom)")
 measure_time_two_way(linear_custom, torch.int32, width, height, classes, absolute_random)
 #sys.exit(0)
