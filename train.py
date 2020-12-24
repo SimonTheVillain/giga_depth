@@ -204,31 +204,23 @@ def sqr_loss(output, mask, gt, enable_masking, use_smooth_l1=False):
 
 
 def train():
-    dataset_path = "/media/simon/ssd_data/data/dataset_reduced_0_08"
+    dataset_path = "/home/simon/datasets/structure_core_unity"
 
-    if os.name == 'nt':
-        dataset_path = "D:/dataset_filtered"
-    writer = SummaryWriter('tensorboard/train_model1_new_loss_rescaled')
+    experiment_name = "bb64_2stage_simple"
 
-    model_path_src = "trained_models/model_2_lr_0001.pt"
-    load_model = False
-    model_path_dst = "trained_models/model_1_new_loss_old_scale_lr.pt"
-    crop_div = 2
-    crop_res = (896/crop_div, 1216/crop_div)
-    store_checkpoints = True
-    num_epochs = 500
-    batch_size = 6# 6
-    num_workers = 8# 8
-    show_images = False
-    shuffle = False
-    half_res = True
-    enable_mask = False
+    writer = SummaryWriter(f"tensorboard/{experiment_name}")
+
+    model_path_src = ""
+    model_path_dst = f"trained_models/{experiment_name}.pt"
+
+    num_epochs = 5000
+    batch_size = 1 # batch size of 1 to begin with!!!!
+    num_workers = 8
     alpha = 0.1
-    use_smooth_l1 = False
     learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
     #learning_rate = 0.00001# should be about 0.001 for disparity based learning
     momentum = 0.90
-    projector_width = 1280
+
 
     depth_loss = False
     if depth_loss:
@@ -238,14 +230,11 @@ def train():
 
     min_test_epoch_loss = 100000.0
 
-
-    if load_model:
+    if model_path_src != "":
         model = torch.load(model_path_src)
         model.eval()
     else:
         model = Model1()
-
-
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

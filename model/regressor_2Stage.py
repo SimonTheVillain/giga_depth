@@ -107,6 +107,7 @@ class Regressor2Stage(nn.Module):
         inds = inds2.reshape((batches, 1, self.height, self.width))
         inds -= offset * self.stage_1_classes * self.stage_2_classes
         print("after reshaping and recalculating indices")
+        # the output lies between 0 and 1 to indicate the x position in the dot-pattern projector
         x = (inds.float() + x_2[:, 0, :, :]) * (1.0 / self.stage_1_classes * self.stage_2_classes)
         print("after calculating x")
         # one last relu for the masking
