@@ -1,4 +1,5 @@
 from dataset_rendered_2 import DatasetRendered2
+import numpy as np
 import cv2
 dataset_path = "/home/simon/datasets/structure_core_unity"
 
@@ -9,6 +10,7 @@ for data in dataset:
     ir, gt, mask = data
     cv2.imshow("ir", ir)
     cv2.imshow("gt", gt)
+    cv2.imshow("mask", mask)
     cv2.waitKey()
     print(ir)
 

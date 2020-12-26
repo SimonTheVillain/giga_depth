@@ -12,21 +12,23 @@ import matplotlib.pyplot as plt
 
 
 def downsample(image):
-    image = image.reshape(image.shape[0]/2,2,image.shape[1]/2,2)
+    image = image.reshape(int(image.shape[0]/2), 2, int(image.shape[1]/2), 2)
     image = np.mean(image, axis=3)
     image = np.mean(image, axis=1)
     return image
 
 def downsampleDepth(d):
-    d = d.reshape(d.shape[0]/2,2,d.shape[1]/2,2)
+    d = d.reshape(int(d.shape[0]/2), 2, int(d.shape[1]/2), 2)
     d = np.mean(d, axis=3)
     d = np.mean(d, axis=1)
     return d
 
 
+
+
 class DatasetRendered2(data.Dataset):
 
-    def __init__(self, root_dir, start_ind, stop_ind, vertical_jitter=2, depth_threshold=15, noise=0.01):
+    def __init__(self, root_dir, start_ind, stop_ind, vertical_jitter=2, depth_threshold=15, noise=0.1):
         self.from_ind = start_ind
         self.to_ind = stop_ind
         self.root_dir = root_dir
@@ -50,7 +52,7 @@ class DatasetRendered2(data.Dataset):
         # values are in the configuration of the unity rendering project
         self.focal_projector = 850 #todo: get real value!
         self.res_projector = 1024
-        self.baselines = {"left": 0.0634 - 0.0, "right": 0.0634 - 0.07501} #todo: is the baseline correct!?
+        self.baselines = {"left": 0.0634 - 0.07501, "right": 0.0634 - 0.0}
 
     def __len__(self):
         # * 2 since we are working with stereo images
@@ -73,7 +75,8 @@ class DatasetRendered2(data.Dataset):
         grey = bgr[:, :, 0] * channel_weights[0] + \
                bgr[:, :, 1] * channel_weights[1] + \
                bgr[:, :, 2] * channel_weights[2]
-        grey += np.random.rand(grey.shape[0], grey.shape[1]).astype(np.float32) * self.noise
+        grey += np.random.rand(grey.shape[0], grey.shape[1]) * np.random.rand() * self.noise
+        grey = grey.astype(np.float32)
         #todo: add noise and scaling of intensity here!!!!
 
 
@@ -83,19 +86,36 @@ class DatasetRendered2(data.Dataset):
         # calculate the (normalized) pixel coordinate in the pattern projector
         # since unity only allowes us to store float16, the offset had to be stored normalized +
         # subtracted from its x-position
-        x_gt = gt[:, :, 2] + np.arange(0, gt.shape[1]) * (1.0 / float(gt.shape[1]))
+        # TODO: delete this since it is hard to use this for subsampling (bilinear is wrong) max filtering as well
+        # guiding by depth is not right either. (calculating depth from this & downsampling would be the way to go)
+        x_gt = gt[:, :, 2] + np.expand_dims(np.arange(0, gt.shape[1]), axis=0) * (1.0 / float(gt.shape[1]))
         x_gt = x_gt[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0]+rr[2]]
+        # simple downsampling actually is not the way to go!!!!
+        x_gt = x_gt.astype(np.float32)
+        x_gt = downsample(x_gt)
 
         mask = np.logical_and(gt[:, :, 0] < self.depth_threshold, gt[:, :, 1] == 0)
-        mask = mask[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0]+rr[2]]
+        mask = mask[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0]+rr[2]].astype(np.float32)
 
-        #depth only is needed to guide the sampling of x_gt and mask!!! (although it definitely is complicated)
-        #todo: downsample x_gt and mask!!!!
+        # depth is used to generate the x-position(groundtruth) in the dot-projector.
         depth = gt[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0]+rr[2], 0]
-
-        x_d = (np.arange(0, self.tgt_res[0]) - self.tgt_cxy[0]) * depth / self.focal
+        # calculate x-poistion in real-world coordinates
+        depth = downsampleDepth(depth) # half the resolution of depth taking the closest sample
+        x_d = (np.arange(0, int(self.tgt_res[0]/2)) - self.tgt_cxy[0] * 0.5) * depth / (self.focal * 0.5)
+        # for the right sensor we want to shift the points 6.34cm to the right
+        # for the left sensor we want to shift the points approx 1.1cm to the left
         x_d += self.baselines[side]
-        x_d = x_d * self.focal_projector / depth + float(self.res_projector[0])/2.0
-        #todo: maybe freshly calculate x_gt from depth!!!!
-        return grey, x_gt, mask
+        x_d = x_d * (self.focal_projector / depth) + float(self.res_projector)/2.0
+        x_d = x_d * (1.0/float(self.res_projector))
+        x_d = x_d.astype(np.float32)
+
+        #downsample the mask. (prioritize invalid pixel!!!)
+        mask[mask == 0] = 2
+        mask = downsampleDepth(mask)
+        mask[mask == 2] = 0
+
+        #cv2.imshow("x_d", x_d)
+        #cv2.imshow("diff", np.abs(x_d - x_gt) * 100.0)
+
+        return grey, x_d, mask
 

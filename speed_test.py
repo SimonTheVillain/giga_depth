@@ -92,7 +92,7 @@ model = CompositeModel(backbone, regressor)
 #model = Model_CR11_hn(core_image_height, class_count)
 #model = Model_test()
 input_channels = 1
-batches = 2
+batches = 1
 warm_up = True
 torch.backends.cudnn.benchmark = True
 

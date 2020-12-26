@@ -43,7 +43,7 @@ class Regressor2Stage(nn.Module):
         inds = (inds + offset * self.classes) // div_inds
         inds = inds.reshape(-1).type(torch.int32)
         return inds
-    def forward(self, x, x_gt):
+    def forward(self, x, x_gt=None, mask_gt=None):
         batches = x.shape[0]
         device = x.device
         # go from (b, c, h, w) to (b, h, c, w)
@@ -62,6 +62,15 @@ class Regressor2Stage(nn.Module):
         print(classes1.argmax(dim=2).shape)
         # get the classes //TODO: why unsqueeze/ adding dimension?
         inds1 = classes1.argmax(dim=2).unsqueeze(1)
+
+        if x_gt is not None:
+            inds1 = (x_gt * self.stage_1_classes).astype(torch.int32)
+
+            ce = nn.CrossEntropyLoss() # softmax is builtin here(the documentation says)
+            loss = ce(classes1, inds1.astype(torch.int64))
+            class_losses = [torch.mean(loss * mask_gt)]
+
+
         print(inds1.shape)
         # go from (b, 1, h, w) to (b, h , 1, w)?
         #inds1 = inds1.transpose(1, 2)#TODO: is this necessary?
@@ -83,22 +92,34 @@ class Regressor2Stage(nn.Module):
             return
 
         classes2 = F.leaky_relu(self.stage_2(x_2.contiguous(), inds))
+
         # TODO: find out why this conditional multiply is failing here!!!!
-        print("before cuda device synchronize(stage_2)")
-        torch.cuda.synchronize()
-        print("after cuda device synchronize")
+        #print("before cuda device synchronize(stage_2)")
+        #torch.cuda.synchronize()
+        #print("after cuda device synchronize")
         inds2 = classes2.argmax(dim=1)
         inds2 = inds * self.stage_2_classes + inds2 #TODO: big mistake happening here!!!!!!!!
 
+        if x_gt is not None:
+            inds2 = (x_gt * self.stage_1_classes * self.stage_2_classes % self.stage_2_classes).astype(torch.int32)
+
+            loss = ce(classes2, inds2.astype(torch.int64))
+            class_losses.append(torch.mean(loss * mask_gt))
+
+            # Inds2 must provide absolute indices to the regression classes
+            # this includes the offset due to lines in the image
+            inds2 = (x_gt * self.stage_1_classes * self.stage_2_classes).astype(torch.int32)
+            inds2 += offset * self.stage_1_classes * self.stage_2_classes
         if torch.any(inds2 < 0) or torch.any(inds2 >= self.height * self.stage_1_classes * self.stage_2_classes):
             print("big mistake, indices are out of bounds!!!")
             return
         #TODO: build in checks to prevent any of these indices being off limits!
+        x_2 = x_2.contiguous()
         x_2 = self.stage_regression(x_2, inds2.type(torch.int32))
 
-        print("before cuda device synchronize (regression_stage)")
-        torch.cuda.synchronize()
-        print("after cuda device synchronize")
+        #print("before cuda device synchronize (regression_stage)")
+        #torch.cuda.synchronize()
+        #print("after cuda device synchronize")
 
         x_2 = x_2.reshape((batches, self.height, self.width, 2))
         x_2 = x_2.permute([0, 3, 1, 2])
@@ -114,9 +135,11 @@ class Regressor2Stage(nn.Module):
         mask = F.leaky_relu(x_2[:, 1, :, :])# TODO: no relu
 
         # TODO: loss
-        loss = None
         print("what is going on here!!!!")
         #TODO: find out what else we need here!
-        return x, mask, loss
+        if x_gt is not None:
+            return x, mask
+        else:
+            return x, mask, class_losses
 
 
