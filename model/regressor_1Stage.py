@@ -6,31 +6,27 @@ from model.residual_block import ResidualBlock_shrink
 
 
 #Regressor
-class Regressor2Stage(nn.Module):
+class Regressor1Stage(nn.Module):
 
     def __init__(self, input_channels=64, height=448, width=608):
-        super(Regressor2Stage, self).__init__()
+        super(Regressor1Stage, self).__init__()
         #per line weights for classes
         self.height = int(height)
         self.width = int(width)
         self.input_channels = input_channels
         self.stage_1_classes = 32
-        self.stage_2_classes = 16
         #the first stage is supposed to output 32 classes (+ in future 32 variables that might help in the next steps)
         # TODO: to have more than 32 "efficient" outputs. cond_mul_cuda_kernel.cu needs code to support these cases.
         self.stage_1 = nn.Conv2d(input_channels * self.height,
                                  self.stage_1_classes * self.height,
                                  1, padding=0, groups=self.height)
-        # stage_3 another 16 subclass per class so we have 512 classes ( regression then is per default by 16 pixel accurate
-        self.stage_2 = CondMul(int(self.stage_1_classes * self.height),
-                               input_channels, self.stage_2_classes)
-        self.stage_regression = CondMul(self.stage_1_classes * self.stage_2_classes * self.height,
+        self.stage_regression = CondMul(self.stage_1_classes * self.height,
                                         input_channels, 2)
 
 
 
     def calc_x_pos(self, class_inds, regression):
-        x = (class_inds + regression) * (1.0 / self.stage_1_classes * self.stage_2_classes)
+        x = (class_inds + regression) * (1.0 / self.stage_1_classes)
         return x
 
     def calc_inds(self, height, inds, div_h, div_inds):
@@ -44,8 +40,6 @@ class Regressor2Stage(nn.Module):
         inds = inds.reshape(-1).type(torch.int32)
         return inds
     def forward(self, x, x_gt=None, mask_gt=None):
-        # prevent indices in the groundtruth, that's out of bounds
-        x_gt = x_gt.clamp(0, 0.99999)
         batches = x.shape[0]
         device = x.device
         # go from (b, c, h, w) to (b, h, c, w)
@@ -53,7 +47,6 @@ class Regressor2Stage(nn.Module):
 
         # go from (b, h, c, w) to (b, h * c, 1, w)
         x_1 = x_1.reshape((x_1.shape[0], self.input_channels * self.height, 1, x_1.shape[3]))
-
         #convolution with new weights for each "line"
         classes1 = F.leaky_relu(self.stage_1(x_1))
 
@@ -65,6 +58,7 @@ class Regressor2Stage(nn.Module):
 
         if x_gt is not None:
             inds1 = (x_gt * self.stage_1_classes).type(torch.int32)
+            inds1 = inds1.clamp(0, self.stage_1_classes - 1)
 
             # the cross entropy takes the estimate in (b, C, h, w) the gt (inds) in (b, 1, h, w)
             classes1 = F.softmax(classes1, 1).permute((0, 2, 1, 3))
@@ -93,52 +87,19 @@ class Regressor2Stage(nn.Module):
             print("big mistake, indices are out of bounds!!!")
             return
         #print(id(inds))
-        classes2 = F.leaky_relu(self.stage_2(x_2.contiguous(), inds))
 
-        # TODO: find out why this conditional multiply is failing here!!!!
-        #print("before cuda device synchronize(stage_2)")
-        #torch.cuda.synchronize()
-        #print("after cuda device synchronize")
-        inds2 = classes2.argmax(dim=1)
-        inds2 = inds * self.stage_2_classes + inds2 #TODO: big mistake happening here!!!!!!!!
-
-        if x_gt is not None:
-            inds2 = (x_gt * self.stage_1_classes * self.stage_2_classes % self.stage_2_classes).type(torch.int32)
-            classes2 = F.softmax(classes2, dim=1)
-            #debug = classes2.reshape(batches, self.stage_2_classes, self.height, self.width)
-            loss = F.cross_entropy(classes2.reshape(batches, self.stage_2_classes, self.height, self.width),
-                                   inds2.squeeze(1).type(torch.int64))
-            class_losses.append(torch.mean(loss * mask_gt))
-
-            # Inds2 must provide absolute indices to the regression classes
-            # this includes the offset due to lines in the image
-            inds2 = (x_gt * self.stage_1_classes * self.stage_2_classes).type(torch.int32)
-            inds2 += offset * self.stage_1_classes * self.stage_2_classes
-
-            # inds2 must be reshaped for the conditional multiply that comes later
-            inds2 = inds2.flatten()
-
-        if torch.any(inds2 < 0) or torch.any(inds2 >= self.height * self.stage_1_classes * self.stage_2_classes):
-            print("big mistake, indices are out of bounds!!!")
-            return
-        #TODO: build in checks to prevent any of these indices being off limits!
-        x_2 = x_2.contiguous()
-        x_2 = self.stage_regression(x_2, inds2.type(torch.int32))
-
-        #print("before cuda device synchronize (regression_stage)")
-        #torch.cuda.synchronize()
-        #print("after cuda device synchronize")
+        x_2 = F.leaky_relu(self.stage_regression(x_2.contiguous(), inds))
 
         # (b * h * w, 2) to (b, h, w, 2)
         x_2 = x_2.reshape((batches, self.height, self.width, 2))
         # (b, h, w, 2) to (b, 2, h, w)
         x_2 = x_2.permute([0, 3, 1, 2])
 
-        inds = inds2.reshape((batches, 1, self.height, self.width))
         #print(id(inds))
-        inds -= offset * self.stage_1_classes * self.stage_2_classes
+
+        inds = inds.reshape(batches, self.height, self.width)
         # the output lies between 0 and 1 to indicate the x position in the dot-pattern projector
-        x = (inds.float() + x_2[:, 0, :, :]) * (1.0 / self.stage_1_classes * self.stage_2_classes)
+        x = (inds.float() + x_2[:, 0, :, :]) * (1.0 / self.stage_1_classes)
 
         # one last relu for the masking
         mask = F.leaky_relu(x_2[:, 1, :, :])# TODO: no relu

@@ -908,7 +908,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
       //also, for 8 its not better than the version without the shared memory
       if(((n == 1) || (n == 2) || (n == 4)) && m%32 == 0){
 
-      		std::cout << "Running the high occupancy kernel(cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel)" << std::endl;
+      		//std::cout << "Running the high occupancy kernel(cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel)" << std::endl;
             //TODO: reevaluate this implementation!!!!
             //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
             shared_size = 2 * sizeof(scalar_t) * 32 * n; // for the accumulator
@@ -916,9 +916,9 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
             const int per_group = 32/n;
             const dim3 threads3(n, per_group, 2); //lets have 64 threads per group (doubles the use of shared memory)
             const dim3 blocks((overall_samples + 64 - 1) / 64);
-            std::cout << threads3.x << ", " << threads3.y << ", " << threads3.z << std::endl;
+            //std::cout << threads3.x << ", " << threads3.y << ", " << threads3.z << std::endl;
 
-            std::cout << blocks.x << ", " << blocks.y << ", " << blocks.z << std::endl;
+            //std::cout << blocks.x << ", " << blocks.y << ", " << blocks.z << std::endl;
             const int parts = (m + 32 - 1) / 32;
 
             switch(n){
@@ -979,8 +979,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
 
             }
       }else if(((n == 8) || (n == 16) || (n == 32)) && m%32 == 0){
-
-		  std::cout << "Running the deep_reuse kernel(cond_mul_cuda_forward_deep_reuse32_kernel) n,m: " << n << ", " << m << std::endl;
+        //std::cout << "Running the deep_reuse kernel(cond_mul_cuda_forward_deep_reuse32_kernel) n,m: " << n << ", " << m << std::endl;
       	//TODO: reevaluate this implementation!!!!
 		//neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
 		shared_size = sizeof(scalar_t) * threads * (threads + 1); // for the accumulator

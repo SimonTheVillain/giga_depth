@@ -113,9 +113,13 @@ class DatasetRendered2(data.Dataset):
         mask[mask == 0] = 2
         mask = downsampleDepth(mask)
         mask[mask == 2] = 0
+        mask[np.logical_or(x_d < 0, x_d >= 1.0)] = 0
 
         #cv2.imshow("x_d", x_d)
         #cv2.imshow("diff", np.abs(x_d - x_gt) * 100.0)
 
+        grey = np.expand_dims(grey, 0)
+        x_d = np.expand_dims(x_d, 0)
+        mask = np.expand_dims(mask, 0)
         return grey, x_d, mask
 
