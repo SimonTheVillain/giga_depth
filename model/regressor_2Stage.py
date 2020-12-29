@@ -45,7 +45,8 @@ class Regressor2Stage(nn.Module):
         return inds
     def forward(self, x, x_gt=None, mask_gt=None):
         # prevent indices in the groundtruth, that's out of bounds
-        x_gt = x_gt.clamp(0, 0.99999)
+        if x_gt is not None:
+            x_gt = x_gt.clamp(0, 0.99999)
         batches = x.shape[0]
         device = x.device
         # go from (b, c, h, w) to (b, h, c, w)

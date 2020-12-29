@@ -9,6 +9,7 @@ from model.backbone_6_64 import Backbone6_64
 from torch.utils.data import DataLoader
 import numpy as np
 import os
+import math
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -34,25 +35,31 @@ def train():
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     #todo: plit loading and storing of models for Backbone and Regressor
-    model_path_src = ""
+    load_regressor = ""
+    load_backbone = ""
     model_path_dst = f"trained_models/{experiment_name}.pt"
 
     num_epochs = 5000
-    batch_size = 2 # batch size of 1 to begin with!!!!
+    batch_size = 2
     num_workers = 8
     alpha = 0.1
     learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
     momentum = 0.90
     shuffle = True
 
-    if model_path_src != "":
-        model = torch.load(model_path_src)
-        model.eval()
+    if load_regressor != "":
+        regressor = torch.load(load_regressor)
+        regressor.eval()
     else:
-        backbone = Backbone6_64()
         regressor = Regressor2Stage()
 
-        model = CompositeModel(backbone, regressor)
+    if load_backbone != "":
+        backbone = torch.load(load_backbone)
+        backbone.eval()
+    else:
+        backbone = Backbone6_64()
+
+    model = CompositeModel(backbone, regressor)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -81,7 +88,7 @@ def train():
                                                   shuffle=shuffle, num_workers=num_workers)
                    for x in ['train', 'val', 'test']}
     dataset_sizes = {x: len(datasets[x]) for x in ['train', 'val', 'test']}
-
+    min_test_epoch_loss = 100000.0
     step = 0
     for epoch in range(1, num_epochs):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
@@ -156,14 +163,21 @@ def train():
 
 
             # store at the end of a epoch
-            if phase == 'val':
+            if phase == 'val' and not math.isnan(loss_disparity_acc) and not math.isinf(loss_disparity_acc):
+                if isinstance(model, nn.DataParallel):
+                    module = model.module
+                else:
+                    module = model
+
+                print("storing network")
+                torch.save(module.backbone, f"trained_models/{experiment_name}_backbone_chk.pt")
+                torch.save(module.regressor, f"trained_models/{experiment_name}_regressor_chk.pt")
+
                 if epoch_loss < min_test_epoch_loss:
                     print("storing network")
                     min_test_epoch_loss = epoch_loss
-                    if isinstance(model, nn.DataParallel):
-                        torch.save(model.module, model_path_dst)
-                    else:
-                        torch.save(model, model_path_dst)
+                    torch.save(module.backbone, f"trained_models/{experiment_name}_backbone.pt")#maybe use type(x).__name__()
+                    torch.save(module.regressor, f"trained_models/{experiment_name}_regressor.pt")
 
     writer.close()
 
