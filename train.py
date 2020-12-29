@@ -38,7 +38,7 @@ def train():
     model_path_dst = f"trained_models/{experiment_name}.pt"
 
     num_epochs = 5000
-    batch_size = 4 # batch size of 1 to begin with!!!!
+    batch_size = 2 # batch size of 1 to begin with!!!!
     num_workers = 8
     alpha = 0.1
     learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
@@ -50,7 +50,7 @@ def train():
         model.eval()
     else:
         backbone = Backbone6_64()
-        regressor = Regressor1Stage()
+        regressor = Regressor2Stage()
 
         model = CompositeModel(backbone, regressor)
 

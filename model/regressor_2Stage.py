@@ -93,7 +93,7 @@ class Regressor2Stage(nn.Module):
             print("big mistake, indices are out of bounds!!!")
             return
         #print(id(inds))
-        classes2 = F.leaky_relu(self.stage_2(x_2.contiguous(), inds))
+        classes2 = F.leaky_relu(self.stage_2(x_2.contiguous(), inds)) #TODO: check if clone is necessary when clone is done in
 
         # TODO: find out why this conditional multiply is failing here!!!!
         #print("before cuda device synchronize(stage_2)")
@@ -121,13 +121,10 @@ class Regressor2Stage(nn.Module):
         if torch.any(inds2 < 0) or torch.any(inds2 >= self.height * self.stage_1_classes * self.stage_2_classes):
             print("big mistake, indices are out of bounds!!!")
             return
-        #TODO: build in checks to prevent any of these indices being off limits!
-        x_2 = x_2.contiguous()
-        x_2 = self.stage_regression(x_2, inds2.type(torch.int32))
 
-        #print("before cuda device synchronize (regression_stage)")
-        #torch.cuda.synchronize()
-        #print("after cuda device synchronize")
+        x_2 = x_2.contiguous()
+        # inds2 needs to be cloned here because of some in place stuff that goes on after this line
+        x_2 = self.stage_regression(x_2, inds2.type(torch.int32).clone())
 
         # (b * h * w, 2) to (b, h, w, 2)
         x_2 = x_2.reshape((batches, self.height, self.width, 2))
@@ -138,12 +135,11 @@ class Regressor2Stage(nn.Module):
         #print(id(inds))
         inds -= offset * self.stage_1_classes * self.stage_2_classes
         # the output lies between 0 and 1 to indicate the x position in the dot-pattern projector
-        x = (inds.float() + x_2[:, 0, :, :]) * (1.0 / self.stage_1_classes * self.stage_2_classes)
+        x = (inds.type(torch.float) + x_2[:, 0, :, :]) * (1.0 / self.stage_1_classes * self.stage_2_classes)
 
         # one last relu for the masking
-        mask = F.leaky_relu(x_2[:, 1, :, :])# TODO: no relu
+        mask = F.leaky_relu(x_2[:, 1, :, :])
 
-        #TODO: find out what else we need here!
         if x_gt is None:
             return x, mask
         else:
