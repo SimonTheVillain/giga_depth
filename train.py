@@ -29,18 +29,19 @@ class CompositeModel(nn.Module):
 
 def train():
     dataset_path = "/home/simon/datasets/structure_core_unity"
+    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
 
     experiment_name = "bb64_2stage_simple"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     #todo: plit loading and storing of models for Backbone and Regressor
-    load_regressor = ""
-    load_backbone = ""
+    load_regressor = "trained_models/bb64_2stage_simple_regressor.pt"
+    load_backbone = "trained_models/bb64_2stage_simple_backbone.pt"
     model_path_dst = f"trained_models/{experiment_name}.pt"
 
     num_epochs = 5000
-    batch_size = 2
+    batch_size = 8
     num_workers = 8
     alpha = 0.1
     learning_rate = 0.0001# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
@@ -112,7 +113,7 @@ def train():
                 input, x_gt, mask_gt = sampled_batch
                 #print(torch.min(x_gt)) # todo: remove this debug!!!!!
                 #print(torch.max(x_gt))
-                if torch.cuda.device_count() == 1:
+                if torch.cuda.device_count() >= 1:
                     input = input.cuda()
                     mask_gt = mask_gt.cuda()
                     x_gt = x_gt.cuda()
@@ -126,9 +127,9 @@ def train():
                     loss_disparity_acc_sub += loss.item()
                     loss = loss * alpha
                     for class_loss in class_losses:
-                        loss += class_loss
-                        loss_class_acc += class_loss.item()
-                        loss_class_acc_sub += class_loss.item()
+                        loss += torch.mean(class_loss)
+                        loss_class_acc += torch.mean(class_loss).item()
+                        loss_class_acc_sub += torch.mean(class_loss).item()
 
                     loss.backward()
                     optimizer.step()

@@ -743,6 +743,7 @@ __global__ void count_classes(
                 const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds,
                 int32_t *counters){
     const int ind = blockIdx.x * blockDim.x + threadIdx.x;
+
     if(ind >= inds.size(0)){
         return;
     }
@@ -750,7 +751,6 @@ __global__ void count_classes(
     if(ind_w > class_count){
         printf("[count_classes]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
-    //printf("result for: %d \n", ind_w);
     atomicAdd(&counters[ind_w], 1);
 }
 
@@ -1207,10 +1207,16 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     int threads = 256;
     dim3 blocks((overall_samples + threads - 1) / threads);
 
+
     count_classes<<<blocks, threads>>>(weights.size(0),//nr of different classes //grad_output.size(0),
                                     inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),
                                     sizes_gpu); //the counts for each class
-
+	cudaError_t error = cudaGetLastError();
+	if(error != cudaSuccess){
+		const char* errstr = cudaGetErrorString(error);
+		std::cout << errstr << std::endl;
+	}
+	cudaDeviceSynchronize();
     //download to cpu
     std::vector<int32_t> sizes_cpu(weights.size(0));
     cudaMemcpy(&sizes_cpu[0], sizes_gpu, sizeof(int32_t) * weights.size(0), cudaMemcpyDeviceToHost);
@@ -1219,14 +1225,21 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     //accumulate the sizes to get the starting positions (on CPU)
     std::vector<int32_t> starting_inds_cpu(weights.size(0));
     int count = 0;
+
+
+    //std::cout << "calculating the starting positions of " << weights.size(0) << "weights" << std::endl;
     for(int i=0;i<weights.size(0);i++){
         starting_inds_cpu[i] = count;
         //std::cout << "starting_ind " << starting_inds_cpu[i] << std::endl;
         count += sizes_cpu[i];
     }
+
     if(count != grad_output.size(0)){
+		//std::cout << "accumulating weight gradients on gpu: " << gpu << " " << prop.name << std::endl;
+        // a serious issue, that needs to be fixed!!!!!
         std::cout << "counted samples " << count << " vs overall samples " << grad_output.size(0) << std::endl;
     }
+    assert(count == grad_output.size(0)); //TODO: reinsert this assert!!!!!
     //TODO: upload accumulated
     cudaMemcpy(starting_inds_gpu, &starting_inds_cpu[0], sizeof(int32_t) * weights.size(0), cudaMemcpyHostToDevice);
 
