@@ -43,7 +43,7 @@ def train():
     batch_size = 2
     num_workers = 8
     alpha = 0.1
-    learning_rate = 0.01# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
+    learning_rate = 0.0001# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
     momentum = 0.90
     shuffle = True
 
