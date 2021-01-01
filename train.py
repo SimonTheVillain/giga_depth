@@ -29,19 +29,22 @@ class CompositeModel(nn.Module):
 
 def train():
     dataset_path = "/home/simon/datasets/structure_core_unity"
-    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
+    #dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
 
     experiment_name = "bb64_2stage_simple_2"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
-    #todo: plit loading and storing of models for Backbone and Regressor
+    #slit loading and storing of models for Backbone and Regressor
     load_regressor = "trained_models/bb64_2stage_simple_regressor.pt"
     load_backbone = "trained_models/bb64_2stage_simple_backbone.pt"
-    model_path_dst = f"trained_models/{experiment_name}.pt"
+
+    # not loading any pretrained part of any model whatsoever
+    load_regressor = ""
+    load_backbone = ""
 
     num_epochs = 5000
-    batch_size = 8
+    batch_size = 1
     num_workers = 8
     alpha = 0.1
     learning_rate = 0.001
@@ -105,9 +108,9 @@ def train():
 
             #TODO: accumulate classification losses for each classification stage!!!
             loss_disparity_acc = 0
-            loss_class_acc = 0
+            loss_class_acc = []
             loss_disparity_acc_sub = 0
-            loss_class_acc_sub = 0
+            loss_class_acc_sub = []
 
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
@@ -127,10 +130,13 @@ def train():
                     loss_disparity_acc += loss.item()
                     loss_disparity_acc_sub += loss.item()
                     loss = loss * alpha
-                    for class_loss in class_losses:
+                    if len(loss_class_acc) is 0:
+                        loss_class_acc = [0] * len(class_losses)
+                        loss_class_acc_sub = [0] * len(class_losses)
+                    for i, class_loss in enumerate(class_losses):
                         loss += torch.mean(class_loss)
-                        loss_class_acc += torch.mean(class_loss).item()
-                        loss_class_acc_sub += torch.mean(class_loss).item()
+                        loss_class_acc[i] += torch.mean(class_loss).item()
+                        loss_class_acc_sub[i] += torch.mean(class_loss).item()
 
                     loss.backward()
                     optimizer.step()
@@ -144,20 +150,21 @@ def train():
 
                 # print("FUCK YEAH")
                 if i_batch % 100 == 99:
-                    print("batch {} loss {}".format(i_batch, (loss_disparity_acc_sub + loss_class_acc_sub) / 100))
+                    print("batch {} loss {}".format(i_batch, (loss_disparity_acc_sub * alpha + sum(loss_class_acc_sub)) / 100))
                     writer.add_scalar(f'{phase}_subepoch/disparity(loss)',
                                       loss_disparity_acc_sub / 100.0 * 1024, step)
-                    if loss_class_acc != 0:
-                        writer.add_scalar(f'{phase}_subepoch/class_loss', loss_class_acc_sub / 100, step)
-                    loss_disparity_acc_sub = 0
-                    loss_class_acc_sub = 0
+                    for i, class_loss in enumerate(loss_class_acc_sub):
+                        writer.add_scalar(f'{phase}_subepoch/class_loss_{i}', class_loss / 100, step)
+                        loss_class_acc_sub[i] = 0
 
-            epoch_loss = loss_disparity_acc / dataset_sizes[phase] * alpha
+                    loss_disparity_acc_sub = 0
+
+            epoch_loss = loss_disparity_acc / dataset_sizes[phase] * batch_size * alpha
             writer.add_scalar(f"{phase}/disparity(loss)",
-                              loss_disparity_acc / dataset_sizes[phase] * 1024 * batch_size, step)
-            if loss_class_acc_sub != 0:
-                epoch_loss += loss_class_acc / dataset_sizes[phase]
-                writer.add_scalar(f"{phase}/class_loss", loss_class_acc / dataset_sizes[phase] * batch_size, step)
+                              loss_disparity_acc / dataset_sizes[phase] * batch_size * 1024, step)
+            for i, class_loss in enumerate(loss_class_acc):
+                epoch_loss += class_loss / dataset_sizes[phase] * batch_size
+                writer.add_scalar(f"{phase}/class_loss{i}", class_loss / dataset_sizes[phase] * batch_size, step)
 
 
             print(f"{phase} Loss: {epoch_loss}")
