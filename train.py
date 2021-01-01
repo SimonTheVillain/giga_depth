@@ -31,7 +31,7 @@ def train():
     dataset_path = "/home/simon/datasets/structure_core_unity"
     dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
 
-    experiment_name = "bb64_2stage_simple"
+    experiment_name = "bb64_2stage_simple_2"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
@@ -44,7 +44,7 @@ def train():
     batch_size = 8
     num_workers = 8
     alpha = 0.1
-    learning_rate = 0.0001# formerly it was 0.001 but alpha used to be 10 # maybe after this we could use 0.01 / 1280.0
+    learning_rate = 0.001
     momentum = 0.90
     shuffle = True
 
@@ -103,6 +103,7 @@ def train():
             else:
                 model.eval()  # Set model to evaluate mode
 
+            #TODO: accumulate classification losses for each classification stage!!!
             loss_disparity_acc = 0
             loss_class_acc = 0
             loss_disparity_acc_sub = 0
@@ -153,14 +154,13 @@ def train():
 
             epoch_loss = loss_disparity_acc / dataset_sizes[phase] * alpha
             writer.add_scalar(f"{phase}/disparity(loss)",
-                              loss_disparity_acc / dataset_sizes[phase] * 1024, step)
+                              loss_disparity_acc / dataset_sizes[phase] * 1024 * batch_size, step)
             if loss_class_acc_sub != 0:
                 epoch_loss += loss_class_acc / dataset_sizes[phase]
-                writer.add_scalar(f"{phase}/class_loss", loss_class_acc / dataset_sizes[phase], step)
+                writer.add_scalar(f"{phase}/class_loss", loss_class_acc / dataset_sizes[phase] * batch_size, step)
 
 
             print(f"{phase} Loss: {epoch_loss}")
-
 
 
             # store at the end of a epoch
