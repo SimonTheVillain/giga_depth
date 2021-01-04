@@ -5,6 +5,7 @@ import torch.optim as optim
 from dataset.dataset_rendered_2 import DatasetRendered2
 from model.regressor_2Stage import Regressor2Stage
 from model.regressor_1Stage import Regressor1Stage
+from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from torch.utils.data import DataLoader
 import numpy as np
@@ -29,24 +30,24 @@ class CompositeModel(nn.Module):
 
 def train():
     dataset_path = "/home/simon/datasets/structure_core_unity"
-    #dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
+    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
 
-    experiment_name = "bb64_2stage_simple_2"
+    experiment_name = "bb64_branchless"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     #slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/bb64_2stage_simple_regressor.pt"
-    load_backbone = "trained_models/bb64_2stage_simple_backbone.pt"
+    load_regressor = "trained_models/bb64_2stage_simple_3_regressor.pt"
+    load_backbone = "trained_models/bb64_2stage_simple_3_backbone.pt"
 
     # not loading any pretrained part of any model whatsoever
     load_regressor = ""
     load_backbone = ""
 
     num_epochs = 5000
-    batch_size = 1
+    batch_size = 2
     num_workers = 8
-    alpha = 0.1
+    alpha = 1.0 # usually this is 0.1
     learning_rate = 0.001
     momentum = 0.90
     shuffle = True
@@ -55,7 +56,7 @@ def train():
         regressor = torch.load(load_regressor)
         regressor.eval()
     else:
-        regressor = Regressor2Stage()
+        regressor = RegressorBranchless()
 
     if load_backbone != "":
         backbone = torch.load(load_backbone)
