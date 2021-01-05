@@ -32,23 +32,23 @@ def train():
     dataset_path = "/home/simon/datasets/structure_core_unity"
     dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
 
-    experiment_name = "bb64_branchless"
+    experiment_name = "bb64_branchless_2"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     #slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/bb64_2stage_simple_3_regressor.pt"
-    load_backbone = "trained_models/bb64_2stage_simple_3_backbone.pt"
+    load_regressor = "trained_models/bb64_branchless_regressor.pt"
+    load_backbone = "trained_models/bb64_branchless_backbone.pt"
 
     # not loading any pretrained part of any model whatsoever
-    load_regressor = ""
-    load_backbone = ""
+    #load_regressor = ""
+    #load_backbone = ""
 
     num_epochs = 5000
     batch_size = 2
     num_workers = 8
     alpha = 1.0 # usually this is 0.1
-    learning_rate = 0.001
+    learning_rate = 0.0001 #0.001 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
 
