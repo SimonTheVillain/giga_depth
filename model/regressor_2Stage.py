@@ -18,6 +18,9 @@ class Regressor2Stage(nn.Module):
         self.stage_2_classes = 16
         #the first stage is supposed to output 32 classes (+ in future 32 variables that might help in the next steps)
         # TODO: to have more than 32 "efficient" outputs. cond_mul_cuda_kernel.cu needs code to support these cases.
+        self.pre_stage = nn.Conv2d(input_channels * self.height,
+                                   input_channels * self.height,
+                                   1, padding=0, groups=self.height)
         self.stage_1 = nn.Conv2d(input_channels * self.height,
                                  self.stage_1_classes * self.height,
                                  1, padding=0, groups=self.height)
@@ -55,6 +58,7 @@ class Regressor2Stage(nn.Module):
         # go from (b, h, c, w) to (b, h * c, 1, w)
         x_1 = x_1.reshape((x_1.shape[0], self.input_channels * self.height, 1, x_1.shape[3]))
 
+        x_1 = F.leaky_relu(self.pre_stage(x_1))
         #convolution with new weights for each "line"
         classes1 = F.leaky_relu(self.stage_1(x_1))
 
@@ -84,10 +88,17 @@ class Regressor2Stage(nn.Module):
 
         inds1 += offset * self.stage_1_classes
 
-        # go from (b, c, h, w) to (b, h, w, c)
-        x_2 = x.permute([0, 2, 3, 1])
+        # go from (b, h*c, 1, w) to (b, h, c, w)
+        x_2 = x_1.reshape((batches, self.height, self.input_channels, self.width))
+        # to (b, h, w, c)
+        x_2 = x_2.transpose(2, 3)
         # to (b * h * w, c)
         x_2 = x_2.reshape((x_2.shape[0] * x_2.shape[1] * x_2.shape[2], x_2.shape[3]))
+        # TODO: remove this old version of rearranging the original input
+        # go from (b, c, h, w) to (b, h, w, c)
+        #x_2 = x.permute([0, 2, 3, 1])
+        # to (b * h * w, c)
+        #x_2 = x_2.reshape((x_2.shape[0] * x_2.shape[1] * x_2.shape[2], x_2.shape[3]))
         inds = inds1.reshape(-1).type(torch.int32)
 
         if torch.any(inds < 0) or torch.any(inds >= self.height * self.stage_1_classes):

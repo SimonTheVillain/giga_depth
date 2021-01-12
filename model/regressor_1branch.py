@@ -6,10 +6,10 @@ from model.residual_block import ResidualBlock_shrink
 
 
 #Regressor
-class Regressor1Stage(nn.Module):
+class Regressor1Branch(nn.Module):
 
     def __init__(self, input_channels=64, height=448, width=608):
-        super(Regressor1Stage, self).__init__()
+        super(Regressor1Branch, self).__init__()
         #per line weights for classes
         self.height = int(height)
         self.width = int(width)
@@ -18,16 +18,14 @@ class Regressor1Stage(nn.Module):
         #the first stage is supposed to output 32 classes (+ in future 32 variables that might help in the next steps)
         # TODO: to have more than 32 "efficient" outputs. cond_mul_cuda_kernel.cu needs code to support these cases.
         self.prestage_1 = nn.Conv2d(input_channels * self.height,
-                                 input_channels * self.height,
+                                 256 * self.height,
                                  1, padding=0, groups=self.height)
-        self.prestage_2 = nn.Conv2d(input_channels * self.height,
-                                 input_channels * self.height,
+        self.prestage_2 = nn.Conv2d(256 * self.height,
+                                 512 * self.height,
                                  1, padding=0, groups=self.height)
-        self.stage_1 = nn.Conv2d(input_channels * self.height,
+        self.stage_1 = nn.Conv2d(512 * self.height,
                                  self.stage_1_classes * self.height,
                                  1, padding=0, groups=self.height)
-        self.stage_regression = CondMul(self.stage_1_classes * self.height,
-                                        input_channels, 2)
 
 
 
@@ -79,16 +77,6 @@ class Regressor1Stage(nn.Module):
         # go from (b, 1, h, w) to (b, h , 1, w)?
         #inds1 = inds1.transpose(1, 2)#TODO: is this necessary?
 
-        # offsets for each line!
-        offset = torch.arange(0, self.height, device=device)
-        offset = offset.unsqueeze(0).unsqueeze(0).unsqueeze(3)
-
-        inds1 += offset * self.stage_1_classes
-
-        # go from (b, c, h, w) to (b, h, w, c)
-        x_2 = x.permute([0, 2, 3, 1])
-        # to (b * h * w, c)
-        x_2 = x_2.reshape((x_2.shape[0] * x_2.shape[1] * x_2.shape[2], x_2.shape[3]))
         inds = inds1.reshape(-1).type(torch.int32)
 
         if torch.any(inds < 0) or torch.any(inds >= self.height * self.stage_1_classes):
@@ -96,25 +84,12 @@ class Regressor1Stage(nn.Module):
             return
         #print(id(inds))
 
-        x_2 = F.leaky_relu(self.stage_regression(x_2.contiguous(), inds))
 
-        # (b * h * w, 2) to (b, h, w, 2)
-        x_2 = x_2.reshape((batches, self.height, self.width, 2))
-        # (b, h, w, 2) to (b, 2, h, w)
-        x_2 = x_2.permute([0, 3, 1, 2])
-
-        #todo: remove:
-        x_2 = x_2 * 0
-
-        #print(id(inds))
-
-        inds = inds.reshape(batches, self.height, self.width) #todo: something not right here!!!
-        #todo: subtract the offset from the inds here... otherwise the calculation down there would be wrong
-        # the output lies between 0 and 1 to indicate the x position in the dot-pattern projector
-        x = (inds.float() + x_2[:, 0, :, :]) * (1.0 / self.stage_1_classes)
+        inds = inds.reshape(batches, self.height, self.width)
+        x = (inds.float()) * (1.0 / self.stage_1_classes)
 
         # one last relu for the masking
-        mask = F.leaky_relu(x_2[:, 1, :, :])# TODO: no relu
+        mask = F.leaky_relu(x)# TODO: no relu
 
         #TODO: find out what else we need here!
         if x_gt is None:

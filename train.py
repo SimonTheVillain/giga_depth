@@ -5,6 +5,7 @@ import torch.optim as optim
 from dataset.dataset_rendered_2 import DatasetRendered2
 from model.regressor_2Stage import Regressor2Stage
 from model.regressor_1Stage import Regressor1Stage
+from model.regressor_1branch import Regressor1Branch
 from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from torch.utils.data import DataLoader
@@ -32,23 +33,25 @@ def train():
     dataset_path = "/home/simon/datasets/structure_core_unity"
     dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
 
-    experiment_name = "bb64_branchless_2"
+    experiment_name = "bb64_1branch"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     #slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/bb64_branchless_regressor.pt"
-    load_backbone = "trained_models/bb64_branchless_backbone.pt"
+    load_regressor = "trained_models/bb64_2stage_regressor.pt"
+    load_backbone = "trained_models/bb64_branchless_2_backbone.pt"
 
     # not loading any pretrained part of any model whatsoever
-    #load_regressor = ""
-    #load_backbone = ""
+    load_regressor = ""
+    load_backbone = ""
 
     num_epochs = 5000
-    batch_size = 2
+    #todo: either do only 100 lines at a time, or go for
+    tgt_res = (1216, 108)#(1216, 896)
+    batch_size = 12*2
     num_workers = 8
-    alpha = 1.0 # usually this is 0.1
-    learning_rate = 0.0001 #0.001 for the branchless regressor (smaller since we feel it's not entirely stable)
+    alpha = 0.0 # usually this is 0.1
+    learning_rate = 0.1 #0.001 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
 
@@ -56,11 +59,17 @@ def train():
         regressor = torch.load(load_regressor)
         regressor.eval()
     else:
-        regressor = RegressorBranchless()
+        #regressor = RegressorBranchless()
+        #regressor = Regressor2Stage()
+        #regressor = Regressor1Stage()
+        regressor = Regressor1Branch(height=int(tgt_res[1]/2))
 
     if load_backbone != "":
         backbone = torch.load(load_backbone)
         backbone.eval()
+        #fix parameters in the backbone (or maybe not!)
+        #for param in backbone.parameters():
+        #    param.requires_grad = False
     else:
         backbone = Backbone6_64()
 
@@ -84,9 +93,9 @@ def train():
 
     #the filtered dataset
     datasets = {
-        'train': DatasetRendered2(dataset_path, 0, 8000),
-        'val': DatasetRendered2(dataset_path, 8000, 9000),
-        'test': DatasetRendered2(dataset_path, 9000, 10000)
+        'train': DatasetRendered2(dataset_path, 0, 8000, tgt_res=tgt_res),
+        'val': DatasetRendered2(dataset_path, 8000, 9000, tgt_res=tgt_res),
+        'test': DatasetRendered2(dataset_path, 9000, 10000, tgt_res=tgt_res)
     }
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,

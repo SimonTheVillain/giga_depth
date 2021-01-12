@@ -28,7 +28,9 @@ def downsampleDepth(d):
 
 class DatasetRendered2(data.Dataset):
 
-    def __init__(self, root_dir, start_ind, stop_ind, vertical_jitter=2, depth_threshold=15, noise=0.1):
+    def __init__(self, root_dir, start_ind, stop_ind, vertical_jitter=2, depth_threshold=15, noise=0.1,
+                 tgt_res=(1216, 896),
+                 tgt_cxy=(604, 457)):
         self.from_ind = start_ind
         self.to_ind = stop_ind
         self.root_dir = root_dir
@@ -39,8 +41,8 @@ class DatasetRendered2(data.Dataset):
         self.depth_threshold = 15
         self.src_res = (1401, 1001)
         self.src_cxy = (700, 500)
-        self.tgt_res = (1216, 896)
-        self.tgt_cxy = (604, 457)
+        self.tgt_res = tgt_res#(1216, 896)
+        self.tgt_cxy = tgt_cxy#(604, 457)
         #the focal length is shared between src and target frame
         self.focal = 1.1154399414062500e+03
 
