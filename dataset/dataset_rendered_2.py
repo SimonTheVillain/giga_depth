@@ -30,7 +30,11 @@ class DatasetRendered2(data.Dataset):
 
     def __init__(self, root_dir, start_ind, stop_ind, vertical_jitter=2, depth_threshold=15, noise=0.1,
                  tgt_res=(1216, 896),
-                 tgt_cxy=(604, 457)):
+                 tgt_cxy=(604, 457),
+                 is_npy=False,
+                 debug=False):
+        self.is_npy = is_npy
+        self.debug = debug
         self.from_ind = start_ind
         self.to_ind = stop_ind
         self.root_dir = root_dir
@@ -57,14 +61,23 @@ class DatasetRendered2(data.Dataset):
         self.baselines = {"left": 0.0634 - 0.07501, "right": 0.0634 - 0.0}
 
     def __len__(self):
+        if self.is_npy:
+            return self.to_ind - self.from_ind
         # * 2 since we are working with stereo images
         return (self.to_ind - self.from_ind) * 2
 
     def __getitem__(self, idx):
+        if self.is_npy:
+            ir = np.load(f"{self.root_dir}/{idx}_ir.npy")
+            x = np.load(f"{self.root_dir}/{idx}_gt.npy")
+            mask = np.load(f"{self.root_dir}/{idx}_mask.npy")
+            return ir, x, mask
+
         side = "left"
         if idx % 2 == 1:
             side = "right"
         idx = int(idx / 2)
+
         v_offset = np.random.randint(-self.vertical_jitter, self.vertical_jitter)
 
         bgr = cv2.imread(self.root_dir + f"/{idx}_{side}.png")
@@ -107,7 +120,7 @@ class DatasetRendered2(data.Dataset):
         # for the right sensor we want to shift the points 6.34cm to the right
         # for the left sensor we want to shift the points approx 1.1cm to the left
         x_d += self.baselines[side]
-        x_d = x_d * (self.focal_projector / depth) + float(self.res_projector)/2.0
+        x_d = x_d * (self.focal_projector / depth) + float(self.res_projector - 1)/2.0
         x_d = x_d * (1.0/float(self.res_projector))
         x_d = x_d.astype(np.float32)
 
@@ -123,5 +136,7 @@ class DatasetRendered2(data.Dataset):
         grey = np.expand_dims(grey, 0)
         x_d = np.expand_dims(x_d, 0)
         mask = np.expand_dims(mask, 0)
+        if self.debug:
+            return grey, x_d, mask, depth
         return grey, x_d, mask
 

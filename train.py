@@ -8,13 +8,11 @@ from model.regressor_1Stage import Regressor1Stage
 from model.regressor_1branch import Regressor1Branch
 from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
+from model.backbone import Backbone
 from torch.utils.data import DataLoader
-import numpy as np
-import os
 import math
-
-import matplotlib
-import matplotlib.pyplot as plt
+import argparse
+import os
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -30,10 +28,14 @@ class CompositeModel(nn.Module):
         return self.regressor(x, x_gt, mask_gt)
 
 def train():
-    dataset_path = "/home/simon/datasets/structure_core_unity"
-    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
+    parser = argparse.ArgumentParser()
+    #parser.add_argument("-V", "--version", help="show program version", action="store_true")
+    parser.add_argument("-d", "--dataset_path", dest="path", help="Path to the dataset.", action="store",
+                        default=os.path.expanduser("~/datasets/structure_core_unity"))
 
-    experiment_name = "bb64_1branch"
+    args = parser.parse_args()
+
+    experiment_name = "single_slice"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
@@ -47,8 +49,11 @@ def train():
 
     num_epochs = 5000
     #todo: either do only 100 lines at a time, or go for
-    tgt_res = (1216, 108)#(1216, 896)
-    batch_size = 12*2
+    tgt_res = (1216, 896)
+    is_npy = True
+    slice_in = (100, 100 + 17*2+1)
+    slice_gt = (50+8, 50+8+1)
+    batch_size = 64
     num_workers = 8
     alpha = 0.0 # usually this is 0.1
     learning_rate = 0.1 #0.001 for the branchless regressor (smaller since we feel it's not entirely stable)
@@ -62,7 +67,7 @@ def train():
         #regressor = RegressorBranchless()
         #regressor = Regressor2Stage()
         #regressor = Regressor1Stage()
-        regressor = Regressor1Branch(height=int(tgt_res[1]/2))
+        regressor = Regressor1Branch(height=1)
 
     if load_backbone != "":
         backbone = torch.load(load_backbone)
@@ -71,7 +76,7 @@ def train():
         #for param in backbone.parameters():
         #    param.requires_grad = False
     else:
-        backbone = Backbone6_64()
+        backbone = Backbone()
 
     model = CompositeModel(backbone, regressor)
 
@@ -93,9 +98,9 @@ def train():
 
     #the filtered dataset
     datasets = {
-        'train': DatasetRendered2(dataset_path, 0, 8000, tgt_res=tgt_res),
-        'val': DatasetRendered2(dataset_path, 8000, 9000, tgt_res=tgt_res),
-        'test': DatasetRendered2(dataset_path, 9000, 10000, tgt_res=tgt_res)
+        'train': DatasetRendered2(args.path, 0, 8000, tgt_res=tgt_res, is_npy=True),
+        'val': DatasetRendered2(args.path, 8000, 9000, tgt_res=tgt_res, is_npy=True),
+        'test': DatasetRendered2(args.path, 9000, 10000, tgt_res=tgt_res, is_npy=True)
     }
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
@@ -125,6 +130,10 @@ def train():
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
                 input, x_gt, mask_gt = sampled_batch
+                if not is_npy:
+                    input = input[:, :, slice_in[0]:slice_in[1], :]
+                    x_gt = x_gt[:, :, slice_gt[0]:slice_gt[1], :]
+                    mask_gt = mask_gt[:, :, slice_gt[0]:slice_gt[1], :]
                 #print(torch.min(x_gt)) # todo: remove this debug!!!!!
                 #print(torch.max(x_gt))
                 if torch.cuda.device_count() >= 1:
@@ -140,7 +149,7 @@ def train():
                     loss_disparity_acc += loss.item()
                     loss_disparity_acc_sub += loss.item()
                     loss = loss * alpha
-                    if len(loss_class_acc) is 0:
+                    if len(loss_class_acc) == 0:
                         loss_class_acc = [0] * len(class_losses)
                         loss_class_acc_sub = [0] * len(class_losses)
                     for i, class_loss in enumerate(class_losses):
