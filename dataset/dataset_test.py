@@ -2,9 +2,10 @@ from dataset_rendered_2 import DatasetRendered2
 import numpy as np
 import cv2
 import os
+import open3d as o3d
 
 dataset_path = os.path.expanduser("~/datasets/structure_core_unity")
-tgt_res = (1216, 108)#(1216, 896)
+tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
 # according to the simulation in unity & the dotpattern extractor (check if this still holds true)
@@ -18,6 +19,26 @@ principal = (principal[0] * 0.5, principal[1] * 0.5)
 
 dataset = DatasetRendered2(dataset_path, 0, 100, tgt_res=tgt_res, debug=True)
 
+def display_pcl(z):
+    fx = 1115.44
+    cxr = 604.0
+    cyr = 896.0 * 0.5
+    fx = fx * 0.5
+    cxr = cxr * 0.5
+    cyr = cyr * 0.5
+    print(z.shape)
+    pts = []
+    for i in range(0, z.shape[0]):
+        for j in range(0, z.shape[1]):
+            y = i - cyr
+            x = j - cxr
+            depth = z[i, j]
+            if 0 < depth < 5:
+                pts.append([x*depth/fx, y*depth/fx, depth])
+    xyz = np.array(pts)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(xyz)
+    o3d.visualization.draw_geometries([pcd])
 
 for i, data in enumerate(dataset):
     ir, gt, mask, depth = data
@@ -34,7 +55,9 @@ for i, data in enumerate(dataset):
     d = -np.divide(bl * (focal_projector * focal), den)
     cv2.imshow("depth_by_gt", d*0.1)
     cv2.imshow("depth_error", np.abs(d-depth))
-
     cv2.waitKey()
+    display_pcl(depth)
+
+
     #print(ir)
 
