@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.cuda_cond_mul.cond_mul import CondMul
+from model.cuda_cond_mul.reference_cond_mul import RefCondMul
 from model.residual_block import ResidualBlock_shrink
 
 
@@ -26,7 +27,7 @@ class Regressor1Stage(nn.Module):
         self.stage_1 = nn.Conv2d(input_channels * self.height,
                                  self.stage_1_classes * self.height,
                                  1, padding=0, groups=self.height)
-        self.stage_regression = CondMul(self.stage_1_classes * self.height,
+        self.stage_regression = RefCondMul(self.stage_1_classes * self.height,
                                         input_channels, 2)
 
 
@@ -89,7 +90,7 @@ class Regressor1Stage(nn.Module):
         x_2 = x.permute([0, 2, 3, 1])
         # to (b * h * w, c)
         x_2 = x_2.reshape((x_2.shape[0] * x_2.shape[1] * x_2.shape[2], x_2.shape[3]))
-        inds = inds1.reshape(-1).type(torch.int32)
+        inds = inds1.reshape(-1).type(torch.int64)
 
         if torch.any(inds < 0) or torch.any(inds >= self.height * self.stage_1_classes):
             print("big mistake, indices are out of bounds!!!")
@@ -102,9 +103,6 @@ class Regressor1Stage(nn.Module):
         x_2 = x_2.reshape((batches, self.height, self.width, 2))
         # (b, h, w, 2) to (b, 2, h, w)
         x_2 = x_2.permute([0, 3, 1, 2])
-
-        #todo: remove:
-        x_2 = x_2 * 0
 
         #print(id(inds))
 

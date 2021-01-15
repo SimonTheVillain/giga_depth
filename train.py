@@ -35,17 +35,17 @@ def train():
 
     args = parser.parse_args()
 
-    experiment_name = "single_slice"
+    experiment_name = "single_slice_branched_sgd"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     #slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/bb64_2stage_regressor.pt"
-    load_backbone = "trained_models/bb64_branchless_2_backbone.pt"
+    load_regressor = "trained_models/single_slice_branched_sgd_regressor_chk.pt"
+    load_backbone = "trained_models/single_slice_branched_sgd_backbone_chk.pt"
 
     # not loading any pretrained part of any model whatsoever
-    load_regressor = ""
-    load_backbone = ""
+    #load_regressor = ""
+    #load_backbone = ""
 
     num_epochs = 5000
     #todo: either do only 100 lines at a time, or go for
@@ -53,9 +53,9 @@ def train():
     is_npy = True
     slice_in = (100, 100 + 17*2+1)
     slice_gt = (50+8, 50+8+1)
-    batch_size = 64
+    batch_size = 256
     num_workers = 8
-    alpha = 0.0 # usually this is 0.1
+    alpha = 0.01# usually this is 0.1
     learning_rate = 0.1 #0.001 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
@@ -64,10 +64,10 @@ def train():
         regressor = torch.load(load_regressor)
         regressor.eval()
     else:
-        #regressor = RegressorBranchless()
+        regressor = RegressorBranchless(height=1)
         #regressor = Regressor2Stage()
-        #regressor = Regressor1Stage()
-        regressor = Regressor1Branch(height=1)
+        regressor = Regressor1Stage(height=1)
+        #regressor = Regressor1Branch(height=1)
 
     if load_backbone != "":
         backbone = torch.load(load_backbone)
@@ -91,16 +91,16 @@ def train():
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
 
-    # optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
+    #optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     #the whole unity rendered dataset
 
     #the filtered dataset
     datasets = {
-        'train': DatasetRendered2(args.path, 0, 8000, tgt_res=tgt_res, is_npy=True),
-        'val': DatasetRendered2(args.path, 8000, 9000, tgt_res=tgt_res, is_npy=True),
-        'test': DatasetRendered2(args.path, 9000, 10000, tgt_res=tgt_res, is_npy=True)
+        'train': DatasetRendered2(args.path, 0, 40000, tgt_res=tgt_res, is_npy=True),
+        'val': DatasetRendered2(args.path, 40000, 41000, tgt_res=tgt_res, is_npy=True),
+        'test': DatasetRendered2(args.path, 41000, 42000, tgt_res=tgt_res, is_npy=True)
     }
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
