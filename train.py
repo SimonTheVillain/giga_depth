@@ -1,3 +1,5 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import torch.nn as nn
 import torch.nn.modules.loss
@@ -9,10 +11,10 @@ from model.regressor_1branch import Regressor1Branch
 from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from model.backbone import Backbone
+from experiments.lines.model_lines_CR8_n import CR8_bb, CR8_reg
 from torch.utils.data import DataLoader
 import math
 import argparse
-import os
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -27,6 +29,7 @@ class CompositeModel(nn.Module):
         x = self.backbone(x)
         return self.regressor(x, x_gt, mask_gt)
 
+
 def train():
     parser = argparse.ArgumentParser()
     #parser.add_argument("-V", "--version", help="show program version", action="store_true")
@@ -35,7 +38,7 @@ def train():
 
     args = parser.parse_args()
 
-    experiment_name = "single_slice_branched_sgd"
+    experiment_name = "cr8_2021"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
@@ -44,8 +47,8 @@ def train():
     load_backbone = "trained_models/single_slice_branched_sgd_backbone_chk.pt"
 
     # not loading any pretrained part of any model whatsoever
-    #load_regressor = ""
-    #load_backbone = ""
+    load_regressor = ""
+    load_backbone = ""
 
     num_epochs = 5000
     #todo: either do only 100 lines at a time, or go for
@@ -53,9 +56,9 @@ def train():
     is_npy = True
     slice_in = (100, 100 + 17*2+1)
     slice_gt = (50+8, 50+8+1)
-    batch_size = 256
+    batch_size = 32
     num_workers = 8
-    alpha = 0.01# usually this is 0.1
+    alpha = 1# usually this is 0.1
     learning_rate = 0.1 #0.001 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
@@ -66,8 +69,9 @@ def train():
     else:
         regressor = RegressorBranchless(height=1)
         #regressor = Regressor2Stage()
-        regressor = Regressor1Stage(height=1)
+        #regressor = Regressor1Stage(height=1)
         #regressor = Regressor1Branch(height=1)
+        regressor = CR8_reg(128)
 
     if load_backbone != "":
         backbone = torch.load(load_backbone)
@@ -76,7 +80,8 @@ def train():
         #for param in backbone.parameters():
         #    param.requires_grad = False
     else:
-        backbone = Backbone()
+        #backbone = Backbone()
+        backbone = CR8_bb(128)
 
     model = CompositeModel(backbone, regressor)
 

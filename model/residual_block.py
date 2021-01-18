@@ -38,6 +38,26 @@ class ResidualBlock_shrink(nn.Module):
         x = F.leaky_relu(x_identity + self.convs[-1](x))
 
         return x
+class ResidualBlock_vshrink(nn.Module):
+    def __init__(self, channels, kernel_size, layers=3, padding=(0, 1), depadding=0):
+        super(ResidualBlock_vshrink, self).__init__()
+        self.depadding = depadding
+        self.convs = nn.ModuleList()
+        for i in range(layers):
+            self.convs.append(nn.Conv2d(channels, channels, kernel_size, padding=padding))
+
+    def forward(self, x):
+        x_identity = x
+        for conv in self.convs[:-1]:
+            #print(x.shape)
+            x = F.leaky_relu(conv(x))
+            #print(x.shape)
+        d = self.depadding
+        if d != 0:
+            x_identity = x_identity[:, :, d: -d, :]
+        x = F.leaky_relu(x_identity + self.convs[-1](x))
+
+        return x
 
 class ResidualBlock_3_ResNet(nn.Module):
         def __init__(self, channels_in, channels_inter, channels_out,
