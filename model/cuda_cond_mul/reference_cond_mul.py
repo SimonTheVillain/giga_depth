@@ -3,8 +3,10 @@ import torch.nn as nn
 
 class RefCondMul(nn.Module):
 
-    def __init__(self, classes, m, n):
+    def __init__(self, classes, input_features, output_features):
         super(RefCondMul, self).__init__()
+        m=input_features
+        n=output_features
         self.m = m
         self.n = n
         self.register_parameter(name='w', param=nn.Parameter(torch.randn((classes, m, n))))

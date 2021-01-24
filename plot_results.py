@@ -23,6 +23,7 @@ class CompositeModel(nn.Module):
         return self.regressor(x, x_gt, mask_gt)
 
 dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity_slice_100_35"
+dataset_path_results = "/media/simon/ssd_data/data/datasets/structure_core_unity_slice_100_35_results"
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
@@ -36,8 +37,12 @@ baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # left, right
 lines_only = True
 is_npy = True
 
-regressor = "trained_models/cr8_2021_32_std_4_regressor_chk.pt"
-backbone = "trained_models/cr8_2021_32_std_4_backbone_chk.pt"
+regressor = "trained_models/cr8_2021_32_scaled_sigma_regressor_chk.pt"
+backbone = "trained_models/cr8_2021_32_scaled_sigma_backbone_chk.pt"
+
+sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
+sigma_estimator = torch.load(sigma_estimator)
+sigma_estimator.eval()
 
 #regressor = "trained_models/cr8_2021_regressor_chk.pt"
 #backbone = "trained_models/cr8_2021_backbone_chk.pt"
@@ -53,19 +58,23 @@ device = torch.cuda.current_device()
 model = CompositeModel(backbone, regressor)
 model.to(device)
 model.eval()
-dataset = DatasetRendered2(dataset_path, 0, 40000, tgt_res=tgt_res, is_npy=is_npy)
+dataset = DatasetRendered2(dataset_path, 0, 40000, tgt_res=tgt_res, is_npy=is_npy, result_dir=dataset_path_results)
 
-fig, axs = plt.subplots(4, 1)
+fig, axs = plt.subplots(5, 1)
 for i, data in enumerate(dataset):
     bl = baselines[(i + 0) % 2]
-    ir, x_gt, mask_gt = data
+    ir, x_gt, mask_gt, x_results = data
     with torch.no_grad():
         ir = torch.tensor(ir, device=device).unsqueeze(0)
-        x, sigma_sq = model(ir)
+        x, sigma = model(ir)
+        mask, sigma_est = sigma_estimator(ir)
+
         #print(x)
         ir = ir.cpu().numpy()
         x = x.cpu().numpy()
-        sigma_sq =sigma_sq.cpu().numpy()
+        sigma = sigma.cpu().numpy()
+        sigma_est = sigma_est.cpu().numpy()
+        mask = mask.cpu().numpy()
 
         x_range = np.arange(0, tgt_res[0] / 2).astype(np.float32)
         den = focal_projector * (x_range[np.newaxis, ...] - principal[0]) - focal * (x_gt[0, :, :] * res_projector - 511.5)
@@ -79,6 +88,7 @@ for i, data in enumerate(dataset):
         axs[1].cla()
         axs[1].plot(x_gt.squeeze())
         axs[1].plot(x.squeeze())
+        axs[1].plot(x_results.squeeze())
 
         axs[2].cla()
         axs[2].plot(d.squeeze())
@@ -86,7 +96,12 @@ for i, data in enumerate(dataset):
 
         #todo: the depth estimaion!
         axs[3].cla()
-        axs[3].plot(np.sqrt(np.clip(sigma_sq.squeeze(), 0, 100)))
+        axs[3].plot(sigma.squeeze().clip(0, 10))
+        axs[3].plot(sigma_est.squeeze())
+
+        axs[4].cla()
+        axs[4].plot((np.abs(x_gt.squeeze() - x_results.squeeze()) < 20/1024))
+        axs[4].plot(mask.squeeze())
         # plt.ylabel('')
         plt.show(block=False)
         plt.waitforbuttonpress()

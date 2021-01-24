@@ -1,6 +1,6 @@
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import torch
 import torch.nn as nn
 import torch.nn.modules.loss
@@ -18,17 +18,6 @@ import math
 import argparse
 
 from torch.utils.tensorboard import SummaryWriter
-
-
-class CompositeModel(nn.Module):
-    def __init__(self, backbone, regressor):
-        super(CompositeModel, self).__init__()
-        self.backbone = backbone
-        self.regressor = regressor
-
-    def forward(self, x, x_gt=None, mask_gt=None):
-        x = self.backbone(x)
-        return self.regressor(x, x_gt, mask_gt)
 
 
 def sigma_loss(sigma, x, x_gt): #sigma_sq is also called "variance"
@@ -50,7 +39,7 @@ def sigma_loss(sigma, x, x_gt): #sigma_sq is also called "variance"
     if torch.any(torch.isinf(sigma)):
         print("sigma: found inf")
     eps = 0.01 # sqrt(0.00001) = 0.0003 ... that means we actually have approx 0.3 pixel of basic offset for sigma
-    term1 = torch.div(torch.square((x - x_gt)* 1024.0), sigma*sigma + eps)
+    term1 = torch.div(torch.square((x - x_gt)*1024.0), sigma*sigma + eps)
     term2 = torch.log(sigma * sigma + eps)
     # term 3 is to stay positive(after all it is sigma^2)
     term3 = 0#F.relu(-sigma)
@@ -84,20 +73,22 @@ def train():
     # parser.add_argument("-V", "--version", help="show program version", action="store_true")
     parser.add_argument("-d", "--dataset_path", dest="path", help="Path to the dataset.", action="store",
                         default=os.path.expanduser("~/datasets/structure_core_unity"))
+    parser.add_argument("-r", "--dataset_path_results", dest="path_results",
+                        help="Path to the results of a network running trough a dataset.",
+                        action="store",
+                        default="")
 
     args = parser.parse_args()
 
-    experiment_name = "cr8_2021_32_cond_mul"
+    experiment_name = "sigma_mask_scaled"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     # slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/cr8_2021_32_std_5_regressor_chk.pt"
-    load_backbone = "trained_models/cr8_2021_32_std_5_backbone_chk.pt"
+    load_model = "trained_models/sigma_mask.pt"
 
     # not loading any pretrained part of any model whatsoever
-    load_regressor = ""
-    load_backbone = ""
+    load_model = ""
 
     num_epochs = 5000
     # todo: either do only 100 lines at a time, or go for
@@ -107,33 +98,17 @@ def train():
     slice_gt = (50 + 8, 50 + 8 + 1)
     batch_size = 32
     num_workers = 8
-    alpha = 1.0 * (1.0 / 4.0) * 1.0  # usually this is 0.1
-    alpha_sigma = 0#1e-10  # how much weight do we give correct confidence measures
+    alpha = 1.0
+    alpha_sigma = 1e-10  # how much weight do we give correct confidence measures
     learning_rate = 0.2  # 0.001 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
 
-    if load_regressor != "":
-        regressor = torch.load(load_regressor)
-        regressor.eval()
+    if load_model != "":
+        model = torch.load(load_model)
+        model.eval()
     else:
-        regressor = RegressorBranchless(height=1)
-        # regressor = Regressor2Stage()
-        # regressor = Regressor1Stage(height=1)
-        # regressor = Regressor1Branch(height=1)
-        regressor = CR8_reg_cond_mul(32, ch_latent=128)
-
-    if load_backbone != "":
-        backbone = torch.load(load_backbone)
-        backbone.eval()
-        # fix parameters in the backbone (or maybe not!)
-        # for param in backbone.parameters():
-        #    param.requires_grad = False
-    else:
-        # backbone = Backbone()
-        backbone = CR8_bb_no_residual_light()
-
-    model = CompositeModel(backbone, regressor)
+        model = CR8_mask_var()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -153,9 +128,9 @@ def train():
 
     # the filtered dataset
     datasets = {
-        'train': DatasetRendered2(args.path, 0, 40000, tgt_res=tgt_res, is_npy=is_npy),
-        'val': DatasetRendered2(args.path, 40000, 41000, tgt_res=tgt_res, is_npy=is_npy),
-        'test': DatasetRendered2(args.path, 41000, 42000, tgt_res=tgt_res, is_npy=is_npy)
+        'train': DatasetRendered2(args.path, 0, 40000, tgt_res=tgt_res, is_npy=is_npy, result_dir=args.path_results),
+        'val': DatasetRendered2(args.path, 40000, 41000, tgt_res=tgt_res, is_npy=is_npy, result_dir=args.path_results),
+        'test': DatasetRendered2(args.path, 41000, 42000, tgt_res=tgt_res, is_npy=is_npy, result_dir=args.path_results)
     }
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
@@ -177,16 +152,14 @@ def train():
                 model.eval()  # Set model to evaluate mode
 
             # TODO: accumulate classification losses for each classification stage!!!
-            loss_disparity_acc = 0
+            loss_mask_acc = 0
             loss_sigma_acc = 0
-            loss_class_acc = []
-            loss_disparity_acc_sub = 0
+            loss_mask_acc_sub = 0
             loss_sigma_acc_sub = 0
-            loss_class_acc_sub = []
 
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
-                ir, x_gt, mask_gt = sampled_batch
+                ir, x_gt, mask_gt, x_real = sampled_batch
                 if not is_npy:
                     ir = ir[:, :, slice_in[0]:slice_in[1], :]
                     x_gt = x_gt[:, :, slice_gt[0]:slice_gt[1], :]
@@ -197,91 +170,78 @@ def train():
                     ir = ir.cuda()
                     mask_gt = mask_gt.cuda()
                     x_gt = x_gt.cuda()
+                    x_real = x_real.cuda()
+
+                #overwrite the mask_gt!
+                mask_gt = (torch.abs(x_real-x_gt) < 20/1024).type(torch.float32)
 
                 if phase == 'train':
                     torch.autograd.set_detect_anomaly(True)
-                    x, sigma, class_losses, x_real = model(ir, x_gt, mask_gt)
+                    mask, sigma = model(ir)
                     x_real = x_real.detach()
 
                     optimizer.zero_grad()
-                    loss = torch.mean(torch.abs(x - x_gt)) #mask_gt
-                    loss_disparity_acc += loss.item()
-                    loss_disparity_acc_sub += loss.item()
+                    loss = torch.mean(torch.abs(mask - mask_gt))
+                    loss_mask_acc += loss.item()
+                    loss_mask_acc_sub += loss.item()
 
+                    loss_sigma = sigma_loss(sigma, x_real, x_gt)
+                    loss_sigma_acc += loss_sigma.item()
+                    loss_sigma_acc_sub += loss_sigma.item()
                     loss = loss * alpha
-                    if alpha_sigma != 0.0:
-                        loss_sigma = sigma_loss(sigma, x_real, x_gt)
-                        loss_sigma_acc += loss_sigma.item()
-                        loss_sigma_acc_sub += loss_sigma.item()
-                        loss += loss_sigma * alpha_sigma
-                    if len(loss_class_acc) == 0:
-                        loss_class_acc = [0] * len(class_losses)
-                        loss_class_acc_sub = [0] * len(class_losses)
-                    for i, class_loss in enumerate(class_losses):
-                        loss += torch.mean(class_loss)
-                        #print(class_loss.item())
-                        loss_class_acc[i] += torch.mean(class_loss).item()
-                        loss_class_acc_sub[i] += torch.mean(class_loss).item()
+                    #print(loss.item())
+                    loss += loss_sigma * alpha_sigma
+
 
                     loss.backward()
                     optimizer.step()
                 else:
                     with torch.no_grad():
-                        x, sigma = model(ir)
-                        loss = torch.mean(torch.abs(x - x_gt)) #mask_gt
-                        loss_disparity_acc += loss.item()
-                        loss_disparity_acc_sub += loss.item()
+                        mask, sigma = model(ir)
+                        loss = torch.mean(torch.abs(mask - mask_gt))
+                        loss_mask_acc += loss.item()
+                        loss_mask_acc_sub += loss.item()
 
-                        if alpha_sigma != 0.0:
-                            loss_sigma = sigma_loss(sigma, x, x_gt)
-                            loss_sigma_acc += loss_sigma.item()
-                            loss_sigma_acc_sub += loss_sigma.item()
+                        loss_sigma = sigma_loss(sigma, x_real, x_gt)
+                        loss_sigma_acc += loss_sigma.item()
+                        loss_sigma_acc_sub += loss_sigma.item()
 
                 if i_batch % 100 == 99:
-                    combo_loss = loss_disparity_acc_sub * alpha + \
-                                 loss_sigma_acc_sub * alpha_sigma + sum(loss_class_acc_sub)
+                    combo_loss = loss_mask_acc_sub * alpha + \
+                                 loss_sigma_acc_sub * alpha_sigma
                     print("batch {} loss {}".format(i_batch, combo_loss / 100))
-                    writer.add_scalar(f'{phase}_subepoch/disparity(loss)',
-                                      loss_disparity_acc_sub / 100.0 * 1024, step)
-                    if alpha_sigma != 0.0:
-                        writer.add_scalar(f'{phase}_subepoch/sigma(loss)',
-                                          loss_sigma_acc_sub / 100.0, step)
-                    for i, class_loss in enumerate(loss_class_acc_sub):
-                        writer.add_scalar(f'{phase}_subepoch/class_loss_{i}', class_loss / 100, step)
-                        loss_class_acc_sub[i] = 0
+                    writer.add_scalar(f'{phase}_subepoch/mask(loss)',
+                                      loss_mask_acc_sub / 100.0, step)
 
-                    loss_disparity_acc_sub = 0
+                    writer.add_scalar(f'{phase}_subepoch/sigma(loss)',
+                                      loss_sigma_acc_sub / 100.0, step)
+
+                    loss_mask_acc_sub = 0
                     loss_sigma_acc_sub = 0
 
-            epoch_loss = loss_disparity_acc / dataset_sizes[phase] * batch_size * alpha
-            writer.add_scalar(f"{phase}/disparity(loss)",
-                              loss_disparity_acc / dataset_sizes[phase] * batch_size * 1024, step)
-            if alpha_sigma != 0.0:
-                writer.add_scalar(f"{phase}/sigma(loss)",
-                                  loss_sigma_acc / dataset_sizes[phase] * batch_size, step)
-            for i, class_loss in enumerate(loss_class_acc):
-                epoch_loss += class_loss / dataset_sizes[phase] * batch_size
-                writer.add_scalar(f"{phase}/class_loss{i}", class_loss / dataset_sizes[phase] * batch_size, step)
+            epoch_loss = loss_mask_acc / dataset_sizes[phase] * batch_size * alpha
+            writer.add_scalar(f"{phase}/mask(loss)",
+                              loss_mask_acc / dataset_sizes[phase] * batch_size * 1024, step)
+
+            writer.add_scalar(f"{phase}/sigma(loss)",
+                              loss_sigma_acc / dataset_sizes[phase] * batch_size, step)
 
             print(f"{phase} Loss: {epoch_loss}")
 
             # store at the end of a epoch
-            if phase == 'val' and not math.isnan(loss_disparity_acc) and not math.isinf(loss_disparity_acc):
+            if phase == 'val' and not math.isnan(loss_mask_acc) and not math.isinf(loss_sigma_acc):
                 if isinstance(model, nn.DataParallel):
                     module = model.module
                 else:
                     module = model
 
                 print("storing network")
-                torch.save(module.backbone, f"trained_models/{experiment_name}_backbone_chk.pt")
-                torch.save(module.regressor, f"trained_models/{experiment_name}_regressor_chk.pt")
+                torch.save(module, f"trained_models/{experiment_name}_chk.pt")
 
                 if epoch_loss < min_test_epoch_loss:
                     print("storing network")
                     min_test_epoch_loss = epoch_loss
-                    torch.save(module.backbone,
-                               f"trained_models/{experiment_name}_backbone.pt")  # maybe use type(x).__name__()
-                    torch.save(module.regressor, f"trained_models/{experiment_name}_regressor.pt")
+                    torch.save(module, f"trained_models/{experiment_name}.pt")
 
     writer.close()
 

@@ -32,14 +32,17 @@ class DatasetRendered2(data.Dataset):
                  tgt_res=(1216, 896),
                  tgt_cxy=(604, 457),
                  is_npy=False,
-                 debug=False):
+                 debug=False,
+                 result_dir=""):
         self.is_npy = is_npy
         self.debug = debug
+        self.result_dir = result_dir
         self.from_ind = start_ind
         self.to_ind = stop_ind
         self.root_dir = root_dir
         self.depth_threshold = depth_threshold
         self.noise = noise
+
 
         #these are the camera parameters applied to
         self.depth_threshold = 15
@@ -71,7 +74,11 @@ class DatasetRendered2(data.Dataset):
             ir = np.load(f"{self.root_dir}/{idx}_ir.npy")
             x = np.load(f"{self.root_dir}/{idx}_gt.npy")
             mask = np.load(f"{self.root_dir}/{idx}_mask.npy")
-            return ir, x, mask
+            if self.result_dir == "":
+                return ir, x, mask
+            else:
+                x_result = np.load(f"{self.result_dir}/{idx}.npy")
+                return ir, x, mask, x_result
 
         side = "left"
         if idx % 2 == 1:

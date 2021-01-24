@@ -39,7 +39,7 @@ class Cond_Mul_Function(Function):
         grad_input, grad_weights, grad_bias = outputs
         return grad_input, None, grad_weights, grad_bias # what to do about the inds
 
-
+# module takes input of shape(n, c_in) + indices (inds) of length n to generate the output (n, c_out)
 class CondMul(nn.Module):
     def __init__(self, classes, input_features, output_features):
         super(CondMul, self).__init__()
@@ -49,4 +49,12 @@ class CondMul(nn.Module):
         self.register_parameter(name='b', param=nn.Parameter(torch.randn((classes, 1, output_features))))
 
     def forward(self, input, inds):
+        assert len(input.shape) == 2, \
+            "Expect input to be of shape (n, input_features)."
+        assert input.shape[1] == self.input_features, \
+            f"Expect the second dimension of input to be of size input_features {self.input_features}."
+        assert len(inds.shape) == 1, \
+            "Expecting inds to be of shape (n)"
+        assert inds.shape[0] == input.shape[0], \
+            "Expecting dim[0] of input and inds to be of same size."
         return Cond_Mul_Function.apply(input, inds, self.w, self.b)

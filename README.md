@@ -13,3 +13,15 @@ Not ideal since it relies on many (wrong) assumption:
 
 ## Dataset
 The dataset used right now is mostly rendered in unity.
+
+## Current work:
+The only files/networks currently being worked on:
+train.py
+train_mask.py
+plot_results.py
+store_results.py
+models based on CR8
+dataset_rendered_2.py
+slice_dataset.py
+dataset/dataset_test
+preprocess_dataset.py (not filter_dataset)

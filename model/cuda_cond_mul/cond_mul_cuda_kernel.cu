@@ -748,7 +748,7 @@ __global__ void count_classes(
         return;
     }
     int ind_w = inds[ind];
-    if(ind_w > class_count){
+    if(ind_w >= class_count || ind_w < 0){
         printf("[count_classes]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
     atomicAdd(&counters[ind_w], 1);
@@ -1239,8 +1239,9 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
         // a serious issue, that needs to be fixed!!!!!
         std::cout << "counted samples " << count << " vs overall samples " << grad_output.size(0) << std::endl;
     }
-    assert(count == grad_output.size(0)); //TODO: reinsert this assert!!!!!
-    //TODO: upload accumulated
+    assert(count == grad_output.size(0));
+
+    //upload the starting indices for the individual weights
     cudaMemcpy(starting_inds_gpu, &starting_inds_cpu[0], sizeof(int32_t) * weights.size(0), cudaMemcpyHostToDevice);
 
     //setup lookup buffer
