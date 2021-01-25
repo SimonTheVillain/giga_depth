@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.residual_block import ResidualBlock_shrink, ResidualBlock_vshrink
 from model.cuda_cond_mul.cond_mul import CondMul
-from model.cuda_cond_mul.reference_cond_mul import RefCondMul
+from model.cuda_cond_mul.reference_cond_mul import RefCondMul, RefCondMulConv
 
 
 #don't trust any of these calculations in the layers we had before...
@@ -140,6 +140,8 @@ class CR8_reg_cond_mul(nn.Module):
         self.conv_1 = nn.Conv2d(ch_in, ch_latent, 1, padding=0)
         self.bn_1 = nn.BatchNorm2d(ch_latent)
         #only one output (regression!!
+        #self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
+        #self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
         self.cond_mul = CondMul(classes, input_features=ch_latent, output_features=1)
         self.conv_2 = nn.Conv2d(ch_latent, classes + 1, 1, padding=0, padding_mode='replicate')
 

@@ -6,7 +6,7 @@
 
 #include <vector>
 #include <iostream>
-
+//#define FORCE_DOUBLE
 namespace {
 
 
@@ -66,7 +66,11 @@ __global__ void cond_mul_cuda_forward_wide_kernel(
     }
 
     const int ind_w = inds[ind];
-    scalar_t result = bias[ind_w][0][in];
+#ifdef FORCE_DOUBLE
+	double result = bias[ind_w][0][in];
+#else
+	scalar_t result = bias[ind_w][0][in];
+#endif
     for(int im=0;im<m;im++){
         result += input[ind][im] * weights[ind_w][im][in];
     }
@@ -457,7 +461,11 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
     //lets store weights for the processing in a register vairable
     scalar_t w[n];
     //the accumulator should be exactly n*32 long
+#ifdef FORCE_DOUBLE
+    double *acc = (double*)&shared[sizeof(double) * 32 * n * threadIdx.z];
+#else
     scalar_t *acc = (scalar_t*)&shared[sizeof(scalar_t) * 32 * n * threadIdx.z]; //TODO: find out if threadIdx.z really is used!!!
+#endif
     //load indices
     int weight_index;
     if( (base_ind + tid) < overall_samples){ //also check if we are overstepping the boundaries
@@ -789,7 +797,11 @@ __global__ void cond_mul_cuda_backward_b_kernel(
     if(ind_w >= grad_b.size(0)){
         return;
     }
-    scalar_t accu = 0;
+#ifdef FORCE_DOUBLE
+	double accu = 0;//TODO: get rid of the need for double precision operations here!
+#else
+	scalar_t accu = 0;
+#endif
     const int start_ind = starting_inds[ind_w];
     const int count = sample_count[ind_w];
     for(int i=0; i < count; i++){
@@ -818,7 +830,11 @@ __global__ void cond_mul_cuda_backward_w_kernel(
     if(ind_w >= grad_w.size(0)){
         return;
     }
-    scalar_t accu = 0;
+#ifdef FORCE_DOUBLE
+    double accu = 0;//TODO: get rid of the need for double precision operations here!
+#else
+	scalar_t accu = 0;
+#endif
     const int start_ind = starting_inds[ind_w];
     const int count = sample_count[ind_w];
     for(int i=0; i < count; i++){
@@ -911,7 +927,11 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
       		//std::cout << "Running the high occupancy kernel(cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel)" << std::endl;
             //TODO: reevaluate this implementation!!!!
             //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
-            shared_size = 2 * sizeof(scalar_t) * 32 * n; // for the accumulator
+#ifdef FORCE_DOUBLE
+		  shared_size = 2 * sizeof(double) * 32 * n; // for the accumulator
+#else
+		  shared_size = 2 * sizeof(scalar_t) * 32 * n; // for the accumulator
+#endif
 
             const int per_group = 32/n;
             const dim3 threads3(n, per_group, 2); //lets have 64 threads per group (doubles the use of shared memory)

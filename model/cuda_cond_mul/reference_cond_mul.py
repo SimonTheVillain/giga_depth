@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 class RefCondMul(nn.Module):
 
@@ -9,13 +10,15 @@ class RefCondMul(nn.Module):
         n=output_features
         self.m = m
         self.n = n
-        self.register_parameter(name='w', param=nn.Parameter(torch.randn((classes, m, n))))
-        self.register_parameter(name='b', param=nn.Parameter(torch.randn((classes, 1, n))))
+        k = math.sqrt(1.0/float(input_features))
+        self.register_parameter(name='w',
+                                param=nn.Parameter(torch.rand(classes, m, n)*k*2.0-k))
+        self.register_parameter(name='b',
+                                param=nn.Parameter(torch.rand(classes, 1, n)*k*2.0-k))
 
 
-
+    # x should be in shape ( n, input_features) transformed to (n, input_features, 1, 1)
     def forward(self, x, inds):
-        old_shape = list(x.shape)
         x = x.transpose(1, len(x.shape)-1)
         old_shape_2 = list(x.shape)
         x = x.reshape((-1, 1, self.m))
@@ -28,6 +31,35 @@ class RefCondMul(nn.Module):
         x = x.reshape(old_shape_2)
         x = x.transpose(1, len(x.shape)-1)
 
+        return x
+
+class RefCondMulConv(nn.Module):
+
+    def __init__(self, classes, input_features, output_features):
+        super(RefCondMulConv, self).__init__()
+        m = input_features
+        n = output_features
+        self.m = m
+        self.n = n
+        self.input_features = input_features
+        self.output_features = output_features
+        self.classes = classes
+        self.conv = nn.Conv2d(input_features, classes * output_features, 1)
+
+
+    def forward(self, x, inds):
+        inds = inds.type(torch.int64)
+        # x should be in shape ( n, input_features) transformed to (n, input_features, 1, 1)
+        x = x.reshape((-1, self.input_features, 1, 1))
+        x = self.conv(x)
+
+        # x should now be in shape(n, output_features * classes , 1, 1) so we convert to
+        # (n, classes, output_features)
+        x = x.reshape((-1, self.classes, self.output_features))
+        x = torch.gather(x, 1, inds.reshape((-1, 1, 1)).repeat(1, 1, self.output_features))
+
+        # x should nwo be in shape(n, 1, output_features)
+        x = x.reshape((-1, self.output_features))
         return x
 
 

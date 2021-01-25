@@ -87,7 +87,7 @@ def train():
 
     args = parser.parse_args()
 
-    experiment_name = "cr8_2021_32_cond_mul"
+    experiment_name = "cr8_2021_32_cond_mul_2"
 
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 

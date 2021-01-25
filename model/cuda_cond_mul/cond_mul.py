@@ -45,8 +45,11 @@ class CondMul(nn.Module):
         super(CondMul, self).__init__()
         self.input_features = input_features
         self.output_features = output_features
-        self.register_parameter(name='w', param=nn.Parameter(torch.randn((classes, input_features, output_features))))
-        self.register_parameter(name='b', param=nn.Parameter(torch.randn((classes, 1, output_features))))
+        k = math.sqrt(1.0/float(input_features))
+        self.register_parameter(name='w',
+                                param=nn.Parameter(torch.rand(classes, input_features, output_features)*k*2.0-k))
+        self.register_parameter(name='b',
+                                param=nn.Parameter(torch.rand(classes, 1, output_features)*k*2.0-k))
 
     def forward(self, input, inds):
         assert len(input.shape) == 2, \
