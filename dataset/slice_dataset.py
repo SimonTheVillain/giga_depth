@@ -6,12 +6,12 @@ src_dir = os.path.expanduser("~/datasets/structure_core_unity")
 dst_dir = os.path.expanduser("~/datasets/structure_core_unity_slice_100_35_2")
 
 src_dir = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity")
-dst_dir = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity_slice_100_35")
+dst_dir = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity_slice_100_90")
 
 dataset = DatasetRendered2(src_dir, 0, 80000)
 
-slice_in = (100, 100 + 17 * 2 + 1)
-slice_gt = (50 + 8, 50 + 8 + 1)
+slice_in = (100, 100 + 17 * 2 + 56)
+slice_gt = (50 + 8, 50 + 8 + 28)
 
 for i, data in enumerate(dataset):
     print(i)

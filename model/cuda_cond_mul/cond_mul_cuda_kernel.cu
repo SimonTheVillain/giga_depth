@@ -7,6 +7,18 @@
 #include <vector>
 #include <iostream>
 //#define FORCE_DOUBLE
+
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+	if (code != cudaSuccess)
+	{
+		fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+		if (abort) exit(code);
+	}
+}
+//gpuErrchk( cudaPeekAtLastError() );
+//gpuErrchk( cudaDeviceSynchronize() );
 namespace {
 
 
@@ -1159,7 +1171,8 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
             output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
       }
   }));
-
+  //gpuErrchk( cudaPeekAtLastError() );
+  //gpuErrchk( cudaDeviceSynchronize() );
   return {output};
 }
 
@@ -1356,5 +1369,7 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
   //auto d_old_h = d_X.slice(/*dim=*/1, 0, state_size);
   //auto d_input = d_X.slice(/*dim=*/1, state_size);
 
+  //gpuErrchk( cudaPeekAtLastError() );
+  //gpuErrchk( cudaDeviceSynchronize() );
   return {grad_input, grad_weights, grad_bias};
 }

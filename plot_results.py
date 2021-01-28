@@ -39,6 +39,8 @@ is_npy = True
 
 regressor = "trained_models/cr8_2021_32_scaled_sigma_regressor_chk.pt"
 backbone = "trained_models/cr8_2021_32_scaled_sigma_backbone_chk.pt"
+regressor = "trained_models/cr8_2021_128_2_lr02_alpha1_regressor_chk.pt"
+backbone = "trained_models/cr8_2021_128_2_lr02_alpha1_backbone_chk.pt"
 
 sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
 sigma_estimator = torch.load(sigma_estimator)
@@ -66,7 +68,7 @@ for i, data in enumerate(dataset):
     ir, x_gt, mask_gt, x_results = data
     with torch.no_grad():
         ir = torch.tensor(ir, device=device).unsqueeze(0)
-        x, sigma = model(ir)
+        x, sigma = model(ir.contiguous())
         mask, sigma_est = sigma_estimator(ir)
 
         #print(x)
@@ -84,24 +86,32 @@ for i, data in enumerate(dataset):
         d = -np.divide(bl * (focal_projector * focal), den)
         d = d.clip(-20, 20)
 
+        x_n = x_gt + (np.random.random(x_gt.shape) - 0.5) * 0.1/1024.0
+        den = focal_projector * (x_range[np.newaxis, ...] - principal[0]) - focal * (x_n[0, :, :] * res_projector - 511.5)
+        d_n = -np.divide(bl * (focal_projector * focal), den)
+        d_n = d_n.clip(-20, 20)
+
         axs[0].imshow(ir[0, 0, :, :])
         axs[1].cla()
-        axs[1].plot(x_gt.squeeze())
-        axs[1].plot(x.squeeze())
-        axs[1].plot(x_results.squeeze())
+        axs[1].plot(x_gt.squeeze()*1024)
+        axs[1].plot(x.squeeze()*1024)
+        axs[1].plot(x_results.squeeze()*1024)
 
         axs[2].cla()
-        axs[2].plot(d.squeeze())
         axs[2].plot(d_gt.squeeze())
+        axs[2].plot(d.squeeze())
 
         #todo: the depth estimaion!
         axs[3].cla()
-        axs[3].plot(sigma.squeeze().clip(0, 10))
-        axs[3].plot(sigma_est.squeeze())
+        axs[3].plot((d_gt.squeeze() - d.squeeze()).clip(-1, 1))
+        axs[3].plot((d_gt.squeeze() - d_n.squeeze()).clip(-1, 1))
+        #axs[3].plot(sigma.squeeze().clip(0, 10))
+        #axs[3].plot(sigma_est.squeeze())
 
         axs[4].cla()
-        axs[4].plot((np.abs(x_gt.squeeze() - x_results.squeeze()) < 20/1024))
-        axs[4].plot(mask.squeeze())
+        axs[4].plot(((x_gt.squeeze()-x.squeeze())*1024).clip(-10, 10))
+        #axs[4].plot((np.abs(x_gt.squeeze() - x_results.squeeze()) < 20/1024))
+        #axs[4].plot(mask.squeeze())
         # plt.ylabel('')
         plt.show(block=False)
         plt.waitforbuttonpress()
