@@ -90,15 +90,16 @@ def train():
                         default=False, const=True)
     parser.add_argument("-b", "--batch_size", dest="batch_size", action="store",
                         help="The batch size during training",
+                        type=int,
                         default=4)
     parser.add_argument("-e", "--experiment_name", dest="experiment_name", action="store",
                         help="The name of this training for tensorboard and checkpoints.",
                         default="result")
-
     args = parser.parse_args()
 
+
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    #experiment_name = "cr8_sliced_full_128"
+    args.experiment_name = "cr8_sliced_full_128"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
