@@ -1291,9 +1291,8 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
         //gradient for input: (basically the opposite of the forward path with transposed weights and zeroed bias
         const int m = weights_t.size(1);
         const int n = weights_t.size(2);
-        size_t per_group = 256/n;
+        size_t per_group = 256/std::min(n, 256);//prevent division by zero
         const dim3 threads3(n, per_group);
-
         //shared size could be useful but isn't seemingly
         //shared_size = sizeof(scalar_t) * m * per_group;// + sizeof(int32_t) * per_group;
         dim3 blocks((overall_samples + per_group - 1) / per_group);
@@ -1306,15 +1305,6 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
 
 
         // gradient for b
-        /*
-        cond_mul_cuda_backward_b_kernel<<<blocks, threads3>>>(
-                        const int32_t *sample_count,
-                        const int32_t *starting_inds,
-                        const int32_t *lookup_buffer,
-                        const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> grad_output,
-                        torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_b){
-                        */
-                        //TODO: reinsert
 
         threads = 256;
         blocks.x = (grad_bias.size(0) * grad_bias.size(2) + threads - 1) / threads;
@@ -1327,6 +1317,7 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
 
 
 
+
         threads = 256;
         blocks.x = (grad_weights.size(0) * grad_weights.size(1) * grad_weights.size(2) + threads - 1) / threads;
         cond_mul_cuda_backward_w_kernel<scalar_t><<<blocks, threads>>>(
@@ -1336,18 +1327,6 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
                     grad_output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                     input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
                     grad_weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>());
-
-
-        //gradient for w
-        /*
-        blocks.x = grad_bias.size
-        __global__ void cond_mul_cuda_backward_w_kernel(
-                        const int32_t *class_count,
-                        const int32_t *sizes,
-                        const int32_t *lookup_buffer,
-                        const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> grad_output,
-                        const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
-                        torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> grad_w){ */
 
     }));
 
@@ -1368,8 +1347,11 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
   //auto d_X = d_gate_weights.mm(weights);
   //auto d_old_h = d_X.slice(/*dim=*/1, 0, state_size);
   //auto d_input = d_X.slice(/*dim=*/1, state_size);
-
-  //gpuErrchk( cudaPeekAtLastError() );
-  //gpuErrchk( cudaDeviceSynchronize() );
+  /*
+	std::cout << "right before the end of backward cond_mul" << std::endl;
+  gpuErrchk( cudaPeekAtLastError() );
+  gpuErrchk( cudaDeviceSynchronize() );
+	std::cout << "after backward cond_mul" << std::endl;
+   */
   return {grad_input, grad_weights, grad_bias};
 }

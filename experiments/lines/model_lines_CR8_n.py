@@ -341,6 +341,243 @@ class CR8_reg_cond_mul_3(nn.Module):
 
             return x, mask, class_losses, x_real
 
+class CR8_reg_cond_mul_4(nn.Module):
+
+    #default parameters are the same as for CR8_reg_cond_mul_2
+    def __init__(self, classes, ch_in=128, ch_latent_c=[128, 128], ch_latent_r=[128, 32]):
+        super(CR8_reg_cond_mul_4, self).__init__()
+        self.classes = classes
+        self.cl1 = nn.Conv2d(ch_in, ch_latent_c[0], 1)
+        self.cl1_bn = nn.BatchNorm2d(ch_latent_c[0])
+        self.cl2 = nn.Conv2d(ch_latent_c[0], ch_latent_c[1], 1)
+        self.cl3 = nn.Conv2d(ch_latent_c[1], classes + 1, 1)
+
+        # only one output (regression!!
+        # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
+        # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
+
+        self.reg1 = nn.Conv2d(ch_in, ch_latent_r[0], 1)
+        self.reg1_bn = nn.BatchNorm2d(ch_latent_r[0])
+        self.reg2_cm = CondMul(classes, input_features=ch_latent_r[0] + ch_latent_c[0], output_features=ch_latent_r[1])
+        self.reg3_cm = CondMul(classes, input_features=ch_latent_r[1], output_features=1)
+
+    def forward(self, x_in, x_gt=None, mask_gt=None):
+        batch_size = x_in.shape[0]
+        int_type = torch.int32
+
+        # print(x.shape)
+        x = F.leaky_relu(self.cl1_bn(self.cl1(x_in)))
+        x = F.leaky_relu(self.cl2(x))
+        x = self.cl3(x)
+
+        # classes = F.softmax(x[:, 0:self.classes, :, :], dim=1)
+        classes = x[:, 0:self.classes, :, :]  # cross entropy already has a softmax
+        mask = F.leaky_relu(x[:, [-1], :, :])
+
+        # reshaped latent features:
+        inds = classes.argmax(dim=1).unsqueeze(1)
+
+        # now do the regressions:
+        inds_r = inds.flatten().type(int_type)
+        x = F.leaky_relu(self.reg1_bn(self.reg1(x_in)))
+        x = torch.cat((x, F.leaky_relu(self.cl1_bn(self.cl1(x_in)))), 1)
+        # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
+        x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+        x = F.leaky_relu(self.reg2_cm(x, inds_r))
+        regression = self.reg3_cm(x, inds_r)
+
+        # assuming h=1 we get the shape back to (b, c, h, w)
+        regression = regression.reshape((batch_size, 1, 1, -1))
+
+        x_real = (inds.type(torch.float32) + regression) * (1.0 / float(self.classes))
+        if x_gt is None:
+            return x_real, mask
+        else:
+            inds_gt = (x_gt * self.classes).type(torch.int64)
+            loss = F.cross_entropy(classes, inds_gt.squeeze(1))
+            class_losses = [torch.mean(loss * mask_gt)]
+
+            inds_r = inds_gt.clamp(0, self.classes - 1).flatten().type(int_type)
+            x = F.leaky_relu(self.reg1_bn(self.reg1(x_in)))
+            x = torch.cat((x, F.leaky_relu(self.cl1_bn(self.cl1(x_in)))), 1)
+            # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
+            x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+            x = F.leaky_relu(self.reg2_cm(x, inds_r))
+            regression = self.reg3_cm(x, inds_r)
+            regression = regression.reshape((batch_size, 1, 1, -1))
+
+            x = (inds_gt.type(torch.float32) + regression) * (1.0 / float(self.classes))
+
+            if torch.any(torch.isnan(regression)):
+                print("regressions: found nan")
+            if torch.any(torch.isinf(regression)):
+                print("regressions: found inf")
+
+            return x, mask, class_losses, x_real
+
+class CR8_reg_cond_mul_5(nn.Module):
+
+    #default parameters are the same as for CR8_reg_cond_mul_2
+    def __init__(self, classes=128, superclasses=8, ch_in=128, ch_latent_c=[128, 128], ch_latent_r=[128, 32]):
+        super(CR8_reg_cond_mul_5, self).__init__()
+        self.classes = classes
+        self.superclasses = superclasses
+        self.class_factor = int(classes/superclasses)
+        self.cl1 = nn.Conv2d(ch_in, ch_latent_c[0], 1)
+        self.cl1_bn = nn.BatchNorm2d(ch_latent_c[0])
+        self.cl2 = nn.Conv2d(ch_latent_c[0], ch_latent_c[1], 1)
+        self.cl3 = nn.Conv2d(ch_latent_c[1], classes + 1, 1)
+
+        # only one output (regression!!
+        # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
+        # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
+
+        self.reg1 = nn.Conv2d(ch_in, ch_latent_r[0], 1)
+        self.reg1_bn = nn.BatchNorm2d(ch_latent_r[0])
+        self.reg2_cm = CondMul(superclasses, input_features=ch_latent_r[0] + ch_latent_c[0], output_features=ch_latent_r[1])
+        self.reg3_cm = CondMul(classes, input_features=ch_latent_r[1], output_features=1)
+
+    def forward(self, x_in, x_gt=None, mask_gt=None):
+        batch_size = x_in.shape[0]
+        int_type = torch.int32
+
+        # print(x.shape)
+        x = F.leaky_relu(self.cl1_bn(self.cl1(x_in)))
+        x = F.leaky_relu(self.cl2(x))
+        x = self.cl3(x)
+
+        # classes = F.softmax(x[:, 0:self.classes, :, :], dim=1)
+        classes = x[:, 0:self.classes, :, :]  # cross entropy already has a softmax
+        mask = F.leaky_relu(x[:, [-1], :, :])
+
+        # reshaped latent features:
+        inds = classes.argmax(dim=1).unsqueeze(1)
+
+        # now do the regressions:
+        inds_r = inds.flatten().type(int_type)
+        inds_super = inds_r / self.class_factor
+        x = F.leaky_relu(self.reg1_bn(self.reg1(x_in)))
+        x = torch.cat((x, F.leaky_relu(self.cl1_bn(self.cl1(x_in)))), 1)
+        # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
+        x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+        x = F.leaky_relu(self.reg2_cm(x.contiguous(), inds_super))
+        regression = self.reg3_cm(x, inds_r)
+
+        # assuming h=1 we get the shape back to (b, c, h, w)
+        regression = regression.reshape((batch_size, 1, 1, -1))
+        x_real = (inds.type(torch.float32) + regression) * (1.0 / float(self.classes))
+        if x_gt is None:
+            return x_real, mask
+        else:
+            inds_gt = (x_gt * self.classes).type(torch.int64)
+            loss = F.cross_entropy(classes, inds_gt.squeeze(1))
+            class_losses = [torch.mean(loss * mask_gt)]
+
+            inds_r = inds_gt.clamp(0, self.classes - 1).flatten().type(int_type)
+            inds_super = (inds_r/self.class_factor).type(int_type)
+            x = F.leaky_relu(self.reg1_bn(self.reg1(x_in)))
+            x = torch.cat((x, F.leaky_relu(self.cl1_bn(self.cl1(x_in)))), 1)
+            # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
+            x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+            x = F.leaky_relu(self.reg2_cm(x, inds_super))
+            regression = self.reg3_cm(x, inds_r)
+            regression = regression.reshape((batch_size, 1, 1, -1))
+
+            x = (inds_gt.type(torch.float32) + regression) * (1.0 / float(self.classes))
+
+            if torch.any(torch.isnan(regression)):
+                print("regressions: found nan")
+            if torch.any(torch.isinf(regression)):
+                print("regressions: found inf")
+
+            return x, mask, class_losses, x_real
+
+#same as #5 but without batch normalization
+class CR8_reg_cond_mul_6(nn.Module):
+
+    #default parameters are the same as for CR8_reg_cond_mul_2
+    def __init__(self, classes=128, superclasses=8, ch_in=128, ch_latent_c=[128, 128], ch_latent_r=[128, 32], concat=True):
+        super(CR8_reg_cond_mul_6, self).__init__()
+        self.classes = classes
+        self.concat = concat
+        self.superclasses = superclasses
+        self.class_factor = int(classes/superclasses)
+        self.cl1 = nn.Conv2d(ch_in, ch_latent_c[0], 1)
+        self.cl2 = nn.Conv2d(ch_latent_c[0], ch_latent_c[1], 1)
+        self.cl3 = nn.Conv2d(ch_latent_c[1], classes + 1, 1)
+
+        # only one output (regression!!
+        # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
+        # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
+
+        self.reg1 = nn.Conv2d(ch_in, ch_latent_r[0], 1)
+        if concat:
+            self.reg2_cm = CondMul(superclasses, input_features=ch_latent_r[0] + ch_latent_c[0], output_features=ch_latent_r[1])
+        else:
+            self.reg2_cm = CondMul(superclasses, input_features=ch_latent_r[0],
+                                   output_features=ch_latent_r[1])
+
+        self.reg3_cm = CondMul(classes, input_features=ch_latent_r[1], output_features=1)
+
+    def forward(self, x_in, x_gt=None, mask_gt=None):
+        batch_size = x_in.shape[0]
+        int_type = torch.int32
+
+        # print(x.shape)
+        x = F.leaky_relu(self.cl1(x_in))
+        x = F.leaky_relu(self.cl2(x))
+        x = self.cl3(x)
+
+        # classes = F.softmax(x[:, 0:self.classes, :, :], dim=1)
+        classes = x[:, 0:self.classes, :, :]  # cross entropy already has a softmax
+        mask = F.leaky_relu(x[:, [-1], :, :])
+
+        # reshaped latent features:
+        inds = classes.argmax(dim=1).unsqueeze(1)
+
+        #print("before first regressions")
+        # now do the regressions:
+        inds_r = inds.flatten().type(int_type)
+        inds_super = inds_r // self.class_factor
+        x = F.leaky_relu(self.reg1(x_in))
+        #print("after linewise!")
+        if self.concat:
+            x = torch.cat((x, F.leaky_relu(self.cl1(x_in))), 1)
+        # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
+        x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+        x = F.leaky_relu(self.reg2_cm(x.contiguous(), inds_super))
+        regression = self.reg3_cm(x, inds_r)
+        #print("after first regressions")
+        # assuming h=1 we get the shape back to (b, c, h, w)
+        regression = regression.reshape((batch_size, 1, 1, -1))
+        x_real = (inds.type(torch.float32) + regression) * (1.0 / float(self.classes))
+        if x_gt is None:
+            return x_real, mask
+        else:
+            inds_gt = (x_gt * self.classes).type(torch.int64)
+            loss = F.cross_entropy(classes, inds_gt.squeeze(1))
+            class_losses = [torch.mean(loss * mask_gt)]
+
+            inds_r = inds_gt.clamp(0, self.classes - 1).flatten().type(int_type)
+            inds_super = (inds_r//self.class_factor).type(int_type)
+            x = F.leaky_relu(self.reg1(x_in))
+            if self.concat:
+                x = torch.cat((x, F.leaky_relu(self.cl1(x_in))), 1)
+            # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
+            x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+            x = F.leaky_relu(self.reg2_cm(x, inds_super))
+            regression = self.reg3_cm(x, inds_r)
+            regression = regression.reshape((batch_size, 1, 1, -1))
+
+            x = (inds_gt.type(torch.float32) + regression) * (1.0 / float(self.classes))
+
+            if torch.any(torch.isnan(regression)):
+                print("regressions: found nan")
+            if torch.any(torch.isinf(regression)):
+                print("regressions: found inf")
+            #print("forward done")
+            return x, mask, class_losses, x_real
+
 # CR8 regressor!!!
 class CR8_reg_2_stage(nn.Module):
 
@@ -523,7 +760,7 @@ class CR8_bb_no_residual_light(nn.Module):
 
 class CR8_bb_short(nn.Module):
 
-    def __init__(self):
+    def __init__(self, ch_out=128):
         super(CR8_bb_short, self).__init__()
         # 1 input image channel, 6 output channels, 3x3 square convolution
         # kernel
@@ -534,17 +771,14 @@ class CR8_bb_short(nn.Module):
         self.conv_4 = nn.Conv2d(64, 64, 5, padding=(0, 2))  # + 2 * 2 = 9
         self.conv_6 = nn.Conv2d(64, 64, 5, padding=(0, 2))  # + 2 * 2 = 13
         self.conv_8 = nn.Conv2d(64, 64, 3, padding=(0, 1))  # + 1 * 2 = 15
-        self.conv_9 = nn.Conv2d(64, 128, 3, padding=(0, 1))  # + 1 * 2 = 17
+        self.conv_9 = nn.Conv2d(64, ch_out, 3, padding=(0, 1))  # + 1 * 2 = 17
 
     def forward(self, x):
         x = F.leaky_relu(self.conv_start(x))
         x = F.leaky_relu(self.conv_1(x))
-        x = F.leaky_relu(self.conv_2(x))
         x = F.leaky_relu(self.conv_3_down(x))
         x = F.leaky_relu(self.conv_4(x))
-        x = F.leaky_relu(self.conv_5(x))
         x = F.leaky_relu(self.conv_6(x))
-        x = F.leaky_relu(self.conv_7(x))
         x = F.leaky_relu(self.conv_8(x))
         x = F.leaky_relu(self.conv_9(x))
         return x

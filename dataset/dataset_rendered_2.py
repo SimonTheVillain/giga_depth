@@ -1,15 +1,8 @@
-import torch
-import torch.nn as nn
 import torch.utils.data as data
-from skimage import io, transform
 import numpy as np
-import numpy.matlib
-from pathlib import Path
 import cv2
-import random
-
-import matplotlib.pyplot as plt
-
+import os
+import re
 
 def downsample(image):
     image = image.reshape(int(image.shape[0]/2), 2, int(image.shape[1]/2), 2)
@@ -146,4 +139,21 @@ class DatasetRendered2(data.Dataset):
         if self.debug:
             return grey, x_d, mask, depth
         return grey, x_d, mask
+
+
+
+def GetDataset(path, is_npy, tgt_res):
+    max_ind = 0
+    files = os.listdir(path)
+    for file in files:
+        if os.path.isfile(f"{path}/{file}"):
+            test = int(re.search(r'\d+', file).group())
+            if test > max_ind:
+                max_ind = test
+    datasets = {
+        'train': DatasetRendered2(path, 0, int(max_ind*9/10) - 1, tgt_res=tgt_res, is_npy=is_npy),
+        'val': DatasetRendered2(path, int(max_ind*9/10), max_ind, tgt_res=tgt_res, is_npy=is_npy)
+    }
+    return datasets
+
 

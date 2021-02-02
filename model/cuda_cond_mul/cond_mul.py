@@ -23,7 +23,7 @@ else:
             extra_cuda_cflags=extra_cuda_cflags)
     else:
         cond_mul_cuda = load(
-            'cond_mul_cuda', ['model/cuda_cond_mul/cond_mul_cuda.cpp', 'model/conda_cond_mul/cond_mul_cuda_kernel.cu'],
+            'cond_mul_cuda', ['model/cuda_cond_mul/cond_mul_cuda.cpp', 'model/cuda_cond_mul/cond_mul_cuda_kernel.cu'],
             verbose=True)
 
 torch.manual_seed(42)

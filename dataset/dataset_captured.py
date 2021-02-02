@@ -34,21 +34,17 @@ class DatasetCaptured(data.Dataset):
         ir_path = self.root_dir + "/single_shots/ir/" + str(idx) + '.png'
         ir = cv2.imread(ir_path, cv2.IMREAD_UNCHANGED)
         ir = ir.astype(float) * (1.0/1000.0) * 0.5
-        ir_l, ir_r = np.split(ir, 2, 1)
-        image = ir_r
 
-        #get the y coordinate
-        vertical = np.asmatrix(np.array(range(0, image.shape[0])) / image.shape[0])
-        vertical = np.transpose(np.matlib.repeat(vertical, image.shape[1], 0))
-        image = np.array([image, vertical])
+        #in the combined image, the capture of the left camera is on the right half
+        # the right camera is closer to the camera
+        ir_r, ir_l = np.split(ir, 2, 1)
+        image = ir_l
+
         image = image.astype(np.float32)
 
         #get random crop
-        offset_x = random.randrange(0, image.shape[2] - self.crop_res[1] + 1)
-        offset_y = random.randrange(0, image.shape[1] - self.crop_res[0] + 1)
-        image = image[:, offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
-
+        offset_x = 0
+        offset_y = 0
+        image = image[offset_y:(offset_y+self.crop_res[0]), offset_x:offset_x+self.crop_res[1]]
+        image = np.expand_dims(image, axis=0)
         return image
-
-
-        pass
