@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import torch
 import torch.nn as nn
 import matplotlib
@@ -48,6 +48,20 @@ backbone = "trained_models/cr8_short_128c_superclasses_backbone_chk.pt"
 regressor = "trained_models/cr8_short_bb32_512c_32sc_384_8_latent_nocat_regressor_chk.pt"
 backbone = "trained_models/cr8_short_bb32_512c_32sc_384_8_latent_nocat_backbone_chk.pt"
 
+
+#regressor = "trained_models/line_bb128_32c1_32c2_32sc_128_32_lr01_alpha100_regressor_chk.pt"
+#backbone = "trained_models/line_bb128_32c1_32c2_32sc_128_32_lr01_alpha100_backbone_chk.pt"
+
+
+#regressor = "trained_models/line_bb128_16_16_16_32sc_128_32_lr01_alpha200_regressor_chk.pt"
+#backbone = "trained_models/line_bb128_16_16_16_32sc_128_32_lr01_alpha200_backbone_chk.pt"
+
+regressor = "trained_models/line_bb64_16_16_16c123_128_128bb_64sc_128_32reg_lr01_alpha200_regressor_chk.pt"
+backbone = "trained_models/line_bb64_16_16_16c123_128_128bb_64sc_128_32reg_lr01_alpha200_backbone_chk.pt"
+
+
+regressor = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_128sc_128_32reg_lr01_alpha200_regressor_chk.pt"
+backbone = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_128sc_128_32reg_lr01_alpha200_backbone_chk.pt"
 sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
 sigma_estimator = torch.load(sigma_estimator)
 sigma_estimator.eval()

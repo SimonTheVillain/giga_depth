@@ -6,3 +6,6 @@ tensorboard/*
 tensorboard
 __pycache__/
 trained_models/*
+model/cuda_cond_mul/build
+model/cuda_cond_mul/cond_mul_cuda.egg*
+model/cuda_cond_mul/dist

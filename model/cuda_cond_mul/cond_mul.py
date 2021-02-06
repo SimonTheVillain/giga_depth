@@ -3,7 +3,7 @@ from torch import nn
 from torch.autograd import Function
 import torch
 
-installed = False
+installed = True
 if installed:
     import cond_mul_cuda
 else:
@@ -16,7 +16,9 @@ else:
         for device in range(0, torch.cuda.device_count()):
             cap = torch.cuda.get_device_capability(device)
             extra_cuda_cflags.append(f"-arch=sm_{cap[0]}{cap[1]}")
+        extra_cuda_cflags.append(f"--gpu-code=sm_{cap[0]}{cap[1]}")
         extra_cuda_cflags = list(set(extra_cuda_cflags))
+        print(extra_cuda_cflags)
         cond_mul_cuda = load(
             'cond_mul_cuda', ['model/cuda_cond_mul/cond_mul_cuda.cpp', 'model/cuda_cond_mul/cond_mul_cuda_kernel.cu'],
             verbose=True,
@@ -40,8 +42,18 @@ class Cond_Mul_Function(Function):
 
     @staticmethod
     def backward(ctx, grad_h):
+        #TODO: remove if this turns out to be unnecessary
+        # set the active device to the one that has our tensors
+        #old_device = torch.cuda.current_device()
+        #torch.cuda.set_device(grad_h.device)
+
         outputs = cond_mul_cuda.backward(
             grad_h.contiguous(), *ctx.saved_variables)
+
+        #TODO: remove if this turns out to be unnecessary
+        # restore the old state!
+        #torch.cuda.set_device(old_device)
+
         grad_input, grad_weights, grad_bias = outputs
         return grad_input, None, grad_weights, grad_bias # what to do about the inds
 
@@ -66,4 +78,15 @@ class CondMul(nn.Module):
             "Expecting inds to be of shape (n)"
         assert inds.shape[0] == input.shape[0], \
             "Expecting dim[0] of input and inds to be of same size."
-        return Cond_Mul_Function.apply(input, inds, self.w, self.b)
+        assert inds.device == self.w.device and input.device == self.w.device, \
+            f"Expecting input tensors to be on device {self.w.device}."
+
+        # set the active device to the one that has our tensors
+        old_device = torch.cuda.current_device()
+        torch.cuda.set_device(self.w.device)
+
+        result = Cond_Mul_Function.apply(input, inds, self.w, self.b)
+
+        # restore the old state!
+        torch.cuda.set_device(old_device)
+        return result

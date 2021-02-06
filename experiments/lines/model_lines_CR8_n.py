@@ -537,14 +537,15 @@ class CR8_reg_cond_mul_6(nn.Module):
 
         #print("before first regressions")
         # now do the regressions:
-        inds_r = inds.flatten().type(int_type)
-        inds_super = inds_r // self.class_factor
+        inds_r = inds.flatten().clamp(0, self.classes - 1).type(int_type)
+        inds_super = (inds_r // self.class_factor).clamp(0, self.superclasses - 1)
         x = F.leaky_relu(self.reg1(x_in))
         #print("after linewise!")
         if self.concat:
             x = torch.cat((x, F.leaky_relu(self.cl1(x_in))), 1)
         # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
         x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+
         x = F.leaky_relu(self.reg2_cm(x.contiguous(), inds_super))
         regression = self.reg3_cm(x, inds_r)
         #print("after first regressions")
@@ -554,12 +555,13 @@ class CR8_reg_cond_mul_6(nn.Module):
         if x_gt is None:
             return x_real, mask
         else:
-            inds_gt = (x_gt * self.classes).type(torch.int64)
+            inds_gt = (x_gt * self.classes).type(torch.int64).clamp(0, self.classes - 1)
             loss = F.cross_entropy(classes, inds_gt.squeeze(1))
             class_losses = [torch.mean(loss * mask_gt)]
 
-            inds_r = inds_gt.clamp(0, self.classes - 1).flatten().type(int_type)
-            inds_super = (inds_r//self.class_factor).type(int_type)
+            inds_r = inds_gt.flatten().type(int_type)
+            #todo: it is amazing how this needs to be clamped. really there shouldn't be a need to
+            inds_super = (inds_r//self.class_factor).type(int_type).clamp(0, self.superclasses - 1)
             x = F.leaky_relu(self.reg1(x_in))
             if self.concat:
                 x = torch.cat((x, F.leaky_relu(self.cl1(x_in))), 1)
@@ -567,6 +569,7 @@ class CR8_reg_cond_mul_6(nn.Module):
             x = x.transpose(1, 3).reshape((-1, x.shape[1]))
             x = F.leaky_relu(self.reg2_cm(x, inds_super))
             regression = self.reg3_cm(x, inds_r)
+
             regression = regression.reshape((batch_size, 1, 1, -1))
 
             x = (inds_gt.type(torch.float32) + regression) * (1.0 / float(self.classes))
@@ -578,115 +581,348 @@ class CR8_reg_cond_mul_6(nn.Module):
             #print("forward done")
             return x, mask, class_losses, x_real
 
-# CR8 regressor!!!
-class CR8_reg_2_stage(nn.Module):
 
-    def __init__(self, classes=[16, 16], ch_in=128, ch_latent=128):
 
-        super(CR8_reg_2_stage, self).__init__()
+
+#same as #5 but without batch normalization
+class CR8_reg_2stage(nn.Module):
+
+    #default parameters are the same as for CR8_reg_cond_mul_2
+    def __init__(self, classes=[32, 32], superclasses=8, ch_in=128,
+                 ch_latent_c=[128, 128],
+                 ch_latent_r=[128, 32],
+                 ch_latent_msk=[32, 16],
+                 concat=False):
+        super(CR8_reg_2stage, self).__init__()
+        overall_classes = classes[0] * classes[1]
         self.classes = classes
-        #everything we need for the first classification stage (TODO:per line):
-        self.c1_1 = nn.Conv2d(ch_in, ch_latent, 1, padding=0)
-        self.c1_2 = nn.Conv2d(ch_latent, ch_latent, 1, padding=0)
-        self.c1_3 = nn.Conv2d(ch_latent, classes[0] + 1, 1, padding=0, padding_mode='replicate')
+        self.concat = concat
+        self.superclasses = superclasses
+        self.class_factor = int(overall_classes/superclasses)
+        # the first latent layer for classification is shared
+        self.cl1 = nn.Conv2d(ch_in, ch_latent_c[0], 1)
 
-        #used or the second classification stage:
-        self.c2_1 = CondMul(classes[0], input_features=ch_in, output_features=32)
-        self.c2_2 = CondMul(classes[0], input_features=32, output_features=32) #because 3
-        self.c2_3 = CondMul(classes[0], input_features=32, output_features=classes[1])
+        self.cl2_1 = nn.Conv2d(ch_latent_c[0], ch_latent_c[1], 1)
+        self.cl3_1 = nn.Conv2d(ch_latent_c[1], classes[0], 1)
 
-        #now
-        self.r1_1 =CondMul(classes[0] * classes[1], input_features=ch_in, output_features=32)
-        self.r1_2 =CondMul(classes[0] * classes[1], input_features=32, output_features=16)
-        self.r1_3 = CondMul(classes[0] * classes[1], input_features=16, output_features=1)
+        self.cl2_2 = CondMul(classes[0], ch_latent_c[0], 32)
+        self.cl3_2 = CondMul(classes[0], 32, classes[1])
+
+
+
+        # only one output (regression!!
+        # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
+        # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
+
+        self.reg1 = nn.Conv2d(ch_in, ch_latent_r[0], 1)
+        if concat:
+            self.reg2_cm = CondMul(superclasses, input_features=ch_latent_r[0] + ch_latent_c[0], output_features=ch_latent_r[1])
+        else:
+            self.reg2_cm = CondMul(superclasses, input_features=ch_latent_r[0],
+                                   output_features=ch_latent_r[1])
+
+        self.reg3_cm = CondMul(overall_classes, input_features=ch_latent_r[1], output_features=1)
+
+        # kernels for masks:
+        self.msk1 = nn.Conv2d(ch_in, ch_latent_msk[0], 1)
+        self.msk2 = nn.Conv2d(ch_latent_msk[0], ch_latent_msk[1], 1)
+        self.msk3 = nn.Conv2d(ch_latent_msk[1], 1, 1)
+
+
 
     def forward(self, x_in, x_gt=None, mask_gt=None):
         batch_size = x_in.shape[0]
-        classes = self.classes[0] * self.classes[1]
+        int_type = torch.int32
+        overall_classes = self.classes[0] * self.classes[1]
+
+        x = F.leaky_relu(self.msk1(x_in))
+        x = F.leaky_relu(self.msk2(x))
+        mask = F.leaky_relu(self.msk3(x))
 
         # print(x.shape)
-        x1 = F.leaky_relu(self.c1_1(x_in))
-        x1 = F.leaky_relu(self.c1_2(x1))
-        x1 = self.c1_3(x1)
-        mask = F.leaky_relu(x1[:, [-1], :, :])
+        x = F.leaky_relu(self.cl1(x_in))
+        # x_latent for the second step in classification
+        x_l = x.transpose(1, 3).reshape((-1, x.shape[1]))
+        x = F.leaky_relu(self.cl2_1(x))
+        x = self.cl3_1(x)
+        cl1 = x # for later/ the cross entropy loss
 
-        inds1 = x1[:, 0:self.classes[0], :, :].argmax(dim=1).flatten().type(torch.int32)
+        inds1 = x.argmax(dim=1).flatten().type(int_type)
+        x = F.leaky_relu(self.cl2_2(x_l.contiguous(), inds1))
+        x = self.cl3_2(x, inds1)
+        inds2 = x.argmax(dim=1).flatten().type(int_type)
+        inds = inds1 * self.classes[1] + inds2
+        #second
 
+
+        #print("before first regressions")
+        # now do the regressions:
+        #todo: remove clamp here! it should not be necessary!!!
+        inds_r = inds.clamp(0, overall_classes - 1).type(int_type)
+        inds_super = (inds_r // self.class_factor).clamp(0, self.superclasses - 1)
+        x = F.leaky_relu(self.reg1(x_in))
+        #print("after linewise!")
+        if self.concat:
+            x = torch.cat((x, F.leaky_relu(self.cl1(x_in))), 1)
         # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
-        x3 = x2 = x_in.transpose(1, 3).reshape((-1, x_in.shape[1]))
-        x2 = F.leaky_relu(self.c2_1(x2, inds1))
-        x2 = F.leaky_relu(self.c2_2(x2, inds1))
-        x2 = self.c2_3(x2, inds1)
+        x = x.transpose(1, 3).reshape((-1, x.shape[1]))
 
-        inds2 = x2.argmax(dim=1).flatten().type(torch.int32)
-
-        inds12 = inds1 * self.classes[0] + inds2
-        x3 = F.leaky_relu(self.r1_1(x3, inds12))
-        x3 = F.leaky_relu(self.r1_2(x3, inds12))
-        r = self.r1_3(x3, inds12).flatten()
-
-        x_real = (inds12.type(torch.float32) + r) * (1.0 / float(classes))
-        #to (b, c, h, w)
-        x_real = x_real.reshape([x_in.shape[0], 1, x_in.shape[2], x_in.shape[3]])
-
+        x = F.leaky_relu(self.reg2_cm(x.contiguous(), inds_super))
+        regression = self.reg3_cm(x, inds_r)
+        #print("after first regressions")
+        # assuming h=1 we get the shape back to (b, c, h, w)
+        regression = regression.reshape((batch_size, 1, 1, -1))
+        inds = inds.reshape(regression.shape)
+        x_real = (inds.type(torch.float32) + regression) * (1.0 / float(overall_classes))
         if x_gt is None:
             return x_real, mask
         else:
-            inds1_gt = (x_gt * self.classes[0]).type(torch.int64)
-            inds12_gt = (x_gt * self.classes[0] * self.classes[1]).type(torch.int64)
-            inds2_gt = inds12_gt % self.classes[1]
+            inds_gt = (x_gt * overall_classes).type(torch.int64).clamp(0, overall_classes - 1)
+            inds1_gt = inds_gt // self.classes[1]
+            inds2_gt = torch.remainder(inds_gt, self.classes[1])
+            loss1 = F.cross_entropy(cl1, inds1_gt.squeeze(1))
 
-            loss1 = F.cross_entropy(x1[:, 0:self.classes[0], :, :], inds1_gt.squeeze(1))
-            inds1_gt = inds1_gt.clamp(0, self.classes[0] - 1).type(torch.int64)
-            inds2_gt = inds2_gt.clamp(0, self.classes[1] - 1).type(torch.int64)
-            inds12_gt = inds12_gt.clamp(0, classes - 1).type(torch.int32)
+            inds1_gt = inds1_gt.flatten().type(int_type)
+            x = F.leaky_relu(self.cl2_2(x_l, inds1_gt))
+            x = self.cl3_2(x, inds1_gt)
+            x = x.reshape((batch_size, -1, x.shape[1])).permute((0, 2, 1))
+            x = x.reshape((batch_size, self.classes[1], 1, -1))
+            loss2 = F.cross_entropy(x, inds2_gt.squeeze(1))
 
-            x3 = x2 = x_in.transpose(1, 3).reshape((-1, x_in.shape[1]))
-            inds1_gt = inds1_gt.flatten().type(torch.int32)
-            x2 = F.leaky_relu(self.c2_1(x2, inds1_gt))
-            x2 = F.leaky_relu(self.c2_2(x2, inds1_gt))
-            x2 = self.c2_3(x2, inds1_gt)
+            class_losses = [torch.mean(loss1 * mask_gt), torch.mean(loss2 * mask_gt)]
 
-            #from (b*w*h, c) to (b, h, w, c)
-            x2 = x2.reshape([batch_size, x_in.shape[2], x_in.shape[3], x2.shape[1]])
-            #to (b, c, h, w)
-            x2 = x2.permute(0, 3, 1, 2)
-            loss2 = F.cross_entropy(x2, inds2_gt.squeeze(1))
+            inds_r = inds_gt.flatten().type(int_type)
+            #todo: it is amazing how this needs to be clamped. really there shouldn't be a need to
+            inds_super = (inds_r//self.class_factor).type(int_type).clamp(0, self.superclasses - 1)
+            x = F.leaky_relu(self.reg1(x_in))
+            if self.concat:
+                x = torch.cat((x, F.leaky_relu(self.cl1(x_in))), 1)
+            # from (b, c, h, w) to (b, w, h, c) to (b * w * h, c)
+            x = x.transpose(1, 3).reshape((-1, x.shape[1]))
+            x = F.leaky_relu(self.reg2_cm(x, inds_super))
+            regression = self.reg3_cm(x, inds_r)
 
-            inds12_gt = inds12_gt.flatten()
-            x3 = F.leaky_relu(self.r1_1(x3, inds12_gt))
-            x3 = F.leaky_relu(self.r1_2(x3, inds12_gt))
-            r = self.r1_3(x3, inds12).flatten()
-
-            x = (inds12_gt.type(torch.float32) + r) * (1.0 / float(classes))
-            # to (b, c, h, w)
-            x = x.reshape([x_in.shape[0], 1, x_in.shape[2], x_in.shape[3]])
-
-            class_losses = [torch.mean(loss1), torch.mean(loss2)] #* mask_gt
-            return x, mask, class_losses, x_real
-
-
-            regression = self.cond_mul(x_l, inds_gt.clamp(0, self.classes - 1).flatten().type(int_type))
-            # assumint h=1 we get the shape back to (b, c, h, w)
             regression = regression.reshape((batch_size, 1, 1, -1))
 
-            x = (inds_gt.type(torch.float32) + regression) * (1.0 / float(self.classes))
+            x = (inds_gt.type(torch.float32) + regression) * (1.0 / float(overall_classes))
 
             if torch.any(torch.isnan(regression)):
                 print("regressions: found nan")
             if torch.any(torch.isinf(regression)):
                 print("regressions: found inf")
-
-            regression = self.cond_mul(x_l, inds.flatten().type(int_type))
-            # assumint h=1 we get the shape back to (b, c, h, w)
-            regression = regression.reshape((batch_size, 1, 1, -1))
-            x_real = (inds.type(torch.float32) + regression) * (1.0 / float(self.classes))
-
-            if torch.any(torch.isnan(regression)):
-                print("regressions_real: found nan")
-            if torch.any(torch.isinf(regression)):
-                print("regressions_real: found inf")
+            #print("forward done")
             return x, mask, class_losses, x_real
+
+
+class Classification3Stage(nn.Module):
+    def __init__(self, ch_in=128,
+                 classes=[16, 16, 16],
+                 pad=[0, 8, 8],  # pad around classes
+                 ch_latent=[[32, 32], [32, 32], [32, 32]]):
+        super(Classification3Stage, self).__init__()
+        self.classes = classes
+        self.pad = pad
+        classes12 = classes[0] * classes[1]
+        self.c1 = nn.ModuleList([nn.Conv2d(ch_in, ch_latent[0][0], 1),
+                                 CondMul(classes[0], ch_in, ch_latent[1][0]),
+                                 CondMul(classes12, ch_in, ch_latent[2][0])])
+        self.c2 = nn.ModuleList([nn.Conv2d(ch_latent[0][0], ch_latent[0][1], 1),
+                                 CondMul(classes[0], ch_latent[1][0], ch_latent[1][1]),
+                                 CondMul(classes12, ch_latent[2][0], ch_latent[2][1])])
+        self.c3 = nn.ModuleList([nn.Conv2d(ch_latent[0][1], classes[0], 1),
+                                 CondMul(classes[0], ch_latent[1][1], classes[1] + 2 * pad[1]),
+                                 CondMul(classes12, ch_latent[2][1], classes[2] + 2 * pad[2])])
+
+    def forward(self, x_in, inds_gt=None, mask_gt=None):
+        batches = x_in.shape[0]
+        height = x_in.shape[2]
+        width = x_in.shape[3]
+
+        classes12 = self.classes[0] * self.classes[1]
+        classes123= classes12 * self.classes[2]
+        classes23 = self.classes[1] * self.classes[2]
+        x = F.leaky_relu(self.c1[0](x_in))
+        x = F.leaky_relu(self.c2[0](x))
+        x = self.c3[0](x)
+        x1 = x
+        inds1 = x.argmax(dim=1)
+        inds1_l = inds1.flatten().type(torch.int32)
+        # convert from (b, c, h, w) to (b, h, w, c) to (b * h * w, c)
+        x_l = x_in.permute((0, 2, 3, 1)).reshape((-1, x_in.shape[1])).contiguous()
+        x = F.leaky_relu(self.c1[1](x_l, inds1_l))
+        x = F.leaky_relu(self.c2[1](x, inds1_l))
+        x = self.c3[1](x, inds1_l)
+        inds2 = x.argmax(dim=1)
+        inds12_l = inds1_l * self.classes[1] + (inds2.flatten() - self.pad[1])
+        inds12_l = inds12_l.clamp(0, classes12 - 1).type(torch.int32)
+
+        x = F.leaky_relu(self.c1[2](x_l, inds12_l))
+        x = F.leaky_relu(self.c2[2](x, inds12_l))
+        x = self.c3[2](x, inds12_l)
+        inds3 = x.argmax(dim=1)
+        inds123_real = inds12_l * self.classes[2] + (inds3.flatten() - self.pad[2])
+        inds123_real = inds123_real.reshape((batches, 1, height, width)).clamp(0, classes123 - 1)
+        if inds_gt is None:
+            return inds123_real
+        else:
+            losses = []
+            inds_gt = inds_gt.clamp(0, classes123 - 1)
+            inds1_gt = inds_gt // classes23
+            loss = F.cross_entropy(x1, inds1_gt.squeeze(1).type(torch.int64)).mean()
+            losses.append(loss)
+            inds1_gt = inds1_gt
+            # also select the neighbouring superclasses
+            for i in [-1, 0, 1]:
+                #calculate the index of this class/ its neighbours
+                inds1_l = inds1_gt + i
+                inds1_l = inds1_l.clamp(0, self.classes[0] - 1)
+                #calculate the local groundtruth index
+                inds2_gt = inds_gt // self.classes[2] - inds1_l * self.classes[1]
+                inds2_gt = inds2_gt + self.pad[1] #todo: really plus?
+
+                #the mask masks out where this would not yield any valid samples
+                mask = torch.logical_and(inds2_gt >= 0, inds2_gt < (self.classes[1] + 2 * self.pad[1]))
+                inds2_gt = inds2_gt.clamp(0, self.classes[1] + 2 * self.pad[1] - 1).squeeze(1).type(torch.int64)
+
+                inds1_l = inds1_l.flatten().type(torch.int32)
+                x = F.leaky_relu(self.c1[1](x_l, inds1_l))
+                x = F.leaky_relu(self.c2[1](x, inds1_l))
+                x = self.c3[1](x, inds1_l)
+                #from (b * h * w, c) to (b, h, w, c) to (b, c, h, w)
+                x = x.reshape((batches, height, width, -1)).permute((0, 3, 1, 2))
+                loss = F.cross_entropy(x, inds2_gt) * mask
+                losses.append(loss.mean())
+
+            inds12_gt = inds_gt // self.classes[2]
+            inds12_gt = inds12_gt
+            for i in [-1, 0, 1]:
+                #calculate the index of this class/ its neighbours
+                inds12_l = inds12_gt + i
+                inds12_l = inds12_l.clamp(0, classes12 - 1)
+                #calculate the local groundtruth index
+                inds3_gt = inds_gt  - inds12_l * self.classes[2]
+                inds3_gt = inds3_gt + self.pad[2] #todo: really plus?
+
+                #the mask masks out where this does not yield any valid samples
+                mask = torch.logical_and(inds3_gt >= 0, inds3_gt < (self.classes[2] + 2 * self.pad[2]))
+                inds3_gt = inds3_gt.clamp(0, self.classes[2] + 2 * self.pad[2] - 1).squeeze(1).type(torch.int64)
+
+                inds12_l = inds12_l.flatten().type(torch.int32)
+                x = F.leaky_relu(self.c1[2](x_l, inds12_l))
+                x = F.leaky_relu(self.c2[2](x, inds12_l))
+                x = self.c3[2](x, inds12_l)
+                # from (b * h * w, c) to (b, h, w, c) to (b, c, h, w)
+                x = x.reshape((batches, height, width, -1)).permute((0, 3, 1, 2))
+                loss = F.cross_entropy(x, inds3_gt) * mask
+                losses.append(loss.mean())
+
+            return inds123_real, losses
+
+
+#same as #5 but without batch normalization
+class CR8_reg_3stage(nn.Module):
+
+    #default parameters are the same as for CR8_reg_cond_mul_2
+    def __init__(self, ch_in=128,
+                 ch_latent=[128, 128, 128],
+                 superclasses=8,
+                 ch_latent_r=[128, 32],
+                 ch_latent_msk=[32, 16],
+                 classes=[16, 16, 16],
+                 pad=[0, 8, 8],
+                 ch_latent_c=[[32, 32], [32, 32], [32, 32]]):
+        super(CR8_reg_3stage, self).__init__()
+        classes123 = classes[0] * classes[1] * classes[2]
+        self.classes = classes
+        self.superclasses = superclasses
+        self.class_factor = int(classes123/superclasses)
+        # the first latent layer for classification is shared
+        self.bb1 = nn.Conv2d(ch_in, ch_latent[0], 1)
+        self.bb2 = nn.Conv2d(ch_latent[0], ch_latent[1], 1)
+        self.bb3 = nn.Conv2d(ch_latent[1], ch_latent[2], 1)
+
+        self.c = Classification3Stage(ch_in=ch_latent[2],
+                                      classes=classes,
+                                      pad=pad,  # pad around classes
+                                      ch_latent=ch_latent_c)
+
+        # only one output (regression!!
+        # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
+        # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
+
+        self.r1 = nn.Conv2d(ch_in, ch_latent_r[0], 1)
+        self.r2 = CondMul(superclasses, ch_latent_r[0], ch_latent_r[1])
+        self.r3 = CondMul(classes123, ch_latent_r[1], 1)
+
+        # kernels for masks:
+        self.msk1 = nn.Conv2d(ch_in, ch_latent_msk[0], 1)
+        self.msk2 = nn.Conv2d(ch_latent_msk[0], ch_latent_msk[1], 1)
+        self.msk3 = nn.Conv2d(ch_latent_msk[1], 1, 1)
+
+
+
+    def forward(self, x_in, x_gt=None, mask_gt=None):
+        height = x_in.shape[2]
+        width = x_in.shape[3]
+        classes123 = self.classes[0] * self.classes[1] * self.classes[2]
+        batch_size = x_in.shape[0]
+        int_type = torch.int32
+
+        #the first stage is to adapt to features to something that has meaning on this line!
+        x = F.leaky_relu(self.bb1(x_in))
+        x = F.leaky_relu(self.bb2(x))
+        x_l = F.leaky_relu(self.bb3(x))
+
+        #calculate the mask/confidence on these lines
+        x = F.leaky_relu(self.msk1(x_in))
+        x = F.leaky_relu(self.msk2(x))
+        mask = F.leaky_relu(self.msk3(x))
+
+
+        if x_gt is None:
+            inds = self.c(x_l).flatten().type(torch.int32)
+            inds_super = inds // self.class_factor
+
+            x = F.leaky_relu(self.r1(x_in))
+            # todo: change this for multiline!
+            # from (b, c, h, w) to (b, h, w, c) to (b * h * w, c)
+            x_l = x.permute((0, 2, 3, 1)).reshape((-1, x.shape[1])).contiguous()
+            x = F.leaky_relu(self.r2(x_l, inds_super))
+            r = self.r3(x, inds).flatten()
+
+            x = (inds.type(torch.float32) + r) * (1.0 / float(classes123))
+            x = x.reshape((batch_size, 1, height, width))
+            return x, mask
+        else:
+
+            inds_gt = (x_gt * classes123).type(torch.int32).clamp(0, classes123 - 1)
+            inds, class_losses = self.c(x_l, inds_gt, mask_gt)
+
+            # todo: change this for multiline!
+            x = F.leaky_relu(self.r1(x_in))
+            # from (b, c, h, w) to (b, h, w, c) to (b * h * w, c)
+            x_l = x.permute((0, 2, 3, 1)).reshape((-1, x.shape[1]))
+
+            #calculate the regression only x
+            inds_gt = inds_gt.clamp(0, classes123 - 1).flatten()
+            inds_super = inds_gt // self.class_factor
+            x = F.leaky_relu(self.r2(x_l, inds_super))
+            r = self.r3(x, inds_gt).flatten()
+
+            x_reg = (inds_gt.type(torch.float32) + r) * (1.0 / float(classes123))
+            x_reg = x_reg.reshape((batch_size, 1, height, width))
+
+
+            #calculate the real x
+            inds = inds.flatten().type(torch.int32)
+            inds_super = inds // self.class_factor
+            x = F.leaky_relu(self.r2(x_l, inds_super))
+            r = self.r3(x, inds_gt).flatten()
+
+            x = (inds.type(torch.float32) + r) * (1.0 / float(classes123))
+            x_real = x.reshape((batch_size, 1, height, width))
+
+            return x_reg, mask, class_losses, x_real
 
 # CR8 backbone!!!
 class CR8_bb_no_residual(nn.Module):
@@ -760,18 +996,18 @@ class CR8_bb_no_residual_light(nn.Module):
 
 class CR8_bb_short(nn.Module):
 
-    def __init__(self, ch_out=128):
+    def __init__(self, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64]):
         super(CR8_bb_short, self).__init__()
         # 1 input image channel, 6 output channels, 3x3 square convolution
         # kernel
-        self.conv_start = nn.Conv2d(1, 16, 3, padding=(0, 1))  # 1
-        self.conv_1 = nn.Conv2d(16, 32, 5, padding=(0, 2))  # + 2 = 3
-        self.conv_3_down = nn.Conv2d(32, 64, 5, padding=(0, 2), stride=(2, 2))  # + 2 = 5
+        self.conv_start = nn.Conv2d(1, channels[0], 3, padding=(0, 1))  # 1
+        self.conv_1 = nn.Conv2d(channels[0], channels[1], 5, padding=(0, 2))  # + 2 = 3
+        self.conv_3_down = nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2), stride=(2, 2))  # + 2 = 5
         # subsampled from here!
-        self.conv_4 = nn.Conv2d(64, 64, 5, padding=(0, 2))  # + 2 * 2 = 9
-        self.conv_6 = nn.Conv2d(64, 64, 5, padding=(0, 2))  # + 2 * 2 = 13
-        self.conv_8 = nn.Conv2d(64, 64, 3, padding=(0, 1))  # + 1 * 2 = 15
-        self.conv_9 = nn.Conv2d(64, ch_out, 3, padding=(0, 1))  # + 1 * 2 = 17
+        self.conv_4 = nn.Conv2d(channels[2], channels_sub[0], 5, padding=(0, 2))  # + 2 * 2 = 9
+        self.conv_6 = nn.Conv2d(channels_sub[0], channels_sub[1], 5, padding=(0, 2))  # + 2 * 2 = 13
+        self.conv_8 = nn.Conv2d(channels_sub[1], channels_sub[2], 3, padding=(0, 1))  # + 1 * 2 = 15
+        self.conv_9 = nn.Conv2d(channels_sub[2], channels_sub[3], 3, padding=(0, 1))  # + 1 * 2 = 17
 
     def forward(self, x):
         x = F.leaky_relu(self.conv_start(x))

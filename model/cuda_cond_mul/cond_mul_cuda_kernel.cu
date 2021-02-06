@@ -335,7 +335,8 @@ sudo env PATH=$PATH nvprof --analysis-metrics -f -o prof.nvvp venv/bin/python te
 nvvp prof.nvvp
 */
 
-//Kernel for m multiple of 32 and n <=32
+//TODO: extend this for more than 32 outputs (multiple of 32!) (and template it so we don't loose any  performance    
+//Kernel for m multiple of 32 and n being one of 1, 2, 4, 8, 16, 32
 //reuse means it is trying not to reload weights at every pixel.
 template <typename scalar_t,int m_per_warp,int n>
 __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
@@ -936,7 +937,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
       //also, for 8 its not better than the version without the shared memory
       if(((n == 1) || (n == 2) || (n == 4)) && m%32 == 0){
 
-      		//std::cout << "Running the high occupancy kernel(cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel)" << std::endl;
+      	//std::cout << "DEBUG: Running the high occupancy kernel(cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel)" << std::endl;
             //TODO: reevaluate this implementation!!!!
             //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
 #ifdef FORCE_DOUBLE
@@ -1011,7 +1012,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
 
             }
       }else if(((n == 8) || (n == 16) || (n == 32)) && m%32 == 0){
-        //std::cout << "Running the deep_reuse kernel(cond_mul_cuda_forward_deep_reuse32_kernel) n,m: " << n << ", " << m << std::endl;
+        //std::cout << "DEBUG:Running the deep_reuse kernel(cond_mul_cuda_forward_deep_reuse32_kernel) n,m: " << n << ", " << m << std::endl;
       	//TODO: reevaluate this implementation!!!!
 		//neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
 		shared_size = sizeof(scalar_t) * threads * (threads + 1); // for the accumulator
@@ -1140,7 +1141,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
          //version with shared memory
          //same or batter than the one without shared memory in  only in a few cases
 
-         std::cout << "deep branch with " << shared_size << "bytes of shared memory" << std::endl;
+         //std::cout << "deep branch with " << shared_size << "bytes of shared memory" << std::endl;
 
         const int per_group = 32/n;
         const dim3 threads3(n, per_group);
@@ -1171,6 +1172,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
             output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
       }
   }));
+  //TODO: remove this device synchronize!
   //gpuErrchk( cudaPeekAtLastError() );
   //gpuErrchk( cudaDeviceSynchronize() );
   return {output};
@@ -1352,6 +1354,6 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
   gpuErrchk( cudaPeekAtLastError() );
   gpuErrchk( cudaDeviceSynchronize() );
 	std::cout << "after backward cond_mul" << std::endl;
-   */
+	*/
   return {grad_input, grad_weights, grad_bias};
 }

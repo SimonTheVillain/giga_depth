@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import torch
 import torch.nn as nn
 import torch.nn.modules.loss
@@ -99,16 +99,19 @@ def train():
                         help="The number of threads working on loading and preprocessing data.",
                         type=int,
                         default=8)
+    parser.add_argument("-g", "--gpu_list", dest="gpu_list", action="store",
+                        nargs="+", type=int,
+                        default=list(range(0, torch.cuda.device_count())))
     args = parser.parse_args()
-
+    main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    args.experiment_name = "bb64_256c_16sc_256_8"
+    args.experiment_name = "line_bb64_16_16_8c123_32_32_32_256bb_2048sc_128_32reg_lr01_alpha200"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
     # slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/cr8_2021_256_wide_reg_regressor_chk.pt"
-    load_backbone = "trained_models/cr8_2021_256_wide_reg_backbone_chk.pt"
+    load_regressor = "trained_models/line_bb32_256c_16sc_1024_16_lr002_alpha100_regressor_chk.pt"
+    load_backbone = "trained_models/line_bb32_256c_16sc_1024_16_lr002_alpha100_backbone_chk.pt"
 
     # not loading any pretrained part of any model whatsoever
     load_regressor = ""
@@ -120,10 +123,10 @@ def train():
     slice_in = (100, 128)
     slice_gt = (50, 64)
     #alpha = 1.0 * (1.0 / 4.0) * 1.0  # usually this is 0.1
-    alpha = 10.0
+    alpha = 200.0 #todo: back to 10 for quicker convergence!?
     alpha_sigma = 0#1e-10  # how much weight do we give correct confidence measures
     #learning_rate = 0.2 # learning rate of 0.2 was sufficient for many applications
-    learning_rate = 0.1  # 0.02 for the branchless regressor (smaller since we feel it's not entirely stable)
+    learning_rate = 0.01  # 0.02 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
     slice = True
@@ -140,10 +143,28 @@ def train():
         #regressor = CR8_reg_2_stage([16, 16], ch_latent=128)
         #regressor = CR8_reg_cond_mul_5(256, 32, ch_latent_c=[128, 128], ch_latent_r=[128, 4])
         if args.is_npy:
-            regressor = CR8_reg_cond_mul_6(512, 32, ch_in=32, ch_latent_c=[128, 128], ch_latent_r=[384, 8], concat=False)
+            #regressor = CR8_reg_cond_mul_6(classes=2048, superclasses=32, ch_in=128,
+            #                               ch_latent_c=[128, 128],
+            #                               ch_latent_r=[128, 32], concat=False)
+            #regressor = CR8_reg_2stage(classes=[32, 32], superclasses=8, ch_in=128,
+            #                           ch_latent_c=[128, 128],
+            #                           ch_latent_r=[128, 32],
+            #                           ch_latent_msk=[32, 16])
+            regressor = CR8_reg_3stage(ch_in=64,
+                                       ch_latent=[128, 128, 256],
+                                       superclasses=2048,
+                                       ch_latent_r=[128, 32],
+                                       ch_latent_msk=[32, 16],
+                                       classes=[16, 16, 8],
+                                       pad=[0, 8, 4],
+                                       ch_latent_c=[[32, 32], [32, 32], [32, 32]])
         else:
             regressor = Regressor2(classes=256, superclasses=16, height=int(slice_gt[1]), ch_in=64,
                                    ch_latent_c=[128, 128], ch_latent_r=[256, 8])
+            #classification is lacking:
+            #TODO: maybe we have more channels here. [128, 256]
+            # for classification one could split lines into groups
+            # maybe by just splitting and stacking up the lines
 
             #regressor = Regressor(classes=128, height=int(slice_gt[1]), ch_in=128, ch_latent_c=[128, 128])
 
@@ -155,7 +176,9 @@ def train():
         #    param.requires_grad = False
     else:
         if args.is_npy:
-            backbone = CR8_bb_short(ch_out=32)
+            #backbone = CR8_bb_short(channels=[16, 32, 64], channels_sub=[64, 64, 128, 128])
+            backbone = CR8_bb_short(channels=[16, 32, 64], channels_sub=[64, 64, 64, 64])
+            #backbone = CR8_bb_short(channels=[8, 16, 32], channels_sub=[32, 32, 32, 32])
         else:
             #backbone = BackboneSliced(slices=1, height=slice_in[1])
             backbone = BackboneSliced2(slices=1, height=int(slice_in[1]),
@@ -163,13 +186,11 @@ def train():
 
     model = CompositeModel(backbone, regressor)
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    if torch.cuda.device_count() > 1:
+    if len(args.gpu_list) > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
-        model = nn.DataParallel(model)
+        model = nn.DataParallel(model, device_ids=args.gpu_list)
 
-    model.to(device)
+    model.to(args.gpu_list[0])
 
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
@@ -218,16 +239,15 @@ def train():
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
                 ir, x_gt, mask_gt = sampled_batch
-
+                ir = ir.to(main_device)
+                mask_gt = mask_gt.to(main_device)
+                x_gt = x_gt.to(main_device)
                 #todo: instead of a query the slice variable should be set accordingly further up!
                 if not args.is_npy and slice:
                     ir = ir[:, :, slice_in[0]:slice_in[0] + slice_in[1], :]
                     x_gt = x_gt[:, :, slice_gt[0]:slice_gt[0] + slice_gt[1], :]
                     mask_gt = mask_gt[:, :, slice_gt[0]:slice_gt[0] + slice_gt[1], :]
-                if torch.cuda.device_count() >= 1:
-                    ir = ir.cuda()
-                    mask_gt = mask_gt.cuda()
-                    x_gt = x_gt.cuda()
+
 
                 if phase == 'train':
                     torch.autograd.set_detect_anomaly(True)
@@ -236,8 +256,10 @@ def train():
 
                     optimizer.zero_grad()
                     loss = torch.mean(torch.abs(x - x_gt)) #mask_gt
-                    loss_reg_acc += loss.item()
-                    loss_reg_acc_sub += loss.item()
+                    mask_mean = mask_gt.mean().item() + 0.0001
+                    masked_reg = torch.mean(torch.abs(x-x_gt) * mask_gt) * (1.0/mask_mean)
+                    loss_reg_acc += masked_reg.item()
+                    loss_reg_acc_sub += masked_reg.item()
 
                     loss = loss * alpha
 
@@ -310,7 +332,7 @@ def train():
             if phase == 'train':
                 writer.add_scalar(f"{phase}/regression_stage",
                                   loss_reg_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
-                combo_loss = loss_disparity_acc * alpha + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
+                combo_loss = loss_reg_acc * alpha + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
                 combo_loss *= 1.0 / dataset_sizes[phase] * args.batch_size
 
                 print(f"{phase} loss: {combo_loss}")
