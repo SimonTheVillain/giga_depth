@@ -105,7 +105,7 @@ def train():
     args = parser.parse_args()
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    args.experiment_name = "slice_bb64_16_14_12c123_32x2each_lbb64x1_42sc_64_64_reg_lr01_alpha200_1nn"
+    args.experiment_name = "bb64_16_14_12c123_16x2each_lbb64x1_42sc_64_64_reg_lr01_alpha200_1nn"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
@@ -129,7 +129,11 @@ def train():
     learning_rate = 0.01  # 0.02 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
-    slice = True
+    slice = False
+    if slice:
+        height = 64
+    else:
+        height = 448
 
     if load_regressor != "":
         regressor = torch.load(load_regressor)
@@ -164,14 +168,14 @@ def train():
             #                       ch_latent_c=[128, 128, 128], ch_latent_r=[256, 8])
 
             regressor = Reg_3stage(ch_in=64,
-                                   height=64,#448,
-                                   ch_latent=[64],#[128, 128, 128],#todo: make this of variable length
-                                   superclasses=8,
-                                   ch_latent_r=[64, 64],
+                                   height=height,#64,#448,
+                                   ch_latent=[],#[128, 128, 128],#todo: make this of variable length
+                                   superclasses=42,
+                                   ch_latent_r=[32, 4],# 64/64
                                    ch_latent_msk=[32, 16],
                                    classes=[16, 14, 12],
                                    pad=[0, 1, 2],
-                                   ch_latent_c=[[32, 32], [32, 32], [32, 32]],#todo: make these of variable length
+                                   ch_latent_c=[[16, 16], [16, 16], [16, 16]],#todo: make these of variable length
                                    regress_neighbours=1)
             #classification is lacking:
             #TODO: maybe we have more channels here. [128, 256]
@@ -193,7 +197,7 @@ def train():
             #backbone = CR8_bb_short(channels=[8, 16, 32], channels_sub=[32, 32, 32, 32])
         else:
             #backbone = BackboneSliced(slices=1, height=slice_in[1])
-            backbone = BackboneSliced2(slices=1, height=int(slice_in[1]),
+            backbone = BackboneSliced2(slices=1, height=height*2,#896,#int(slice_in[1]),
                                        channels=[16, 32, 64], channels_sub=[64, 64, 64, 64, 64])
 
     model = CompositeModel(backbone, regressor)

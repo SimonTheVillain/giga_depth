@@ -460,7 +460,6 @@ class Reg_3stage(nn.Module):
             inds_super = inds // self.class_factor
             inds_super = (inds_super + self.superclasses * ind_offsets).flatten().type(torch.int32)
             inds_l = (inds + classes123 * ind_offsets).flatten().type(torch.int32)
-
             # STEP 1
             x = F.leaky_relu(self.r2(x_l, inds_super))
             # STEP 3 + reshape
@@ -471,4 +470,4 @@ class Reg_3stage(nn.Module):
             x_real = x.reshape((bs, 1, height, width))
             torch.cuda.synchronize()
 
-            return x_reg, mask, class_losses, x_real
+            return x_reg_combined, mask, class_losses, x_real
