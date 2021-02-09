@@ -1,4 +1,5 @@
 import math
+import os
 from torch import nn
 from torch.autograd import Function
 import torch
@@ -13,16 +14,23 @@ else:
     # to nvcc
     extra_cuda_cflags = []
     if torch.cuda.device_count() > 1:
+        arch_list = ""
         for device in range(0, torch.cuda.device_count()):
             cap = torch.cuda.get_device_capability(device)
-            extra_cuda_cflags.append(f"-arch=sm_{cap[0]}{cap[1]}")
-        extra_cuda_cflags.append(f"--gpu-code=sm_{cap[0]}{cap[1]}")
-        extra_cuda_cflags = list(set(extra_cuda_cflags))
-        print(extra_cuda_cflags)
+            arch_list += f"{cap[0]}.{cap[1]} "
+        # set the cuda flag for architecture list so the code is not only compiled for only one of the installed GPUs
+        os.environ["TORCH_CUDA_ARCH_LIST"] = arch_list[:-1]
+
+        #for device in range(0, torch.cuda.device_count()):
+        #    cap = torch.cuda.get_device_capability(device)
+        #    extra_cuda_cflags.append(f"-arch=sm_{cap[0]}{cap[1]}")
+        #extra_cuda_cflags.append(f"--gpu-code=sm_{cap[0]}{cap[1]}")
+        #extra_cuda_cflags = list(set(extra_cuda_cflags))
+        #print(extra_cuda_cflags)
         cond_mul_cuda = load(
             'cond_mul_cuda', ['model/cuda_cond_mul/cond_mul_cuda.cpp', 'model/cuda_cond_mul/cond_mul_cuda_kernel.cu'],
-            verbose=True,
-            extra_cuda_cflags=extra_cuda_cflags)
+            verbose=True)#,
+            #extra_cuda_cflags=extra_cuda_cflags)
     else:
         cond_mul_cuda = load(
             'cond_mul_cuda', ['model/cuda_cond_mul/cond_mul_cuda.cpp', 'model/cuda_cond_mul/cond_mul_cuda_kernel.cu'],

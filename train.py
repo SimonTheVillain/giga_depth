@@ -12,7 +12,7 @@ from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from experiments.lines.model_lines_CR8_n import *
 from model.backbone import Backbone, BackboneSliced, BackboneSliced2
-from model.regressor import Regressor, Regressor2
+from model.regressor import Regressor, Regressor2, Reg_3stage
 from torch.utils.data import DataLoader
 import math
 import argparse
@@ -50,7 +50,7 @@ def sigma_loss(sigma, x, x_gt): #sigma_sq is also called "variance"
     if torch.any(torch.isinf(sigma)):
         print("sigma: found inf")
     eps = 0.01 # sqrt(0.00001) = 0.0003 ... that means we actually have approx 0.3 pixel of basic offset for sigma
-    term1 = torch.div(torch.square((x - x_gt)* 1024.0), sigma*sigma + eps)
+    term1 = torch.div(torch.square((x - x_gt) * 1024.0), sigma*sigma + eps)
     term2 = torch.log(sigma * sigma + eps)
     # term 3 is to stay positive(after all it is sigma^2)
     term3 = 0#F.relu(-sigma)
@@ -105,13 +105,13 @@ def train():
     args = parser.parse_args()
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    args.experiment_name = "line_bb64_16_16_8c123_32_32_32_256bb_2048sc_128_32reg_lr01_alpha200"
+    args.experiment_name = "slice_bb64_16_14_12c123_32x2each_lbb64x1_42sc_64_64_reg_lr01_alpha200_1nn"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
     # slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/line_bb32_256c_16sc_1024_16_lr002_alpha100_regressor_chk.pt"
-    load_backbone = "trained_models/line_bb32_256c_16sc_1024_16_lr002_alpha100_backbone_chk.pt"
+    load_regressor = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_regressor_chk.pt"
+    load_backbone = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_backbone_chk.pt"
 
     # not loading any pretrained part of any model whatsoever
     load_regressor = ""
@@ -151,16 +151,28 @@ def train():
             #                           ch_latent_r=[128, 32],
             #                           ch_latent_msk=[32, 16])
             regressor = CR8_reg_3stage(ch_in=64,
-                                       ch_latent=[128, 128, 256],
-                                       superclasses=2048,
-                                       ch_latent_r=[128, 32],
+                                       ch_latent=[64, 64, 64],
+                                       superclasses=42,#672*4,#672, #168,
+                                       ch_latent_r=[64, 128],
                                        ch_latent_msk=[32, 16],
-                                       classes=[16, 16, 8],
-                                       pad=[0, 8, 4],
-                                       ch_latent_c=[[32, 32], [32, 32], [32, 32]])
+                                       classes=[16, 14, 12],
+                                       pad=[0, 1, 2],
+                                       ch_latent_c=[[32, 32], [32, 32], [32, 32]],
+                                       regress_neighbours=1)
         else:
-            regressor = Regressor2(classes=256, superclasses=16, height=int(slice_gt[1]), ch_in=64,
-                                   ch_latent_c=[128, 128], ch_latent_r=[256, 8])
+            #regressor = Regressor2(classes=256, superclasses=16, height=int(slice_gt[1]), ch_in=64,
+            #                       ch_latent_c=[128, 128, 128], ch_latent_r=[256, 8])
+
+            regressor = Reg_3stage(ch_in=64,
+                                   height=64,#448,
+                                   ch_latent=[64],#[128, 128, 128],#todo: make this of variable length
+                                   superclasses=8,
+                                   ch_latent_r=[64, 64],
+                                   ch_latent_msk=[32, 16],
+                                   classes=[16, 14, 12],
+                                   pad=[0, 1, 2],
+                                   ch_latent_c=[[32, 32], [32, 32], [32, 32]],#todo: make these of variable length
+                                   regress_neighbours=1)
             #classification is lacking:
             #TODO: maybe we have more channels here. [128, 256]
             # for classification one could split lines into groups

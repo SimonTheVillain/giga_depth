@@ -62,6 +62,19 @@ backbone = "trained_models/line_bb64_16_16_16c123_128_128bb_64sc_128_32reg_lr01_
 
 regressor = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_128sc_128_32reg_lr01_alpha200_regressor_chk.pt"
 backbone = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_128sc_128_32reg_lr01_alpha200_backbone_chk.pt"
+
+regressor = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_2048sc_128_32reg_lr01_alpha200_regressor_chk.pt"
+backbone = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_2048sc_128_32reg_lr01_alpha200_backbone_chk.pt"
+
+regressor = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_2048sc_128_32reg_lr01_alpha200_1nn_regressor_chk.pt"
+backbone = "trained_models/line_bb64_16_16_8c123_32_32_32_256bb_2048sc_128_32reg_lr01_alpha200_1nn_backbone_chk.pt"
+
+regressor = "trained_models/line_bb64_16_14_12c123_32_32_32_128bb_672sc_128_32reg_lr01_alpha200_1nn_regressor_chk.pt"
+backbone = "trained_models/line_bb64_16_14_12c123_32_32_32_128bb_672sc_128_32reg_lr01_alpha200_1nn_backbone_chk.pt"
+
+regressor = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_168sc_64_16reg_lr01_alpha100_1nn_regressor_chk.pt"
+backbone = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_168sc_64_16reg_lr01_alpha100_1nn_backbone_chk.pt"
+
 sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
 sigma_estimator = torch.load(sigma_estimator)
 sigma_estimator.eval()

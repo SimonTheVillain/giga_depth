@@ -778,7 +778,7 @@ class Classification3Stage(nn.Module):
                 inds1_l = inds1_l.clamp(0, self.classes[0] - 1)
                 #calculate the local groundtruth index
                 inds2_gt = inds_gt // self.classes[2] - inds1_l * self.classes[1]
-                inds2_gt = inds2_gt + self.pad[1] #todo: really plus?
+                inds2_gt = inds2_gt + self.pad[1]
 
                 #the mask masks out where this would not yield any valid samples
                 mask = torch.logical_and(inds2_gt >= 0, inds2_gt < (self.classes[1] + 2 * self.pad[1]))
@@ -801,7 +801,7 @@ class Classification3Stage(nn.Module):
                 inds12_l = inds12_l.clamp(0, classes12 - 1)
                 #calculate the local groundtruth index
                 inds3_gt = inds_gt  - inds12_l * self.classes[2]
-                inds3_gt = inds3_gt + self.pad[2] #todo: really plus?
+                inds3_gt = inds3_gt + self.pad[2]
 
                 #the mask masks out where this does not yield any valid samples
                 mask = torch.logical_and(inds3_gt >= 0, inds3_gt < (self.classes[2] + 2 * self.pad[2]))
@@ -830,12 +830,14 @@ class CR8_reg_3stage(nn.Module):
                  ch_latent_msk=[32, 16],
                  classes=[16, 16, 16],
                  pad=[0, 8, 8],
-                 ch_latent_c=[[32, 32], [32, 32], [32, 32]]):
+                 ch_latent_c=[[32, 32], [32, 32], [32, 32]],
+                 regress_neighbours=0):
         super(CR8_reg_3stage, self).__init__()
         classes123 = classes[0] * classes[1] * classes[2]
         self.classes = classes
         self.superclasses = superclasses
         self.class_factor = int(classes123/superclasses)
+        self.regress_neighbours = regress_neighbours
         # the first latent layer for classification is shared
         self.bb1 = nn.Conv2d(ch_in, ch_latent[0], 1)
         self.bb2 = nn.Conv2d(ch_latent[0], ch_latent[1], 1)
@@ -889,8 +891,10 @@ class CR8_reg_3stage(nn.Module):
             x_l = x.permute((0, 2, 3, 1)).reshape((-1, x.shape[1])).contiguous()
             x = F.leaky_relu(self.r2(x_l, inds_super))
             r = self.r3(x, inds).flatten()
+            #r = self.r2(x_l, inds).flatten()#todo:remove this reactivate the two lines above
 
             x = (inds.type(torch.float32) + r) * (1.0 / float(classes123))
+            #x = (inds.type(torch.float32)) * (1.0 / float(classes123)) #todo remove debug
             x = x.reshape((batch_size, 1, height, width))
             return x, mask
         else:
@@ -904,25 +908,30 @@ class CR8_reg_3stage(nn.Module):
             x_l = x.permute((0, 2, 3, 1)).reshape((-1, x.shape[1]))
 
             #calculate the regression only x
-            inds_gt = inds_gt.clamp(0, classes123 - 1).flatten()
-            inds_super = inds_gt // self.class_factor
-            x = F.leaky_relu(self.r2(x_l, inds_super))
-            r = self.r3(x, inds_gt).flatten()
+            x_reg_combined = torch.zeros((batch_size, 1 + 2 * self.regress_neighbours, height, width),
+                                         device=x_l.device)
+            for offset in range(-self.regress_neighbours, self.regress_neighbours+1):
+                inds_gt = (inds_gt + offset).clamp(0, classes123 - 1).flatten()
+                inds_super = inds_gt // self.class_factor
+                x = F.leaky_relu(self.r2(x_l, inds_super))
+                r = self.r3(x, inds_gt).flatten()
+                #r = self.r2(x_l, inds_gt).flatten()#todo:remove this reactivate the two lines above
 
-            x_reg = (inds_gt.type(torch.float32) + r) * (1.0 / float(classes123))
-            x_reg = x_reg.reshape((batch_size, 1, height, width))
+                x_reg = (inds_gt.type(torch.float32) + r) * (1.0 / float(classes123))
+                x_reg = x_reg.reshape((batch_size, 1, height, width))
+                x_reg_combined[:, [offset+self.regress_neighbours], :, :] = x_reg
 
 
             #calculate the real x
             inds = inds.flatten().type(torch.int32)
             inds_super = inds // self.class_factor
             x = F.leaky_relu(self.r2(x_l, inds_super))
-            r = self.r3(x, inds_gt).flatten()
+            r = self.r3(x, inds).flatten()
 
             x = (inds.type(torch.float32) + r) * (1.0 / float(classes123))
             x_real = x.reshape((batch_size, 1, height, width))
 
-            return x_reg, mask, class_losses, x_real
+            return x_reg_combined, mask, class_losses, x_real
 
 # CR8 backbone!!!
 class CR8_bb_no_residual(nn.Module):
