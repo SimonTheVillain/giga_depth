@@ -11,7 +11,7 @@ from model.regressor_1branch import Regressor1Branch
 from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from experiments.lines.model_lines_CR8_n import *
-from model.backbone import Backbone, BackboneSliced, BackboneSliced2
+from model.backbone import Backbone, BackboneSliced, BackboneSliced2, BackboneSliced3
 from model.regressor import Regressor, Regressor2, Reg_3stage
 from torch.utils.data import DataLoader
 import math
@@ -105,7 +105,7 @@ def train():
     args = parser.parse_args()
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    args.experiment_name = "bb64_16_14_12c123_16x2each_lbb64x1_42sc_64_64_reg_lr01_alpha200_1nn"
+    args.experiment_name = "bb64_16_14_12c123_16x2each_lbb64x1_42sc_32_4_reg_lr01_alpha200_1nn"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
@@ -172,7 +172,7 @@ def train():
                                    ch_latent=[],#[128, 128, 128],#todo: make this of variable length
                                    superclasses=42,
                                    ch_latent_r=[32, 4],# 64/64
-                                   ch_latent_msk=[32, 16],
+                                   ch_latent_msk=[16, 8],
                                    classes=[16, 14, 12],
                                    pad=[0, 1, 2],
                                    ch_latent_c=[[16, 16], [16, 16], [16, 16]],#todo: make these of variable length
@@ -196,9 +196,11 @@ def train():
             backbone = CR8_bb_short(channels=[16, 32, 64], channels_sub=[64, 64, 64, 64])
             #backbone = CR8_bb_short(channels=[8, 16, 32], channels_sub=[32, 32, 32, 32])
         else:
+            backbone = BackboneSliced3(slices=1, height=height * 2,
+                                       channels=[16, 32, 64], channels_sub=[64, 64, 64, 64])
             #backbone = BackboneSliced(slices=1, height=slice_in[1])
-            backbone = BackboneSliced2(slices=1, height=height*2,#896,#int(slice_in[1]),
-                                       channels=[16, 32, 64], channels_sub=[64, 64, 64, 64, 64])
+            #backbone = BackboneSliced2(slices=1, height=height*2,#896,#int(slice_in[1]),
+            #                           channels=[16, 32, 64], channels_sub=[64, 64, 64, 64, 64])
 
     model = CompositeModel(backbone, regressor)
 

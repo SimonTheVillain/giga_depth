@@ -412,9 +412,9 @@ class Reg_3stage(nn.Module):
             # the input for the classifier (as well as the output) should come in (b, c, h, w)
             inds = self.c(x_l)
             inds_super = inds // self.class_factor + ind_offsets * self.superclasses
-            inds = inds + ind_offsets * classes123
+            inds_l = inds + ind_offsets * classes123
             inds_super = inds_super.flatten().type(torch.int32)
-            inds = inds.flatten().type(torch.int32)
+            inds_l = inds_l.flatten().type(torch.int32)
 
 
             x = F.leaky_relu(self.r1(x_in))
@@ -422,9 +422,9 @@ class Reg_3stage(nn.Module):
             x_l = x.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
             x_l = x_l.reshape((bs * height * width, -1)).contiguous()
             x = F.leaky_relu(self.r2(x_l, inds_super))
-            r = self.r3(x, inds).flatten()
+            r = self.r3(x, inds_l).flatten()
 
-            x = (inds.type(torch.float32) + r) * (1.0 / float(classes123))
+            x = (inds.flatten().type(torch.float32) + r) * (1.0 / float(classes123))
             x = x.reshape((bs, 1, height, width))
             return x, mask
         else:
