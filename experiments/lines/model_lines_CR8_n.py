@@ -831,13 +831,15 @@ class CR8_reg_3stage(nn.Module):
                  classes=[16, 16, 16],
                  pad=[0, 8, 8],
                  ch_latent_c=[[32, 32], [32, 32], [32, 32]],
-                 regress_neighbours=0):
+                 regress_neighbours=0,
+                 skip_first_regression=False):
         super(CR8_reg_3stage, self).__init__()
         classes123 = classes[0] * classes[1] * classes[2]
         self.classes = classes
         self.superclasses = superclasses
         self.class_factor = int(classes123/superclasses)
         self.regress_neighbours = regress_neighbours
+        self.skip_first_regression = skip_first_regression
         # the first latent layer for classification is shared
         self.bb1 = nn.Conv2d(ch_in, ch_latent[0], 1)
         self.bb2 = nn.Conv2d(ch_latent[0], ch_latent[1], 1)
@@ -852,7 +854,8 @@ class CR8_reg_3stage(nn.Module):
         # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
         # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
 
-        self.r1 = nn.Conv2d(ch_in, ch_latent_r[0], 1)
+        if not skip_first_regression:
+            self.r1 = nn.Conv2d(ch_in, ch_latent_r[0], 1)
         self.r2 = CondMul(superclasses, ch_latent_r[0], ch_latent_r[1])
         self.r3 = CondMul(classes123, ch_latent_r[1], 1)
 
@@ -885,7 +888,10 @@ class CR8_reg_3stage(nn.Module):
             inds = self.c(x_l).flatten().type(torch.int32)
             inds_super = inds // self.class_factor
 
-            x = F.leaky_relu(self.r1(x_in))
+            if not self.skip_first_regression:
+                x = F.leaky_relu(self.r1(x_in))
+            else:
+                x = x_in
             # todo: change this for multiline!
             # from (b, c, h, w) to (b, h, w, c) to (b * h * w, c)
             x_l = x.permute((0, 2, 3, 1)).reshape((-1, x.shape[1])).contiguous()
@@ -903,7 +909,10 @@ class CR8_reg_3stage(nn.Module):
             inds, class_losses = self.c(x_l, inds_gt, mask_gt)
 
             # todo: change this for multiline!
-            x = F.leaky_relu(self.r1(x_in))
+            if not self.skip_first_regression:
+                x = F.leaky_relu(self.r1(x_in))
+            else:
+                x = x_in
             # from (b, c, h, w) to (b, h, w, c) to (b * h * w, c)
             x_l = x.permute((0, 2, 3, 1)).reshape((-1, x.shape[1]))
 

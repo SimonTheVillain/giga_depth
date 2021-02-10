@@ -105,7 +105,7 @@ def train():
     args = parser.parse_args()
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    args.experiment_name = "bb64_16_14_12c123_16x2each_lbb64x1_42sc_32_4_reg_lr01_alpha200_1nn"
+    args.experiment_name = "line_bb64_16_14_12c123_16x2each_lbb64x1_42sc_64_64_reg_lr01_alpha10_1nn"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
@@ -123,13 +123,13 @@ def train():
     slice_in = (100, 128)
     slice_gt = (50, 64)
     #alpha = 1.0 * (1.0 / 4.0) * 1.0  # usually this is 0.1
-    alpha = 200.0 #todo: back to 10 for quicker convergence!?
+    alpha = 10.0 #todo: back to 10 for quicker convergence!?
     alpha_sigma = 0#1e-10  # how much weight do we give correct confidence measures
     #learning_rate = 0.2 # learning rate of 0.2 was sufficient for many applications
     learning_rate = 0.01  # 0.02 for the branchless regressor (smaller since we feel it's not entirely stable)
     momentum = 0.90
     shuffle = True
-    slice = False
+    slice = True
     if slice:
         height = 64
     else:
@@ -157,11 +157,11 @@ def train():
             regressor = CR8_reg_3stage(ch_in=64,
                                        ch_latent=[64, 64, 64],
                                        superclasses=42,#672*4,#672, #168,
-                                       ch_latent_r=[64, 128],
+                                       ch_latent_r=[64, 64],
                                        ch_latent_msk=[32, 16],
                                        classes=[16, 14, 12],
                                        pad=[0, 1, 2],
-                                       ch_latent_c=[[32, 32], [32, 32], [32, 32]],
+                                       ch_latent_c=[[16, 16], [16, 16], [16, 16]],
                                        regress_neighbours=1)
         else:
             #regressor = Regressor2(classes=256, superclasses=16, height=int(slice_gt[1]), ch_in=64,
