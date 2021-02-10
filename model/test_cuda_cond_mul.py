@@ -267,7 +267,7 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
     y1 = model(x1, test_ind)
     y2 = model_ref(x2, test_ind)
     y3 = model_conv(x3, test_ind)
-    print("comparisons y1-y2 / y1-y3")
+    print("comparisons y1-y2 / y1-y3 (values around 0.5 are fine, all the other stuff should be smaller than e-05)")
     maximum = max(y1.abs().max(), y2.abs().max(), y3.abs().max())
     print(torch.max(torch.abs(torch.div(y1 - y2, y2))))
     print(torch.max(torch.abs(torch.div(y1 - y2, y1))))
@@ -307,11 +307,11 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
 #small_gradient_experiment()
 #sys.exit(0)
 batch_size = 32*32
-width = 608
+width = 60#8
 height = 1#448
-classes = 1 # (classes per line)
-m = 128
-n = 2#output channels
+classes = 32 # (classes per line)
+m = 64
+n = 32#output channels
 absolute_random = True
 #width = 1 #TODO: remove these debug measures
 #height = 1
@@ -324,12 +324,11 @@ linear_custom = CondMul(classes * height, m, n).cuda(device)
 
 
 
-compare_models(linear_custom, linear_ref, linear_conv, batch_size, width, height, classes)
-sys.exit(0)
+#compare_models(linear_custom, linear_ref, linear_conv, batch_size, width, height, classes)
+#sys.exit(0)
+
+
 print("time used by inference (custom)")
-
-
-
 measure_time_two_way(linear_custom, torch.int32, width, height, classes, absolute_random)
 #sys.exit(0)
 print("time used by inference (reference)")

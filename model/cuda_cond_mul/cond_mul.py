@@ -4,7 +4,7 @@ from torch import nn
 from torch.autograd import Function
 import torch
 
-installed = True
+installed = False
 if installed:
     import cond_mul_cuda
 else:

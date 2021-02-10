@@ -188,6 +188,9 @@ class Regressor2(nn.Module):
             return x, mask, class_losses, x_real
 
 
+
+
+
 class Classifier3Stage(nn.Module):
     def __init__(self, ch_in=128,
                  height=448,
@@ -198,15 +201,34 @@ class Classifier3Stage(nn.Module):
         self.classes = classes
         self.pad = pad
         classes12 = classes[0] * classes[1]
-        self.c1 = nn.ModuleList([nn.Conv2d(height * ch_in, height * ch_latent[0][0], 1, groups=height),
-                                 CondMul(height * classes[0], ch_in, ch_latent[1][0]),
-                                 CondMul(height * classes12, ch_in, ch_latent[2][0])])
-        self.c2 = nn.ModuleList([nn.Conv2d(height * ch_latent[0][0], height * ch_latent[0][1], 1, groups=height),
-                                 CondMul(height * classes[0], ch_latent[1][0], ch_latent[1][1]),
-                                 CondMul(height * classes12, ch_latent[2][0], ch_latent[2][1])])
-        self.c3 = nn.ModuleList([nn.Conv2d(height * ch_latent[0][1], height * classes[0], 1),
-                                 CondMul(height * classes[0], ch_latent[1][1], classes[1] + 2 * pad[1]),
-                                 CondMul(height * classes12, ch_latent[2][1], classes[2] + 2 * pad[2])])
+
+        #todo: proper loop and encapsulation of the 3
+        ch_latent[0].insert(0, ch_in)
+        ch_latent[0].append(classes[0] + 2 * pad[0])
+        ch_latent[1].insert(0, ch_in)
+        ch_latent[1].append(classes[1] + 2 * pad[1])
+        ch_latent[2].insert(0, ch_in)
+        ch_latent[2].append(classes[2] + 2 * pad[2])
+        self.c1 = nn.ModuleList()
+        self.c2 = nn.ModuleList()
+        self.c3 = nn.ModuleList()
+        for i in range(0, len(ch_latent[0]) - 1):
+            self.c1.append(nn.Conv2d(height * ch_latent[0][i], height * ch_latent[0][i + 1], 1, groups=height))
+
+        for i in range(0, len(ch_latent[1]) - 1):
+            self.c2.append(CondMul(height * classes[0], ch_latent[0][i], ch_latent[1][i + 1]))
+
+        for i in range(0, len(ch_latent[2]) - 1):
+            self.c3.append(CondMul(height * classes12, ch_latent[0][i], ch_latent[1][i + 1]))
+        #self.c1 = nn.ModuleList([nn.Conv2d(height * ch_in, height * ch_latent[0][0], 1, groups=height),
+        #                         CondMul(height * classes[0], ch_in, ch_latent[1][0]),
+        #                         CondMul(height * classes12, ch_in, ch_latent[2][0])])
+        #self.c2 = nn.ModuleList([nn.Conv2d(height * ch_latent[0][0], height * ch_latent[0][1], 1, groups=height),
+        #                         CondMul(height * classes[0], ch_latent[1][0], ch_latent[1][1]),
+        #                         CondMul(height * classes12, ch_latent[2][0], ch_latent[2][1])])
+        #self.c3 = nn.ModuleList([nn.Conv2d(height * ch_latent[0][1], height * classes[0], 1),
+        #                         CondMul(height * classes[0], ch_latent[1][1], classes[1] + 2 * pad[1]),
+        #                         CondMul(height * classes12, ch_latent[2][1], classes[2] + 2 * pad[2])])
 
     def forward(self, x_in, inds_gt=None, mask_gt=None):
         bs = x_in.shape[0]  # batch size
@@ -223,9 +245,13 @@ class Classifier3Stage(nn.Module):
         # STEP 1:
         # convert from (b, c, h, w) to (b, h, c, w) to (b, h*c, 1, w)
         x = x_in.permute((0, 2, 1, 3)).reshape((bs, -1, 1, width))
-        x = F.leaky_relu(self.c1[0](x))
-        x = F.leaky_relu(self.c2[0](x))
-        x = self.c3[0](x)
+        for i in range(0, len(self.c1)):
+            x = self.c1[i](x)
+            if i < len(self.c1) - 1:
+                x = F.leaky_relu(x)
+        #x = F.leaky_relu(self.c1[0](x))
+        #x = F.leaky_relu(self.c2[0](x))
+        #x = self.c3[0](x)
 
         #convert from (b, h*c, 1, w) to (b, h, c, w) to (b, c, h, w)
         x = x.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
@@ -238,9 +264,14 @@ class Classifier3Stage(nn.Module):
         inds1_l = inds1_l.flatten()
         # convert from (b, c, h, w) to (b, h, w, c) to (b * h * w, c)
         x_l = x_in.permute((0, 2, 3, 1)).reshape((-1, x_in.shape[1])).contiguous()
-        x = F.leaky_relu(self.c1[1](x_l, inds1_l))
-        x = F.leaky_relu(self.c2[1](x, inds1_l))
-        x = self.c3[1](x, inds1_l)
+        x = x_l
+        for i in range(0, len(self.c2)):
+            x = self.c2[i](x, inds1_l)
+            if i < len(self.c2) - 1:
+                x = F.leaky_relu(x)
+        #x = F.leaky_relu(self.c1[1](x_l, inds1_l))
+        #x = F.leaky_relu(self.c2[1](x, inds1_l))
+        #x = self.c3[1](x, inds1_l)
 
         # (b * h * w, c) to (b * h * w, 1) to (b, 1, h, w)
         inds2 = x.argmax(dim=1).reshape((bs, 1, height, width))
@@ -252,9 +283,14 @@ class Classifier3Stage(nn.Module):
         inds12_l = inds12_l.flatten()
 
         # STEP 3:
-        x = F.leaky_relu(self.c1[2](x_l, inds12_l))
-        x = F.leaky_relu(self.c2[2](x, inds12_l))
-        x = self.c3[2](x, inds12_l)
+        x = x_l
+        for i in range(0, len(self.c3)):
+            x = self.c3[i](x, inds12_l)
+            if i < len(self.c3) - 1:
+                x = F.leaky_relu(x)
+        #x = F.leaky_relu(self.c1[2](x_l, inds12_l))
+        #x = F.leaky_relu(self.c2[2](x, inds12_l))
+        #x = self.c3[2](x, inds12_l)
 
         # (b * h * w, c) to (b * h * w, 1) to (b, 1, h, w)
         inds3 = x.argmax(dim=1).reshape((bs, 1, height, width))
@@ -284,9 +320,14 @@ class Classifier3Stage(nn.Module):
                 inds2_gt = inds2_gt.clamp(0, self.classes[1] + 2 * self.pad[1] - 1).squeeze(1).type(torch.int64)
 
                 inds1_l = (inds1_l + self.classes[0] * offsets).flatten().type(torch.int32)
-                x = F.leaky_relu(self.c1[1](x_l, inds1_l))
-                x = F.leaky_relu(self.c2[1](x, inds1_l))
-                x = self.c3[1](x, inds1_l)
+                x = x_l
+                for j in range(0, len(self.c2)):
+                    x = self.c2[j](x, inds1_l)
+                    if i < len(self.c2) - 1:
+                        x = F.leaky_relu(x)
+                #x = F.leaky_relu(self.c1[1](x_l, inds1_l))
+                #x = F.leaky_relu(self.c2[1](x, inds1_l))
+                #x = self.c3[1](x, inds1_l)
                 # from (b * h * w, c) to (b, h, w, c) to (b, c, h, w)
                 x = x.reshape((bs, height, width, -1)).permute((0, 3, 1, 2))
                 loss = F.cross_entropy(x, inds2_gt) * mask
@@ -308,9 +349,14 @@ class Classifier3Stage(nn.Module):
                 inds3_gt = inds3_gt.clamp(0, self.classes[2] + 2 * self.pad[2] - 1).squeeze(1).type(torch.int64)
 
                 inds12_l = (inds12_l + classes12 * offsets).flatten().type(torch.int32)
-                x = F.leaky_relu(self.c1[2](x_l, inds12_l))
-                x = F.leaky_relu(self.c2[2](x, inds12_l))
-                x = self.c3[2](x, inds12_l)
+                x = x_l
+                for j in range(0, len(self.c3)):
+                    x = self.c3[j](x, inds12_l)
+                    if i < len(self.c3) - 1:
+                        x = F.leaky_relu(x)
+                #x = F.leaky_relu(self.c1[2](x_l, inds12_l))
+                #x = F.leaky_relu(self.c2[2](x, inds12_l))
+                #x = self.c3[2](x, inds12_l)
                 # from (b * h * w, c) to (b, h, w, c) to (b, c, h, w)
                 x = x.reshape((bs, height, width, -1)).permute((0, 3, 1, 2))
                 loss = F.cross_entropy(x, inds3_gt) * mask
