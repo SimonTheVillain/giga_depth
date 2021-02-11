@@ -105,7 +105,7 @@ def train():
     args = parser.parse_args()
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    args.experiment_name = "line_bb64_16_14_12c123_nobbeach_lbb64x1_42sc_64_64_reg_lr01_alpha10_1nn"
+    args.experiment_name = "slice_bb64_16_14_12c123_nobbeach_168sc_32_reg_lr01_alpha10_1nn"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
@@ -166,7 +166,7 @@ def train():
             regressor = Reg_3stage(ch_in=64,
                                    height=1,#64,#448,
                                    ch_latent=[],#[128, 128, 128],#todo: make this of variable length
-                                   superclasses=42,
+                                   superclasses=168,
                                    ch_latent_r=[32, 4],# 64/64
                                    ch_latent_msk=[16, 8],
                                    classes=[16, 14, 12],
@@ -181,11 +181,11 @@ def train():
                                    height=height,#64,#448,
                                    ch_latent=[],#[128, 128, 128],#todo: make this of variable length
                                    superclasses=42,
-                                   ch_latent_r=[32, 4],# 64/64
+                                   ch_latent_r=[32],# 64/64
                                    ch_latent_msk=[16, 8],
                                    classes=[16, 14, 12],
                                    pad=[0, 1, 2],
-                                   ch_latent_c=[[16, 16], [16, 16], [16, 16]],#todo: make these of variable length
+                                   ch_latent_c=[[], [], []],#todo: make these of variable length
                                    regress_neighbours=1)
             #classification is lacking:
             #TODO: maybe we have more channels here. [128, 256]

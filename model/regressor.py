@@ -372,13 +372,13 @@ class Reg_3stage(nn.Module):
     # default parameters are the same as for CR8_reg_cond_mul_2
     def __init__(self, ch_in=128,
                  height=448,
-                 ch_latent=[128, 128, 128],#todo: make this of variable length
+                 ch_latent=[128, 128, 128],#these are of variable length
                  superclasses=8,
-                 ch_latent_r=[128, 32],
-                 ch_latent_msk=[32, 16],
+                 ch_latent_r=[128, 32],#TODO: check if the first (or even both) of these layers is unnecessary.
+                 ch_latent_msk=[32, 16],#todo:make these of variable length?
                  classes=[16, 16, 16],
                  pad=[0, 8, 8],
-                 ch_latent_c=[[32, 32], [32, 32], [32, 32]],#todo: make these of variable length
+                 ch_latent_c=[[32, 32], [32, 32], [32, 32]],#these are of variable length
                  regress_neighbours=0):
         super(Reg_3stage, self).__init__()
         classes123 = classes[0] * classes[1] * classes[2]
@@ -407,9 +407,11 @@ class Reg_3stage(nn.Module):
         # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
 
         #todo: is it really the best using the raw input here. maybe we use the per line backbone?
-        self.r1 = nn.Conv2d(height * ch_in, height * ch_latent_r[0], 1, groups=height)
-        self.r2 = CondMul(height * superclasses, ch_latent_r[0], ch_latent_r[1])
-        self.r3 = CondMul(height * classes123, ch_latent_r[1], 1)
+        #self.r1 = nn.Conv2d(height * ch_in, height * ch_latent_r[0], 1, groups=height)
+        #self.r2 = CondMul(height * superclasses, ch_latent_r[0], ch_latent_r[1])
+        #self.r3 = CondMul(height * classes123, ch_latent_r[1], 1)
+        self.r2 = CondMul(height * superclasses, ch_in, ch_latent_r[0])
+        self.r3 = CondMul(height * classes123, ch_latent_r[0], 1)
 
         # kernels for masks:
         self.msk = nn.ModuleList()
@@ -463,9 +465,9 @@ class Reg_3stage(nn.Module):
             inds_l = inds_l.flatten().type(torch.int32)
 
 
-            x = F.leaky_relu(self.r1(x_in))
+            #x = F.leaky_relu(self.r1(x_in))
             # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-            x_l = x.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
+            x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
             x_l = x_l.reshape((bs * height * width, -1)).contiguous()
             x = F.leaky_relu(self.r2(x_l, inds_super))
             r = self.r3(x, inds_l).flatten()
@@ -479,9 +481,9 @@ class Reg_3stage(nn.Module):
             inds, class_losses = self.c(x_l, inds_gt, mask_gt)
 
             # todo: change this for multiline!
-            x = F.leaky_relu(self.r1(x_in))
+            #x = F.leaky_relu(self.r1(x_in))
             # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-            x_l = x.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
+            x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
             x_l = x_l.reshape((bs * height * width, -1)).contiguous()
 
             # calculate the regression only x

@@ -135,13 +135,16 @@ nvvp prof.nvvp
 //reuse means it is trying not to reload weights at every pixel.
 template <typename scalar_t,int m_per_warp,int n_per_set>
 __global__ void cond_mul_cuda_forward_deep_reuse32_kernel(
-    const int parts_in,
-    const int parts_out,
-    const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
-    const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds, //indices are in int32 datatype
-    const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> weights,
-    const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> bias,
-    torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> output) {
+                        const int parts_in, //sets as in the template and parts as in this parameter are the same TODO: rename either set or part!
+                        const int parts_out,//since the accumulator (shared memory) stores results for the
+                        // n_per_set outputs (+ groups) for the next 32 pixel. Only with parts > 1 more than 32 outputs
+                        // n>32 can be achieved. This also means that inputs are being read multiple times.
+                        // Actually parts_out is bullshit and anyway set to 1! TODO: remove if not needed at all
+                        const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
+                        const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds, //indices are in int32 datatype
+                        const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> weights,
+                        const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> bias,
+                        torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> output) {
     extern __shared__ uint8_t shared[];
 
     //TODO: rethink the meaning of threadIdx.x! It should be n
@@ -641,7 +644,7 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
 		const dim3 threads3(n, per_group);
 		const dim3 blocks((overall_samples + 32 - 1) / 32);
 		const int parts_in = (m + 32 - 1) / 32;
-		const int parts_out = (n - 1)/32 + 1;
+		const int parts_out = (n - 1)/32 + 1; //in this branch, parts_out should always be 1 (it is meant for n>32)
 		//std::cout << "shared_size: " << shared_size << std::endl;
 		switch(n){
 		case 1:
