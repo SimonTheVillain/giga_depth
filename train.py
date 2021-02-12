@@ -16,6 +16,7 @@ from model.regressor import Regressor, Regressor2, Reg_3stage
 from torch.utils.data import DataLoader
 import math
 import argparse
+import yaml
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -80,29 +81,59 @@ def sigma_loss(sigma, x, x_gt): #sigma_sq is also called "variance"
 
 
 def train():
+    with open("configs/default.yaml", "r") as ymlfile:
+        config = yaml.load(ymlfile)
+
     parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config_file", dest="config", action="store",
+                        help="Load the config file with parameters.",
+                        default="")
+    args, additional_args = parser.parse_known_args()
+    if args.config != "":
+        with open(args.config, "r") as ymlfile:
+            config = yaml.load(ymlfile)
+            #todo: recursively merge both config structures!!!!!!!
     # parser.add_argument("-V", "--version", help="show program version", action="store_true")
     parser.add_argument("-d", "--dataset_path", dest="path", action="store",
                         help="Path to the dataset.",
-                        default=os.path.expanduser("~/datasets/structure_core_unity"))
-    parser.add_argument("-n", "--npy_dataset", dest="is_npy", action="store_const",
+                        default=os.path.expanduser(config["dataset"]["path"]))
+    parser.add_argument("-npy", "--npy_dataset", dest="is_npy", action="store_const",
                         help="Loads data directly form numpy files",
-                        default=False, const=True)
+                        default=bool(config["dataset"]["is_npy"]), const=True)
     parser.add_argument("-b", "--batch_size", dest="batch_size", action="store",
                         help="The batch size during training",
                         type=int,
-                        default=4)
-    parser.add_argument("-e", "--experiment_name", dest="experiment_name", action="store",
+                        default=int(config["training"]["batch_size"]))
+    parser.add_argument("-e", "--epochs", dest="epochs", action="store",
+                        help="The number of epochs before quitting training.",
+                        default=config["training"]["epochs"])
+    parser.add_argument("-n", "--experiment_name", dest="experiment_name", action="store",
                         help="The name of this training for tensorboard and checkpoints.",
-                        default="result")
+                        default=config["training"]["name"])
     parser.add_argument("-w", "--num_workers", dest="num_workers", action="store",
                         help="The number of threads working on loading and preprocessing data.",
                         type=int,
-                        default=8)
+                        default=config["dataset"]["workers"])
     parser.add_argument("-g", "--gpu_list", dest="gpu_list", action="store",
                         nargs="+", type=int,
                         default=list(range(0, torch.cuda.device_count())))
-    args = parser.parse_args()
+    parser.add_argument("-r", "--learning_rate", dest="learning_rate", action="store",
+                        help="Learning rate for gradient descent algorithm.",
+                        type=float,
+                        default=config["training"]["learning_rate"])
+    parser.add_argument("-m", "--momentum", dest="momentum", action="store",
+                        help="Momentum for gradient descent algorithm.",
+                        type=float,
+                        default=config["training"]["momentum"])
+    parser.add_argument("-a", "--alpha_reg", dest="alpha_reg", action="store",
+                        help="The factor with which the regression error is incorporated into the loss.",
+                        type=float,
+                        default=config["training"]["alpha_reg"])
+    parser.add_argument("-as", "--alpha_sigma", dest="alpha_sigma", action="store",
+                        help="The factor with which mask error is incorporated into the loss.",
+                        type=float,
+                        default=config["training"]["alpha_sigma"])
+    args = parser.parse_args(additional_args)
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
     args.experiment_name = "slice_bb64_16_14_12c123_nobbeach_168sc_32_reg_lr01_alpha10_1nn"
@@ -110,107 +141,54 @@ def train():
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
     # slit loading and storing of models for Backbone and Regressor
-    load_regressor = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_regressor_chk.pt"
-    load_backbone = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_backbone_chk.pt"
+    #load_regressor = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_regressor_chk.pt"
+    #load_backbone = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_backbone_chk.pt"
 
     # not loading any pretrained part of any model whatsoever
-    load_regressor = ""
-    load_backbone = ""
+    #load_regressor = ""
+    #load_backbone = ""
 
-    num_epochs = 5000
+    #num_epochs = 5000
     # todo: either do only 100 lines at a time, or go for
-    tgt_res = (1216, 896)
-    slice_in = (100, 128)
-    slice_gt = (50, 64)
+    #tgt_res = (1216, 896)
     #alpha = 1.0 * (1.0 / 4.0) * 1.0  # usually this is 0.1
-    alpha = 10.0 #todo: back to 10 for quicker convergence!?
-    alpha_sigma = 0#1e-10  # how much weight do we give correct confidence measures
+    #alpha = 10.0 #todo: back to 10 for quicker convergence!?
+    #alpha_sigma = 0#1e-10  # how much weight do we give correct confidence measures
     #learning_rate = 0.2 # learning rate of 0.2 was sufficient for many applications
-    learning_rate = 0.01  # 0.02 for the branchless regressor (smaller since we feel it's not entirely stable)
-    momentum = 0.90
+    #learning_rate = 0.01  # 0.02 for the branchless regressor (smaller since we feel it's not entirely stable)
+    #momentum = 0.90
     shuffle = True
     slice = True
-    if slice:
-        height = 64
-    else:
-        height = 448
 
-    if load_regressor != "":
-        regressor = torch.load(load_regressor)
+    if config["regressor"]["load_file"] != "":
+        regressor = torch.load(config["regressor"]["load_file"])
         regressor.eval()
     else:
-        #regressor = RegressorBranchless(height=1)
-        #regressor = Regressor(classes=128, height=int(tgt_res[1]/2), ch_in=128, ch_latent_c=[128, 128])
-        # regressor = Regressor2Stage()
-        # regressor = Regressor1Stage(height=1)
-        # regressor = Regressor1Branch(height=1)
-        #regressor = CR8_reg_2_stage([16, 16], ch_latent=128)
-        #regressor = CR8_reg_cond_mul_5(256, 32, ch_latent_c=[128, 128], ch_latent_r=[128, 4])
-        if args.is_npy:
-            #regressor = CR8_reg_cond_mul_6(classes=2048, superclasses=32, ch_in=128,
-            #                               ch_latent_c=[128, 128],
-            #                               ch_latent_r=[128, 32], concat=False)
-            #regressor = CR8_reg_2stage(classes=[32, 32], superclasses=8, ch_in=128,
-            #                           ch_latent_c=[128, 128],
-            #                           ch_latent_r=[128, 32],
-            #                           ch_latent_msk=[32, 16])
-            #regressor = CR8_reg_3stage(ch_in=64,
-            #                           ch_latent=[64, 64, 64],
-            #                           superclasses=42,#672*4,#672, #168,
-            #                           ch_latent_r=[64, 64],
-            #                           ch_latent_msk=[32, 16],
-            #                           classes=[16, 14, 12],
-            #                           pad=[0, 1, 2],
-            #                           ch_latent_c=[[16, 16], [16, 16], [16, 16]],
-            #                           regress_neighbours=1)
-            regressor = Reg_3stage(ch_in=64,
-                                   height=1,#64,#448,
-                                   ch_latent=[],#[128, 128, 128],#todo: make this of variable length
-                                   superclasses=168,
-                                   ch_latent_r=[32, 4],# 64/64
-                                   ch_latent_msk=[16, 8],
-                                   classes=[16, 14, 12],
-                                   pad=[0, 1, 2],
-                                   ch_latent_c=[[], [], []],#todo: make these of variable length
-                                   regress_neighbours=1)
-        else:
-            #regressor = Regressor2(classes=256, superclasses=16, height=int(slice_gt[1]), ch_in=64,
-            #                       ch_latent_c=[128, 128, 128], ch_latent_r=[256, 8])
+        regressor = Reg_3stage(ch_in=config["regressor"]["ch_in"],
+                               height=config["regressor"]["lines"],#64,#448,
+                               ch_latent=config["regressor"]["bb"],#[128, 128, 128],#todo: make this of variable length
+                               superclasses=config["regressor"]["superclasses"],
+                               ch_latent_r=config["regressor"]["ch_reg"],# 64/64 # in the current implementation there is only one stage between input
+                               ch_latent_msk=config["regressor"]["msk"],
+                               classes=config["regressor"]["classes"],
+                               pad=config["regressor"]["padding"],
+                               ch_latent_c=config["regressor"]["class_bb"],#todo: make these of variable length
+                               regress_neighbours=config["regressor"]["regress_neighbours"])
 
-            regressor = Reg_3stage(ch_in=64,
-                                   height=height,#64,#448,
-                                   ch_latent=[],#[128, 128, 128],#todo: make this of variable length
-                                   superclasses=42,
-                                   ch_latent_r=[32],# 64/64
-                                   ch_latent_msk=[16, 8],
-                                   classes=[16, 14, 12],
-                                   pad=[0, 1, 2],
-                                   ch_latent_c=[[], [], []],#todo: make these of variable length
-                                   regress_neighbours=1)
-            #classification is lacking:
-            #TODO: maybe we have more channels here. [128, 256]
-            # for classification one could split lines into groups
-            # maybe by just splitting and stacking up the lines
-
-            #regressor = Regressor(classes=128, height=int(slice_gt[1]), ch_in=128, ch_latent_c=[128, 128])
-
-    if load_backbone != "":
-        backbone = torch.load(load_backbone)
+    if config["backbone"]["load_file"] != "":
+        backbone = torch.load(config["backbone"]["load_file"])
         backbone.eval()
         # fix parameters in the backbone (or maybe not!)
         # for param in backbone.parameters():
         #    param.requires_grad = False
     else:
         if args.is_npy:
-            #backbone = CR8_bb_short(channels=[16, 32, 64], channels_sub=[64, 64, 128, 128])
-            backbone = CR8_bb_short(channels=[16, 32, 64], channels_sub=[64, 64, 64, 64])
-            #backbone = CR8_bb_short(channels=[8, 16, 32], channels_sub=[32, 32, 32, 32])
+            backbone = CR8_bb_short(channels=config["backbone"]["channels"],
+                                    channels_sub=config["backbone"]["channels2"])
         else:
-            backbone = BackboneSliced3(slices=1, height=height * 2,
-                                       channels=[16, 32, 64], channels_sub=[64, 64, 64, 64])
-            #backbone = BackboneSliced(slices=1, height=slice_in[1])
-            #backbone = BackboneSliced2(slices=1, height=height*2,#896,#int(slice_in[1]),
-            #                           channels=[16, 32, 64], channels_sub=[64, 64, 64, 64, 64])
+            backbone = BackboneSliced3(slices=1, height=config["dataset"]["slice_in"]["height"],
+                                       channels=config["backbone"]["channels"],
+                                       channels_sub=config["backbone"]["channels2"])
 
     model = CompositeModel(backbone, regressor)
 
@@ -223,7 +201,7 @@ def train():
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
 
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=momentum)
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.momentum)
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # the whole unity rendered dataset
@@ -234,7 +212,7 @@ def train():
     #    'train': DatasetRendered2(args.path, 0*scale, 20000*scale, tgt_res=tgt_res, is_npy=args.is_npy),
     #    'val': DatasetRendered2(args.path, 20000*scale, 20500*scale, tgt_res=tgt_res, is_npy=args.is_npy)
     #}
-    datasets = GetDataset(args.path, is_npy=args.is_npy, tgt_res=tgt_res)
+    datasets = GetDataset(args.path, is_npy=args.is_npy, tgt_res=config["dataset"]["tgt_res"])
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=args.batch_size,
                                                   shuffle=shuffle, num_workers=args.num_workers)
@@ -242,9 +220,9 @@ def train():
     dataset_sizes = {x: len(datasets[x]) for x in ['train', 'val']}
     min_test_disparity = 100000.0
     step = 0
-    for epoch in range(1, num_epochs):
+    for epoch in range(1, args.epochs):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
-        print('Epoch {}/{}'.format(epoch, num_epochs - 1))
+        print('Epoch {}/{}'.format(epoch, args.epochs - 1))
         print('-' * 10)
 
         for phase in ['train', 'val']:
@@ -272,6 +250,8 @@ def train():
                 x_gt = x_gt.to(main_device)
                 #todo: instead of a query the slice variable should be set accordingly further up!
                 if not args.is_npy and slice:
+                    slice_in = (config["dataset"]["slice_in"]["start"], config["dataset"]["slice_in"]["height"])
+                    slice_gt = (config["dataset"]["slice_out"]["start"], config["dataset"]["slice_out"]["height"])
                     ir = ir[:, :, slice_in[0]:slice_in[0] + slice_in[1], :]
                     x_gt = x_gt[:, :, slice_gt[0]:slice_gt[0] + slice_gt[1], :]
                     mask_gt = mask_gt[:, :, slice_gt[0]:slice_gt[0] + slice_gt[1], :]
@@ -289,13 +269,13 @@ def train():
                     loss_reg_acc += masked_reg.item()
                     loss_reg_acc_sub += masked_reg.item()
 
-                    loss = loss * alpha
+                    loss = loss * args.alpha_reg
 
-                    if alpha_sigma != 0.0:
+                    if args.alpha_sigma != 0.0:
                         loss_sigma = sigma_loss(sigma, x_real, x_gt)
                         loss_sigma_acc += loss_sigma.item()
                         loss_sigma_acc_sub += loss_sigma.item()
-                        loss += loss_sigma * alpha_sigma
+                        loss += loss_sigma * args.alpha_sigma
 
                     if len(loss_class_acc) == 0:
                         loss_class_acc = [0] * len(class_losses)
@@ -315,7 +295,7 @@ def train():
                         #loss_disparity_acc += loss.item()
                         #loss_disparity_acc_sub += loss.item()
 
-                        if alpha_sigma != 0.0:
+                        if args.alpha_sigma != 0.0:
                             loss_sigma = sigma_loss(sigma, x, x_gt)
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
@@ -328,7 +308,7 @@ def train():
                 if i_batch % 100 == 99:
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
                                       loss_disparity_acc_sub / 100.0 * 1024, step)
-                    if alpha_sigma != 0.0:
+                    if args.alpha_sigma != 0.0:
                         writer.add_scalar(f'{phase}_subepoch/sigma_loss',
                                           loss_sigma_acc_sub / 100.0, step)
 
@@ -336,8 +316,8 @@ def train():
                         writer.add_scalar(f'{phase}_subepoch/regression_error', loss_reg_acc_sub / 100.0 * 1024, step)
 
 
-                        combo_loss = loss_reg_acc_sub * alpha + \
-                                     loss_sigma_acc_sub * alpha_sigma + sum(loss_class_acc_sub)
+                        combo_loss = loss_reg_acc_sub * args.alpha_reg + \
+                                     loss_sigma_acc_sub * args.alpha_sigma + sum(loss_class_acc_sub)
                         print("batch {} loss: {}".format(i_batch, combo_loss / 100))
                     else: #val
                         print("batch {} disparity error: {}".format(i_batch, loss_disparity_acc_sub / 100*1024))
@@ -351,7 +331,7 @@ def train():
 
             writer.add_scalar(f"{phase}/disparity",
                               loss_disparity_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
-            if alpha_sigma != 0.0:
+            if args.alpha_sigma != 0.0:
                 writer.add_scalar(f"{phase}/sigma(loss)",
                                   loss_sigma_acc / dataset_sizes[phase] * args.batch_size, step)
             for i, class_loss in enumerate(loss_class_acc):
@@ -360,7 +340,7 @@ def train():
             if phase == 'train':
                 writer.add_scalar(f"{phase}/regression_stage",
                                   loss_reg_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
-                combo_loss = loss_reg_acc * alpha + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
+                combo_loss = loss_reg_acc * args.alpha_reg + loss_sigma_acc * args.alpha_sigma + sum(loss_class_acc_sub)
                 combo_loss *= 1.0 / dataset_sizes[phase] * args.batch_size
 
                 print(f"{phase} loss: {combo_loss}")
