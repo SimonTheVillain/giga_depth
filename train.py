@@ -82,7 +82,7 @@ def sigma_loss(sigma, x, x_gt): #sigma_sq is also called "variance"
 
 def train():
     with open("configs/default.yaml", "r") as ymlfile:
-        config = yaml.load(ymlfile)
+        config = yaml.safe_load(ymlfile)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config_file", dest="config", action="store",
@@ -91,7 +91,7 @@ def train():
     args, additional_args = parser.parse_known_args()
     if args.config != "":
         with open(args.config, "r") as ymlfile:
-            config = yaml.load(ymlfile)
+            config = yaml.safe_load(ymlfile)
             #todo: recursively merge both config structures!!!!!!!
     # parser.add_argument("-V", "--version", help="show program version", action="store_true")
     parser.add_argument("-d", "--dataset_path", dest="path", action="store",
@@ -136,7 +136,7 @@ def train():
     args = parser.parse_args(additional_args)
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    args.experiment_name = "slice_bb64_16_14_12c123_nobbeach_168sc_32_reg_lr01_alpha10_1nn"
+    #args.experiment_name = "slice_bb64_16_14_12c123_nobbeach_168sc_32_reg_lr01_alpha10_1nn"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
