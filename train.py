@@ -164,6 +164,7 @@ def train():
         regressor = torch.load(config["regressor"]["load_file"])
         regressor.eval()
     else:
+        #https://stackoverflow.com/questions/334655/passing-a-dictionary-to-a-function-as-keyword-parameters
         regressor = Reg_3stage(ch_in=config["regressor"]["ch_in"],
                                height=config["regressor"]["lines"],#64,#448,
                                ch_latent=config["regressor"]["bb"],#[128, 128, 128],#todo: make this of variable length

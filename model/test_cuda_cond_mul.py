@@ -280,6 +280,7 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
     (y2*y2).sum().backward()
     (y3*y3).sum().backward()
     print("input gradients:")
+    #print(x1.grad - x2.grad)
     print(torch.max(torch.abs(torch.div(x1.grad - x2.grad, 1))))
     print(torch.max(torch.abs(torch.div(x1.grad - x3.grad, 1))))
 
@@ -288,16 +289,16 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
     b2 = model_ref.b.grad
     b3 = model_conv.conv.bias.grad
     b3 = b3.reshape(b1.shape)
-    print(torch.max(torch.abs(torch.div(b1 - b2, b2))))
-    print(torch.max(torch.abs(torch.div(b1 - b3, b3))))
+    print(torch.max(torch.abs(torch.div(b1 - b2, 1))))#b2
+    print(torch.max(torch.abs(torch.div(b1 - b3, 1))))#b3
 
     print("weight gradients:")
     w1 = model.w.grad
     w2 = model_ref.w.grad
     w3 = model_conv.conv.weight.grad
     w3 = w3.reshape((w1.shape[0], w1.shape[2], w1.shape[1])).permute(0, 2, 1)
-    print(torch.max(torch.abs(torch.div(w1 - w2, w2))))
-    print(torch.max(torch.abs(torch.div(w1 - w3, w3))))
+    print(torch.max(torch.abs(torch.div(w1 - w2, 1))))#w2
+    print(torch.max(torch.abs(torch.div(w1 - w3, 1))))#w3
 
     #print(torch.max(torch.abs(torch.div(in_g1 - in_g2, in_g1))))
     #print(torch.max(torch.abs(torch.div(in_g1 - in_g3, in_g1))))
@@ -306,13 +307,13 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
 
 #small_gradient_experiment()
 #sys.exit(0)
-batch_size = 32*32
-width = 60#8
-height = 1#448
+batch_size = 32*32# 32*32
+width = 608#60#8
+height = 448#448
 classes = 32 # (classes per line)
-m = 64
-n = 32#output channels
-absolute_random = True
+m = 256
+n = 16#output channels
+absolute_random = False
 #width = 1 #TODO: remove these debug measures
 #height = 1
 #m = 64
