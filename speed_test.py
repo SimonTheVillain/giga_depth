@@ -38,21 +38,20 @@ class Model_test(nn.Module):
 
     def __init__(self):
         super(Model_test, self).__init__()
-        self.start = nn.Conv2d(8, 64, 3, padding=1)
-        self.conv1 = nn.Conv2d(64, 64, 7, padding=3)
-        self.conv2 = nn.Conv2d(64, 64, 7, padding=3)
-        self.conv3 = nn.Conv2d(64, 128, 7, padding=3)
-        self.conv4 = nn.Conv2d(128, 256, 7, padding=3)
-        self.conv5 = nn.Conv2d(256, 8, 7, padding=3)
+        self.start = nn.Conv2d(1, 16, 3, padding=1)
+        self.conv1 = nn.Conv2d(16, 32, 5, padding=2)
+        self.convdown = nn.Conv2d(32, 64, 5, padding=2, stride=2)
+        self.conv2 = nn.Conv2d(64, 64, 5, padding=2)
+        self.conv3 = nn.Conv2d(64, 64, 5, padding=2)
+        self.conv4 = nn.Conv2d(64, 64, 5, padding=2)
 
     def forward(self, x):
 
         x = F.leaky_relu(self.start(x))
         x = F.leaky_relu(self.conv1(x))
-        x = F.leaky_relu(self.conv2(x))
+        x = F.leaky_relu(self.convdown(x))
         x = F.leaky_relu(self.conv3(x))
         x = F.leaky_relu(self.conv4(x))
-        x = F.leaky_relu(self.conv5(x))
         return x
 
 class CompositeModel(nn.Module):
@@ -90,7 +89,7 @@ backbone = Backbone6_64()
 regressor = Regressor2Stage(64, 448, 608)
 model = CompositeModel(backbone, regressor)
 #model = Model_CR11_hn(core_image_height, class_count)
-#model = Model_test()
+model = Model_test()
 input_channels = 1
 batches = 1
 warm_up = True
@@ -100,7 +99,7 @@ torch.backends.cudnn.benchmark = True
 model.cuda()
 print(f"nr model params: {get_n_params(model)}")
 
-for half_precision in [False]:#, True]:
+for half_precision in [True]:#, True]:
 
     if half_precision:
         model.half()

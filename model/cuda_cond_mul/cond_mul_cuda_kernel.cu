@@ -1060,7 +1060,7 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
         torch::Tensor input,
         torch::Tensor inds,
         torch::Tensor weights) {
-    std::cout << "cond_mul_cuda_backward (start)" << std::endl;
+    //std::cout << "cond_mul_cuda_backward (start)" << std::endl;
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     //i shit you not its not even trying to compile this!!!!
     auto device = weights.device();

@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from .cuda_cond_mul.cond_mul import CondMul
-from .cuda_cond_mul.reference_cond_mul import RefCondMul, RefCondMulConv
-from .cuda_cond_mul.reference_cond_mul import Ref2CondMul
+from model.cuda_cond_mul.cond_mul import CondMul
+from model.cuda_cond_mul.reference_cond_mul import RefCondMul, RefCondMulConv
+from model.cuda_cond_mul.reference_cond_mul import Ref2CondMul
 import time
 import sys
 
