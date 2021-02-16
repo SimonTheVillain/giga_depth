@@ -402,9 +402,6 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_high_occupancy_kernel(
 //TODO: m_per_warp and n_per_warp is the same as blockDim.x and blockDim.y
 template <typename scalar_t, int pixel_per_warp>
 __global__ void cond_mul_cuda_forward_deep_reuse32_few_in_many_out(
-        //const int parts_in, // the input is split up in parts. Needs to be set so it works with pixel_per_warp TODO: Template? rename loop_in
-        //const int parts_out, //the output is split up in parts. Each part/warp can have n_per_warp outputs TODO: rename loop_out_channels
-        //const int n_simultaneous,
         const int loop_pixel, //in the normal case we would loop over pixel_per_warp pixel since we go 1 pixel at a time TODO: rename loop_out_pixel
         const int simultaneous_out_pixel, //if we have very few output channels we can handle multiple pixel at once
         const int simultaneous_out_channels, //TODO: simultaneous out_channels can be derived from blockDim.y (blockDim.y = simultaneous_out_pixel * simultaneous_out_channels)
@@ -425,7 +422,7 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_few_in_many_out(
 
     //split up the available output channels (threadIdx.y) into the simultaneous pixel into the simultaneously
     // worked channels (ind_y_sub) and the simultaneously worked pixel (ind_y_main)
-    // e.g. m=2 -> blockDim = (2,16,2) and 32 pixel_per_warp ->
+    // e.g. m=2 -> blockDim = (2,16,2) and 32 pixel_per_warp -> simultaneous_out_channels = 16
     // ind_y goes 0,1,2,3,4,5,6,7, 08,09,10,11,12,13,14,15
     // ind_y_main 0,0,0,0,0,0,0,0, 01,01,01,01,01,01,01,01 // main is used for the input channels m
     // ind_y_sub  0,1,2,3,4,5,6,7, 00,01,02,03,04,05,06,07 // sub is used for the input dimension n
@@ -526,6 +523,166 @@ __global__ void cond_mul_cuda_forward_deep_reuse32_few_in_many_out(
     }
 
 }
+
+//TODO: this can be extended to different cases quite easily. Fewer inputs m,
+// or n=32 by splitting up the group via blockDim.z and adaption of shared memory and removal(templated if) of
+// the syncthreads. More outputs n via more threads in anycase
+// ACTUALLY: A SPECIALIZED VERSION WITHOUT SHARED MEMORY AND SHUFFELING INSTEAD WHEN N <= 32
+// interesting case m=16 -> n=1 .... does not pay. It probably only makes sense for n being multiples of m!!!
+template <typename scalar_t, int m>
+__global__ void cond_mul_cuda_few_in_many_out(
+        const int loop_outer,
+        const int loop_inner,
+        const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
+        const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds, //indices are in int32 datatype
+        const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> weights,
+        const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> bias,
+        torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> output) {
+    const int tid = threadIdx.x + threadIdx.y * blockDim.x; //also this is ind_n
+    const int ind_n = tid;
+    const int base_ind = blockIdx.x * loop_outer * loop_inner;
+    const int overall_samples = input.size(0);
+    //shared memory needs to hold pixel_per_warp * input_channels pixel.
+    extern __shared__ uint8_t shared[];
+    scalar_t* buffers[2];
+    buffers[0] = (scalar_t*)(&shared[0]);
+    buffers[1] = (scalar_t*)(&shared[sizeof(scalar_t) * blockDim.x * blockDim.y]);
+    int current_buffer = 1;
+
+    int ind_w = -1;
+    scalar_t w[m];
+    scalar_t b;
+    for(int i=0;i<loop_outer;i++){
+        current_buffer = (current_buffer + 1) % 2;
+        int pix_ind = base_ind + i * loop_inner + threadIdx.y;
+        if( pix_ind < overall_samples){
+            buffers[current_buffer][tid] = input[pix_ind][threadIdx.x];
+        }
+        if(threadIdx.x == 0){
+            //printf("pix_ind %d\n", pix_ind);
+        }
+        __syncthreads();
+
+
+        for(int j=0;j<loop_inner; j++){
+            pix_ind = base_ind + i * loop_inner + j;
+
+            if(tid == 0){
+                //printf("pix_ind %d of %d\n", pix_ind, overall_samples);
+            }
+
+            //printf("pixel_ind: %d of %d \n", pix_ind, overall_samples);
+            if(pix_ind >= overall_samples){
+                return;
+            }
+            int ind_w_new = inds[pix_ind];
+            if(ind_w_new != ind_w){
+                ind_w = ind_w_new;
+                b = bias[ind_w][0][ind_n];
+                scalar_t acc = b;
+                for(int k=0;k<m;k++){
+                    //this actually is somewhat efficient when loading
+                    w[k] = weights[ind_w][k][ind_n];
+                    acc += w[k] * buffers[current_buffer][m * j + k];
+                }
+                output[pix_ind][ind_n]= acc;
+            }else{
+                scalar_t acc = b;
+                for(int k=0;k<m;k++){
+                    //reading from shared memory might not be the most efficient here
+                    // there are 32 banks. we store 64 values in them. within one warp only 2 banks are used.
+                    // each by 16 threads accessing the same value!
+                    //printf("buffer_index: %d \n", m * j + k);
+                    acc += w[k] * buffers[current_buffer][m * j + k];
+                }
+                //also this access is very efficient
+                output[pix_ind][ind_n]= acc;
+            }
+            //this seems necessary except you would utilize some kind of double buffering
+            //or another finer grained method of securing resources between threads
+            //__syncthreads();
+
+        }
+    }
+}
+
+// in case we have fewer than 32 outputs we go by without any shared memory
+template <typename scalar_t, int m>
+__global__ void cond_mul_cuda_few_in_many_out_no_shared(
+        const int loop_outer,// loop_outer * loop_inner must be 32
+        const int loop_inner,// see ind_buffer! TODO: delete the remainders of ind_buffer
+        const torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> input,
+        const torch::PackedTensorAccessor<int32_t,1,torch::RestrictPtrTraits,size_t> inds, //indices are in int32 datatype
+        const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> weights,
+        const torch::PackedTensorAccessor<scalar_t,3,torch::RestrictPtrTraits,size_t> bias,
+        torch::PackedTensorAccessor<scalar_t,2,torch::RestrictPtrTraits,size_t> output) {
+
+    const int tid = threadIdx.x + threadIdx.y * blockDim.x; //index within warp!
+    const int n = output.size(1);
+    const int simultaneous_pixel_out = 32 / n; //how many pixel can one warp put out
+    const int ind_n_out = tid % n; //basically reshaping block
+    const int ind_pix_sub = tid/n;
+    const unsigned mask = 0xffffffff;
+
+    const int base_ind = (blockIdx.x * blockDim.z + threadIdx.z) * loop_outer * loop_inner;
+    if(tid == 0){
+        //printf("base_ind %d, outer_loop %d, inner_loop %d, simultaneous_pixel_out %d\n",base_ind,loop_outer, loop_inner, simultaneous_pixel_out);
+    }
+    const int overall_samples = input.size(0);
+    scalar_t buffer;
+    int ind_w = -1;
+    int pix_ind = base_ind + tid;
+    scalar_t w[m];
+    scalar_t b;
+    for(int i=0;i<loop_outer;i++){
+
+        if(base_ind + i * loop_inner >= overall_samples){
+            //if even the base index for this loop iteration is out of bounds
+            // we want to exit since none of the threads in this warp will have work to do
+            return;
+        }
+        pix_ind = base_ind + i * loop_inner + threadIdx.y;
+        if( pix_ind < overall_samples){
+            buffer = input[pix_ind][threadIdx.x]; //threadIdx = ind_m
+        }
+        //printf("pix_ind_read %d, ind_m %d, tid %d, warp_nr %d, blockIdx %d\n",pix_ind, threadIdx.x, tid, threadIdx.z, blockIdx.x);
+
+
+        for(int j=0;j<loop_inner; j+=simultaneous_pixel_out){
+            pix_ind = base_ind + i * loop_inner + j + ind_pix_sub;
+            //printf("pixel_ind: %d of %d, j %d, loop_inner %d, simultaneous_pixel_out %d, local_pixel index %d \n", pix_ind, overall_samples,j,loop_inner,simultaneous_pixel_out,i * loop_inner + j + ind_pix_sub);
+            
+            int ind_w_new = ind_w;
+            if(pix_ind < overall_samples){
+                ind_w_new = inds[pix_ind];
+            }
+
+            //it is somewhat unfortunate that the loop for loading the weights needs to
+            //be separate from the one calculating the result
+            if(ind_w_new != ind_w){// &&
+               //pix_ind < overall_samples){ //don't load new weights for non-existing pixel
+                ind_w = ind_w_new;
+                b = bias[ind_w][0][ind_n_out];
+                for(int k=0;k<m;k++) {
+                    w[k] = weights[ind_w][k][ind_n_out];
+                }
+            }
+            scalar_t acc = b;
+            for(int k=0;k<m;k++){
+                //it is important that none of the threads has exited for loading the things with shuffle
+                //printf("pixel_ind: %d of %d, locally: %d \n", pix_ind, overall_samples, k + (j + ind_pix_sub) * m);
+                scalar_t value = __shfl_sync(mask, buffer, k + (j + ind_pix_sub) * m);
+                acc += w[k] * value;
+            }
+            if(pix_ind < overall_samples) {
+                output[pix_ind][ind_n_out] = acc;
+            }
+
+
+        }
+    }
+}
+
 
 __global__ void count_classes(
                 const size_t class_count,
@@ -874,12 +1031,165 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                    */
 
           }
+      }else if(((m==4 || m==8 || m==16)  && // theoretically also for m==1, m==2 but performs worse than trivial implementation
+                (n==1 || n==2 || n==4 || n==8 || n==16 || n==32) &&
+                n >= m)
+               && true){
+          //std::cout << "Hyperspecialized kernel part 2" << std::endl;
+
+          //the kernel is optimized for 32 pixel_per_warp. Don't use with anything else!
+          // background is the
+          const int pixel_per_warp = 32;
+
+          const dim3 threads3(m, 32/m, 3); //96 threads (3 warps)
+          const int pixel_per_block = pixel_per_warp * threads3.z;
+          dim3 blocks((overall_samples + pixel_per_block - 1) / (pixel_per_block)); // most of the blocks take the next 32 pixel for each active warp (64)
+
+          switch(m){
+              case 1:
+                  cond_mul_cuda_few_in_many_out_no_shared<scalar_t, 1><<<blocks, threads3>>>(
+                          pixel_per_warp /threads3.y, //how often do we need to read channels/pixels to fill all pixel
+                                  threads3.y,//pixel of the inner loop (can take more than 1 pixel at a time)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 2:
+                  cond_mul_cuda_few_in_many_out_no_shared<scalar_t, 2><<<blocks, threads3>>>(
+                                    pixel_per_warp /threads3.y, //how often do we need to read channels/pixels to fill all pixel
+                                  threads3.y,//pixel of the inner loop (can take more than 1 pixel at a time)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 4:
+                  cond_mul_cuda_few_in_many_out_no_shared<scalar_t, 4><<<blocks, threads3>>>(
+                                    pixel_per_warp /threads3.y, //how often do we need to read channels/pixels to fill all pixel
+                                  threads3.y,//pixel of the inner loop (can take more than 1 pixel at a time)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 8:
+                  cond_mul_cuda_few_in_many_out_no_shared<scalar_t, 8><<<blocks, threads3>>>(
+                                    pixel_per_warp /threads3.y, //how often do we need to read channels/pixels to fill all pixel
+                                  threads3.y,//pixel of the inner loop (can take more than 1 pixel at a time)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 16:
+                  cond_mul_cuda_few_in_many_out_no_shared<scalar_t, 16><<<blocks, threads3>>>(
+                                    pixel_per_warp /threads3.y, //how often do we need to read channels/pixels to fill all pixel
+                                  threads3.y,//pixel of the inner loop (can take more than 1 pixel at a time)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+          };
+
+      }else if(((m==1 || m==2 || m==4 || m==8 || m==16)  &&
+                (n==64 || n==96 || n==128 || n==160 || n==192 || n==224 || n==256))
+                && true){
+          //TODO: this is supposed to be the most specialized kernel of them all! ( the next kernel)
+          // but the principle could work for different applications as well. e.g.
+          // 16->16 or 16->32 or 16->128, 4->16 etc.
+          // fewer than 64 outputs should probably not be done by reducing thread count, but by adding to threadDim.z
+          // e.g. 16->16 could still have 64 threads if we just have (16, 1, 4) blocks.
+          // actually for 32 and fewer outputs we shouldn't use shared memory at all. SHUFFELING
+          //std::cout << " the hyperspecialized kernel, m: " << m << " n: " << n << std::endl;
+          const int pixel_per_block = std::max(64, n/m);
+          //std::cout << "pixel_per_block" << pixel_per_block << std::endl;
+          dim3 blocks((overall_samples + pixel_per_block - 1) / (pixel_per_block)); // most of the blocks take the next 32 pixel for each active warp (64)
+          const dim3 threads3(m, n/m); //alltogether we want n threads.
+          shared_size = sizeof(scalar_t) * threads3.x * threads3.y * threads3.z * 2; //two times since we double buffer!!!
+
+          //std::cout << "loop_inner " << threads3.y << std::endl;
+          //std::cout << "loop_outer " << pixel_per_block/threads3.y << std::endl;
+          switch(m){
+              case 1:
+                  cond_mul_cuda_few_in_many_out<scalar_t, 1><<<blocks, threads3, shared_size>>>(
+                            pixel_per_block /threads3.y, //how often do we need to read channels/pixels to fill all pixel
+                                  threads3.y,//loop_inner (or how many pixel are read simultaneously by all the threads)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 2:
+                  cond_mul_cuda_few_in_many_out<scalar_t, 2><<<blocks, threads3, shared_size>>>(
+                          pixel_per_block /threads3.y, //how often do we need to read channels/pixels to fill all pixel
+                                  threads3.y,//loop_inner (or how many pixel are read simultaneously by all the threads)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 4:
+                  cond_mul_cuda_few_in_many_out<scalar_t, 4><<<blocks, threads3, shared_size>>>(
+                          pixel_per_block /threads3.y, //loop outer
+                                  threads3.y,//loop_inner (or how many pixel are read simultaneously by all the threads)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 8:
+                  cond_mul_cuda_few_in_many_out<scalar_t, 8><<<blocks, threads3, shared_size>>>(
+                                    pixel_per_block / threads3.y, //loop outer
+                                  threads3.y,//loop_inner (or how many pixel are read simultaneously by all the threads)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+              case 16:
+                  cond_mul_cuda_few_in_many_out<scalar_t, 16><<<blocks, threads3, shared_size>>>(
+                                  pixel_per_block /threads3.y, //loop outer
+                                  threads3.y,//loop_inner (or how many pixel are read simultaneously by all the threads)
+                                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  break;
+          };
+
+          //std::cout << "blocks: " << blocks.x << std::endl;
+        /*
+          cond_mul_cuda_few_in_many_out<scalar_t, 16><<<blocks, threads3, shared_size>>>(
+                  outer_iterations, //loop outer
+                  inner_iterations,//loop_inner
+                  input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(),
+                  inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
+                  weights.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                  bias.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(),
+                  output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>());
+                  */
+
       }else if(     ((m == 1) && ((n==4) || (n == 8) || (n==16) || (n%32 == 0) )) || //n==1,2 would also be an inefficient option
                     ((m == 2) && ((n==4)|| (n==8) || (n%16 == 0))) || //n==1,2 would probably be very inefficient
                     ((m == 4) && ((n==2) || (n==4) || (n%16 == 0))) ||
                     ((m==8) && ((n==1) || (n==2) || (n%4 == 0)) ||
                     ((m==16) && ((n==1) || (n%2==0)) ) ||
                     (m==32)) && false){
+          //TODO: remove!
+          // this actually is slow as fuck!!!!! ABYSMAL. It might have been better with more shared memory but as it is,
+          // it is useless!!!
           //TODO:
           //This branch cares for cases in which the input is smaller than 32. Ideally the output has enough output channels
           //to sufficiently saturate the warps.

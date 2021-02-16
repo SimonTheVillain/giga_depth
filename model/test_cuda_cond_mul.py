@@ -267,6 +267,19 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
     y1 = model(x1, test_ind)
     y2 = model_ref(x2, test_ind)
     y3 = model_conv(x3, test_ind)
+    print("pure difference between y1-y2")
+    #print(y1)
+    #print(y2)
+    if True:
+        print(y1-y2)
+        print("find outlier along pixel:")
+        maxval, where = torch.max(torch.abs(y1-y2), 0)
+        for ind, val in zip(where, maxval):
+           print(f"ind {ind}, value {val}")
+        print("find outlier along channels")
+        maxval, where = torch.max(torch.abs(y1-y2), 1)
+        for ind, val in zip(where, maxval):
+           print(f"ind {ind}, value {val}")
     print("comparisons y1-y2 / y1-y3 (values around 0.5 are fine, all the other stuff should be smaller than e-05)")
     maximum = max(y1.abs().max(), y2.abs().max(), y3.abs().max())
     print(torch.max(torch.abs(torch.div(y1 - y2, y2))))
@@ -280,7 +293,23 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
     (y2*y2).sum().backward()
     (y3*y3).sum().backward()
     print("input gradients:")
-    #print(x1.grad - x2.grad)
+    if False:
+        print(x1.grad)
+        print(x1.grad - x2.grad)
+        print("find outlier along pixel:")
+        maxval, where = torch.max(torch.abs(x1.grad - x2.grad), 0)
+        print(where.shape)
+        print(where)
+        print(maxval)
+        for ind, val in zip(where, maxval):
+            print(f"ind {ind}, value {val}")
+        print("find outlier along channels")
+        maxval, where = torch.max(torch.abs(x1.grad - x2.grad), 1)
+        print(where)
+        print(maxval)
+        for ind, val in zip(where, maxval):
+            print(f"ind {ind}, value {val}")
+
     print(torch.max(torch.abs(torch.div(x1.grad - x2.grad, 1))))
     print(torch.max(torch.abs(torch.div(x1.grad - x3.grad, 1))))
 
@@ -307,12 +336,12 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
 
 #small_gradient_experiment()
 #sys.exit(0)
-batch_size = 32*32# 32*32
-width = 608#60#8
-height = 448#448
+batch_size = 1#32*32# 32*32
+width = 60#8#8#8#8#60#8
+height = 1#4480#4480#448#4480#448
 classes = 32 # (classes per line)
-m = 64
-n = 64#output channels
+m = 16
+n = 16#output channels
 absolute_random = False
 #width = 1 #TODO: remove these debug measures
 #height = 1
@@ -323,11 +352,11 @@ absolute_random = False
 linear_custom = CondMul(classes * height, m, n).cuda(device)
 
 
-
-linear_ref = RefCondMul(classes * height, m, n).cuda(device) # 32 as output wouldn't work here
-#linear_conv = RefCondMulConv(classes*height, m, n).cuda(device)
-#compare_models(linear_custom, linear_ref, linear_conv, batch_size, width, height, classes)
-#sys.exit(0)
+if False:
+    linear_ref = RefCondMul(classes * height, m, n).cuda(device) # 32 as output wouldn't work here
+    linear_conv = RefCondMulConv(classes*height, m, n).cuda(device)
+    compare_models(linear_custom, linear_ref, linear_conv, batch_size, width, height, classes)
+    sys.exit(0)
 
 
 print("time used by inference (custom)")
