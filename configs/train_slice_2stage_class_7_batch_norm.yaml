@@ -1,5 +1,5 @@
 training:
-  name: slice_2stage_class_7
+  name: slice_2stage_class_7_batch_norm
   batch_size: 8
   learning_rate: 0.2
   momentum: 0.9

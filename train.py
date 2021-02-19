@@ -27,9 +27,25 @@ class CompositeModel(nn.Module):
         self.backbone = backbone
         self.regressor = regressor
 
+        #TODO: remove this debug(or at least make it so it can run with other than 64 channels
+        #another TODO: set affine parameters to false!
+        #self.bn = nn.BatchNorm2d(64, affine=False)
+
     def forward(self, x, x_gt=None, mask_gt=None):
-        x = self.backbone(x)
-        return self.regressor(x, x_gt, mask_gt)
+
+
+        if x_gt != None:
+            x, debugs = self.backbone(x, True)
+            results = self.regressor(x, x_gt, mask_gt)
+            #todo: batch norm the whole backbone and merge two dicts:
+            #https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python-taking-union-o
+            # z = {**x, **y}
+            for key, val in debugs.items():
+                results[-1][key] = val
+            return results
+        else:
+            x = self.backbone(x)
+            return self.regressor(x, x_gt, mask_gt)
 
 
 def sigma_loss(sigma, x, x_gt): #sigma_sq is also called "variance"
@@ -125,6 +141,10 @@ def train():
                         help="Momentum for gradient descent algorithm.",
                         type=float,
                         default=config["training"]["momentum"])
+    parser.add_argument("-wd", "--weight_decay", dest="weight_decay", action="store",
+                        help="Weight decay, effectively this is an l2 loss for the weights.",
+                        type=float,
+                        default=config["training"]["weight_decay"] if "weight_decay" in config["training"] else 0 )
     parser.add_argument("-a", "--alpha_reg", dest="alpha_reg", action="store",
                         help="The factor with which the regression error is incorporated into the loss.",
                         type=float,
@@ -133,6 +153,7 @@ def train():
                         help="The factor with which mask error is incorporated into the loss.",
                         type=float,
                         default=config["training"]["alpha_sigma"])
+
     args = parser.parse_args(additional_args)
     main_device = f"cuda:{args.gpu_list[0]}"# torch.cuda.device(args.gpu_list[0])
     #experiment_name = "cr8_2021_256_wide_reg_alpha10"
@@ -189,7 +210,8 @@ def train():
         else:
             backbone = BackboneSliced3(slices=1, height=config["dataset"]["slice_in"]["height"],
                                        channels=config["backbone"]["channels"],
-                                       channels_sub=config["backbone"]["channels2"])
+                                       channels_sub=config["backbone"]["channels2"],
+                                       use_bn=True)
 
     model = CompositeModel(backbone, regressor)
 
@@ -202,7 +224,11 @@ def train():
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
 
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate, momentum=args.momentum)
+    optimizer = optim.SGD(model.parameters(),
+                          lr=args.learning_rate,
+                          momentum=args.momentum,
+                          weight_decay=args.weight_decay)
+    #print(f"weight_decay (DEBUG): {args.weight_decay}")
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # the whole unity rendered dataset
@@ -220,7 +246,7 @@ def train():
                    for x in ['train', 'val']}
     dataset_sizes = {x: len(datasets[x]) for x in ['train', 'val']}
     min_test_disparity = 100000.0
-    step = 0
+    step = -1
     for epoch in range(1, args.epochs):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
         print('Epoch {}/{}'.format(epoch, args.epochs - 1))
@@ -260,8 +286,12 @@ def train():
 
                 if phase == 'train':
                     torch.autograd.set_detect_anomaly(True)
-                    x, sigma, class_losses, x_real = model(ir, x_gt, mask_gt)
+                    x, sigma, class_losses, x_real, debug = model(ir, x_gt, mask_gt)
                     x_real = x_real.detach()
+
+                    debug_names = ["c1", "c2", "c3", "r", "mean_backbone_output"]
+                    for key, value in debug.items():
+                        writer.add_scalar(f'debug/{key}', value, step)
 
                     optimizer.zero_grad()
                     loss = torch.mean(torch.abs(x - x_gt)) #mask_gt

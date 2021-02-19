@@ -1,8 +1,9 @@
 training:
-  name: slice_2stage_class_7
+  name: slice_2stage_class_7_full_bn_l2
   batch_size: 8
   learning_rate: 0.2
   momentum: 0.9
+  weight_decay: 1e-4
   alpha_reg: 0.01
   alpha_sigma: 0
   gpu_list: [0]

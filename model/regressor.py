@@ -230,6 +230,24 @@ class Classifier3Stage(nn.Module):
         #                         CondMul(height * classes[0], ch_latent[1][1], classes[1] + 2 * pad[1]),
         #                         CondMul(height * classes12, ch_latent[2][1], classes[2] + 2 * pad[2])])
 
+    def get_mean_weights(self):
+        mean_weights = {}
+        accu = 0
+        for c in self.c1:
+            accu += c.weight.abs().mean().item()
+        mean_weights["mean_weight_c1"] = accu
+        accu = 0
+        for c in self.c2:
+            accu += c.w.abs().mean().item()
+        mean_weights["mean_weight_c2"] = accu
+        accu = 0
+        for c in self.c3:
+            accu += c.w.abs().mean().item()
+        mean_weights["mean_weight_c3"] = accu
+        return mean_weights
+
+
+
     def forward(self, x_in, inds_gt=None, mask_gt=None):
         bs = x_in.shape[0]  # batch size
         height = x_in.shape[2]
@@ -518,4 +536,10 @@ class Reg_3stage(nn.Module):
             x_real = x.reshape((bs, 1, height, width))
             torch.cuda.synchronize()
 
-            return x_reg_combined, mask, class_losses, x_real
+            #lets check if the weights
+            debugs = self.c.get_mean_weights()
+            debug_r = self.r2.w.abs().mean().item() + self.r3.w.abs().mean().item()
+            debugs["mean_w_reg"] = debug_r
+
+
+            return x_reg_combined, mask, class_losses, x_real, debugs

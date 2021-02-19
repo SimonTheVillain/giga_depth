@@ -716,6 +716,7 @@ __global__ void setup_indices(
     if(ind_w > class_count){
         printf("[setup_indices]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
+    //TODO: utilize warp aggregated atomics here!!!
     int count_old = atomicAdd(&counters[ind_w], 1);
     int start_ind = start_inds[ind_w];
     lookup_buffer[start_ind + count_old] = ind;

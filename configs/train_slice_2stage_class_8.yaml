@@ -1,9 +1,10 @@
 training:
-  name: slice_2stage_class_7
+  name: slice_2stage_class_8
   batch_size: 8
-  learning_rate: 0.2
+  learning_rate: 0.5
   momentum: 0.9
-  alpha_reg: 0.01
+  weight_decay: 1e-5
+  alpha_reg: 1
   alpha_sigma: 0
   gpu_list: [0]
   epochs: 5000
@@ -33,7 +34,7 @@ regressor:
   name: Regv3
   ch_in: 64
   lines: 64
-  bb: []
+  bb: [64]
   classes: [16, 14, 12]
   padding: [0, 1, 2]
   class_bb: [[16], [16], [16]]

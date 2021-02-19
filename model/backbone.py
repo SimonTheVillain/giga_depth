@@ -218,17 +218,36 @@ class SliceShort2(nn.Module):
     def radius():
         return 6
 
-    def __init__(self, channels=[64, 64, 64, 64]):
+    def __init__(self, channels=[64, 64, 64, 64], use_bn=False):
         super(SliceShort2, self).__init__()
+        if use_bn:
+            self.bn1 = nn.BatchNorm2d(channels[1])
+            self.bn2 = nn.BatchNorm2d(channels[2])
+            self.bn3 = nn.BatchNorm2d(channels[3])
         self.conv_1 = nn.Conv2d(channels[0], channels[1], 5, padding=(0, 2))  # + 2 * 2 = 9
         self.conv_2 = nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2))  # + 2 * 2 = 13
         self.conv_3 = nn.Conv2d(channels[2], channels[3], 5, padding=(0, 2))  # + 2 * 2 = 17
 
-    def forward(self, x):
-        x = F.leaky_relu(self.conv_1(x))
-        x = F.leaky_relu(self.conv_2(x))
-        x = F.leaky_relu(self.conv_3(x))
-        return x
+    def forward(self, x, with_debug=False):
+        if hasattr(self, 'bn1'):
+            x = F.leaky_relu(self.bn1(self.conv_1(x)))
+            x = F.leaky_relu(self.bn2(self.conv_2(x)))
+            if with_debug:
+                x = self.conv_3(x)
+
+                debug = {"bb_mean_x_before_bn": x.abs().mean().item()}
+                x = self.bn3(x)
+                debug["bb_mean_x_after_bn"] = x.abs().mean().item()
+                x = F.leaky_relu(x)
+                return x, debug
+            else:
+                x = F.leaky_relu(self.bn3(self.conv_3(x)))
+                return x
+        else:
+            x = F.leaky_relu(self.conv_1(x))
+            x = F.leaky_relu(self.conv_2(x))
+            x = F.leaky_relu(self.conv_3(x))
+            return x
 
 
 class BackboneSliced3(nn.Module):
@@ -237,7 +256,7 @@ class BackboneSliced3(nn.Module):
     def radius():
         return 12
 
-    def __init__(self, slices=8, height=896, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64]):
+    def __init__(self, slices=8, height=896, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64], use_bn=False):
         super(BackboneSliced3, self).__init__()
         # the first 4 layers are properly padded:
         self.height = height
@@ -245,23 +264,33 @@ class BackboneSliced3(nn.Module):
         self.conv_start = nn.Conv2d(1, channels[0], 3, padding=(1, 1))
         self.conv_1 = nn.Conv2d(channels[0], channels[1], 5, padding=(2, 2))
         self.conv_down = nn.Conv2d(channels[1], channels[2], 5, padding=(2, 2), stride=(2, 2))
+
+        if use_bn:
+            self.bn_start = nn.BatchNorm2d(channels[0])
+            self.bn_1 = nn.BatchNorm2d(channels[1])
+            self.bn_down = nn.BatchNorm2d(channels[2])
         #448
         #If it wouldn't be padded vertically, the image
 
         # subsampled from here!
         self.slices = nn.ModuleList()
         for i in range(0, slices):
-            self.slices.append(SliceShort2(channels=channels_sub))
+            self.slices.append(SliceShort2(channels=channels_sub, use_bn=use_bn))
 
-    def forward(self, x):
+    def forward(self, x, with_debug=False):
         r = self.slices[0].radius()
         device = x.device
         nr_slices = len(self.slices)
         #print(nr_slices)
         #print(x.shape)
-        x = F.leaky_relu(self.conv_start(x))
-        x = F.leaky_relu(self.conv_1(x))
-        x = F.leaky_relu(self.conv_down(x))
+        if hasattr(self, 'bn_start'):
+            x = F.leaky_relu(self.bn_start(self.conv_start(x)))
+            x = F.leaky_relu(self.bn_1(self.conv_1(x)))
+            x = F.leaky_relu(self.bn_down(self.conv_down(x)))
+        else:
+            x = F.leaky_relu(self.conv_start(x))
+            x = F.leaky_relu(self.conv_1(x))
+            x = F.leaky_relu(self.conv_down(x))
         #print(x.shape)
         height_half = int(self.height / 2)
         height_slice = int(height_half / nr_slices)
@@ -270,6 +299,7 @@ class BackboneSliced3(nn.Module):
         #print(x.shape)
         result_accumulator = torch.zeros((x.shape[0], self.features, x.shape[2] - r*2, x.shape[3]), device=device)
         t_out = 0
+        debugs = {}
         for i in range(0, nr_slices):
             #calculate the source slice:
             t_in = max(0, i * height_slice - r)
@@ -281,7 +311,16 @@ class BackboneSliced3(nn.Module):
             x_p = x[:, :, t_in:b_in, :]
 
             #print(f" take from {t_in} to {b_in}")
-            x_p = self.slices[i](x_p)
+            if with_debug:
+                x_p, debugs_slice = self.slices[i](x_p, True)
+                for key, val in debugs_slice.items():
+                    if key in debugs:
+                        debugs[key] += val
+                    else:
+                        debugs[key] = val
+
+            else:
+                x_p = self.slices[i](x_p)
 
             #print(f" store from {t_out} to {b_out}")
             #print(x_p.shape)
@@ -293,4 +332,7 @@ class BackboneSliced3(nn.Module):
         #print(result_accumulator.shape)
         x = F.pad(result_accumulator, (0, 0, r, r), "replicate")
         #print(x.shape)
-        return x
+        if with_debug:
+            return x, debugs
+        else:
+            return x
