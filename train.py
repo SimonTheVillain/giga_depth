@@ -149,6 +149,10 @@ def train():
                         type=float,
                         default=config["training"]["accumulation_steps"] if "accumulation_steps" in config["training"] else 1)
 
+    parser.add_argument("-o", "--optimizer", dest="optimizer", action="store",
+                        help="The optimizer used for training sgd or adam",
+                        type=str,
+                        default=config["training"]["optimizer"] if "optimizer" in config["training"] else "sgd")
     parser.add_argument("-a", "--alpha_reg", dest="alpha_reg", action="store",
                         help="The factor with which the regression error is incorporated into the loss.",
                         type=float,
@@ -157,6 +161,7 @@ def train():
                         help="The factor with which mask error is incorporated into the loss.",
                         type=float,
                         default=config["training"]["alpha_sigma"])
+
 
     args = parser.parse_args(additional_args)
     main_device = f"cuda:{args.gpu_list[0]}"  # torch.cuda.device(args.gpu_list[0])
@@ -236,10 +241,19 @@ def train():
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
 
-    optimizer = optim.SGD(model.parameters(),
-                          lr=args.learning_rate,
-                          momentum=args.momentum,
-                          weight_decay=args.weight_decay)
+    if args.optimizer == "sgd":
+        optimizer = optim.SGD(model.parameters(),
+                              lr=args.learning_rate,
+                              momentum=args.momentum,
+                              weight_decay=args.weight_decay)
+    else:
+        if args.optimizer == "adam":
+            optimizer = optim.Adam(model.parameters(),
+                                   lr=args.learning_rate,
+                                   weight_decay=args.weight_decay)
+        else:
+            print("Optimizer argument must either be sgd or adam!")
+            return
 
     if "key_epochs" in config["training"]:
         key_steps = config["training"]["key_epochs"]

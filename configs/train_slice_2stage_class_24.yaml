@@ -1,16 +1,16 @@
 training:
-  name: slice_2stage_class_23
+  name: slice_2stage_class_24
   batch_size: 8
-  learning_rate: 4.0
+  learning_rate: 0.1 # very unstable actually
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
   weight_decay: 1e-5
   alpha_reg: [500, 1000, 2000]
   alpha_sigma: 0
   gpu_list: [0]
-  epochs: 10
-  key_epochs: [ 3, 6 ]
-  optimizer: "sgd"
+  epochs: 6
+  key_epochs: [ 2, 4 ]
+  optimizer: "adam"
 
 dataset:
   path: ~/datasets/structure_core_unity
@@ -45,6 +45,6 @@ regressor:
   ch_reg: [32]
   msk: [16, 8]
   regress_neighbours: 1
-  reg_line_div: 8
-  c3_line_div: 8
+  reg_line_div: 2
+  c3_line_div: 2
 
