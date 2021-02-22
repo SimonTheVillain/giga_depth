@@ -196,7 +196,8 @@ class Classifier3Stage(nn.Module):
                  height=448,
                  classes=[16, 16, 16],
                  pad=[0, 8, 8],  # pad around classes
-                 ch_latent=[[32, 32], [32, 32], [32, 32]]):#todo: make these of variable lengths
+                 ch_latent=[[32, 32], [32, 32], [32, 32]],
+                 c3_line_div=1):#todo: make these of variable lengths
         super(Classifier3Stage, self).__init__()
         self.classes = classes
         self.pad = pad
@@ -218,17 +219,11 @@ class Classifier3Stage(nn.Module):
         for i in range(0, len(ch_latent[1]) - 1):
             self.c2.append(CondMul(height * classes[0], ch_latent[0][i], ch_latent[1][i + 1]))
 
+        self.c3_line_div = c3_line_div
+        heights = [int(height / c3_line_div)] * (len(ch_latent[2]) - 1)
+        heights[-1] = height
         for i in range(0, len(ch_latent[2]) - 1):
-            self.c3.append(CondMul(height * classes12, ch_latent[0][i], ch_latent[1][i + 1]))
-        #self.c1 = nn.ModuleList([nn.Conv2d(height * ch_in, height * ch_latent[0][0], 1, groups=height),
-        #                         CondMul(height * classes[0], ch_in, ch_latent[1][0]),
-        #                         CondMul(height * classes12, ch_in, ch_latent[2][0])])
-        #self.c2 = nn.ModuleList([nn.Conv2d(height * ch_latent[0][0], height * ch_latent[0][1], 1, groups=height),
-        #                         CondMul(height * classes[0], ch_latent[1][0], ch_latent[1][1]),
-        #                         CondMul(height * classes12, ch_latent[2][0], ch_latent[2][1])])
-        #self.c3 = nn.ModuleList([nn.Conv2d(height * ch_latent[0][1], height * classes[0], 1),
-        #                         CondMul(height * classes[0], ch_latent[1][1], classes[1] + 2 * pad[1]),
-        #                         CondMul(height * classes12, ch_latent[2][1], classes[2] + 2 * pad[2])])
+            self.c3.append(CondMul(heights[i] * classes12, ch_latent[0][i], ch_latent[1][i + 1]))
 
     def get_mean_weights(self):
         mean_weights = {}
@@ -295,17 +290,23 @@ class Classifier3Stage(nn.Module):
         inds2 = x.argmax(dim=1).reshape((bs, 1, height, width))
 
         inds12 = inds1 * self.classes[1] + (inds2 - self.pad[1])
-        inds12_l = (inds12.clamp(0, classes12 - 1) + classes12 * offsets).type(torch.int32)
+        inds12_l = inds12.clamp(0, classes12 - 1) + classes12 * offsets
+        inds12_l_scaled_lines = inds12.clamp(0, classes12 - 1) + classes12 * (offsets // self.c3_line_div)
 
         # (b, 1, h, w) to (b * h * w)
-        inds12_l = inds12_l.flatten()
+        inds12_l = inds12_l.type(torch.int32).flatten()
+        inds12_l_scaled_lines = inds12_l_scaled_lines.type(torch.int32).flatten()
+
+
 
         # STEP 3:
         x = x_l
         for i in range(0, len(self.c3)):
-            x = self.c3[i](x, inds12_l)
             if i < len(self.c3) - 1:
-                x = F.leaky_relu(x)
+                x = F.leaky_relu(self.c3[i](x, inds12_l_scaled_lines))
+            else:
+                x = self.c3[i](x, inds12_l)
+
         #x = F.leaky_relu(self.c1[2](x_l, inds12_l))
         #x = F.leaky_relu(self.c2[2](x, inds12_l))
         #x = self.c3[2](x, inds12_l)
@@ -366,12 +367,15 @@ class Classifier3Stage(nn.Module):
                 mask = torch.logical_and(inds3_gt >= 0, inds3_gt < (self.classes[2] + 2 * self.pad[2]))
                 inds3_gt = inds3_gt.clamp(0, self.classes[2] + 2 * self.pad[2] - 1).squeeze(1).type(torch.int64)
 
-                inds12_l = (inds12_l + classes12 * offsets).flatten().type(torch.int32)
+                inds12_l = (inds12_l + classes12 * offsets).type(torch.int32).flatten()
+                inds12_l_scaled_lines = inds12.clamp(0, classes12 - 1) + classes12 * (offsets // self.c3_line_div)
+                inds12_l_scaled_lines = inds12_l_scaled_lines.type(torch.int32).flatten()
                 x = x_l
-                for j in range(0, len(self.c3)):
-                    x = self.c3[j](x, inds12_l)
+                for i in range(0, len(self.c3)):
                     if i < len(self.c3) - 1:
-                        x = F.leaky_relu(x)
+                        x = F.leaky_relu(self.c3[i](x, inds12_l_scaled_lines))
+                    else:
+                        x = self.c3[i](x, inds12_l)
                 #x = F.leaky_relu(self.c1[2](x_l, inds12_l))
                 #x = F.leaky_relu(self.c2[2](x, inds12_l))
                 #x = self.c3[2](x, inds12_l)
@@ -390,21 +394,29 @@ class Reg_3stage(nn.Module):
     # default parameters are the same as for CR8_reg_cond_mul_2
     def __init__(self, ch_in=128,
                  height=448,
-                 ch_latent=[128, 128, 128],#these are of variable length
+                 ch_latent=[128, 128, 128],  #these are of variable length
                  superclasses=8,
-                 ch_latent_r=[128, 32],#TODO: check if the first (or even both) of these layers is unnecessary.
-                 ch_latent_msk=[32, 16],#todo:make these of variable length?
+                 ch_latent_r=[128, 32],  #TODO: check if the first (or even both) of these layers is unnecessary.
+                 ch_latent_msk=[32, 16],  #todo:make these of variable length?
                  classes=[16, 16, 16],
                  pad=[0, 8, 8],
-                 ch_latent_c=[[32, 32], [32, 32], [32, 32]],#these are of variable length
-                 regress_neighbours=0):
+                 ch_latent_c=[[32, 32], [32, 32], [32, 32]],  #these are of variable length
+                 regress_neighbours=0,
+                 reg_line_div=1,
+                 c3_line_div=1):
         super(Reg_3stage, self).__init__()
+        if c3_line_div == 1 and len(ch_latent) != 0:
+            print("You can't share weights between lines the classification c3 if there is  a per line backbone( "
+                  "h_latent).")
+            c3_line_div = 1
         classes123 = classes[0] * classes[1] * classes[2]
         self.classes = classes
         self.height = height
         self.superclasses = superclasses
         self.class_factor = int(classes123 / superclasses)
         self.regress_neighbours = regress_neighbours
+        self.reg_line_div = reg_line_div
+
         # the first latent layer for classification is shared
         self.bb = nn.ModuleList()
         ch_latent.insert(0, ch_in)
@@ -418,7 +430,8 @@ class Reg_3stage(nn.Module):
                                   height=height,
                                   classes=classes,
                                   pad=pad,  # pad around classes
-                                  ch_latent=ch_latent_c)
+                                  ch_latent=ch_latent_c,
+                                  c3_line_div=c3_line_div)
 
         # only one output (regression!!
         # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
@@ -428,7 +441,7 @@ class Reg_3stage(nn.Module):
         #self.r1 = nn.Conv2d(height * ch_in, height * ch_latent_r[0], 1, groups=height)
         #self.r2 = CondMul(height * superclasses, ch_latent_r[0], ch_latent_r[1])
         #self.r3 = CondMul(height * classes123, ch_latent_r[1], 1)
-        self.r2 = CondMul(height * superclasses, ch_in, ch_latent_r[0])
+        self.r2 = CondMul(int(height / reg_line_div) * superclasses, ch_in, ch_latent_r[0])
         self.r3 = CondMul(height * classes123, ch_latent_r[0], 1)
 
         # kernels for masks:
@@ -472,13 +485,13 @@ class Reg_3stage(nn.Module):
         mask = mask.reshape((bs, 1, height, -1))
 
         # create vector with index offsets along the vertical dimension (1, 1, h, 0)
-        ind_offsets = torch.arange(0, height, device=device).unsqueeze(1).unsqueeze(0).unsqueeze(0)
+        line_offsets = torch.arange(0, height, device=device).unsqueeze(1).unsqueeze(0).unsqueeze(0)
         if x_gt is None:
 
             # the input for the classifier (as well as the output) should come in (b, c, h, w)
             inds = self.c(x_l)
-            inds_super = inds // self.class_factor + ind_offsets * self.superclasses
-            inds_l = inds + ind_offsets * classes123
+            inds_super = inds // self.class_factor + self.superclasses * (line_offsets // self.reg_line_div)
+            inds_l = inds + line_offsets * classes123
             inds_super = inds_super.flatten().type(torch.int32)
             inds_l = inds_l.flatten().type(torch.int32)
 
@@ -510,8 +523,9 @@ class Reg_3stage(nn.Module):
             for offset in range(-self.regress_neighbours, self.regress_neighbours+1):
                 inds_gt = (inds_gt + offset).clamp(0, classes123 - 1)
                 inds_super = inds_gt // self.class_factor
-                inds_super = (inds_super + self.superclasses * ind_offsets).flatten().type(torch.int32)
-                inds_l = (inds_gt + classes123 * ind_offsets).flatten().type(torch.int32)
+                inds_super = inds_super + self.superclasses * (line_offsets // self.reg_line_div)
+                inds_super = inds_super.flatten().type(torch.int32)
+                inds_l = (inds_gt + classes123 * line_offsets).flatten().type(torch.int32)
 
                 # STEP 2
                 x = F.leaky_relu(self.r2(x_l, inds_super))
@@ -524,8 +538,9 @@ class Reg_3stage(nn.Module):
                 x_reg_combined[:, [offset+self.regress_neighbours], :, :] = x_reg
             # calculate the real x
             inds_super = inds // self.class_factor
-            inds_super = (inds_super + self.superclasses * ind_offsets).flatten().type(torch.int32)
-            inds_l = (inds + classes123 * ind_offsets).flatten().type(torch.int32)
+            inds_super = inds_super + self.superclasses * (line_offsets // self.reg_line_div)
+            inds_super = inds_super.flatten().type(torch.int32)
+            inds_l = (inds + classes123 * line_offsets).flatten().type(torch.int32)
             # STEP 1
             x = F.leaky_relu(self.r2(x_l, inds_super))
             # STEP 3 + reshape
