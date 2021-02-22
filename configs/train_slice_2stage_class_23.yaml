@@ -1,5 +1,5 @@
 training:
-  name: slice_2stage_class_21
+  name: slice_2stage_class_23
   batch_size: 8
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
@@ -44,6 +44,6 @@ regressor:
   ch_reg: [32]
   msk: [16, 8]
   regress_neighbours: 1
-  reg_line_div: 4
-  c3_line_div: 4
+  reg_line_div: 8
+  c3_line_div: 8
 
