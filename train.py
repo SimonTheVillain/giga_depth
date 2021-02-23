@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.modules.loss
 import torch.optim as optim
+from torch.cuda.amp.grad_scaler import GradScaler
+from torch.cuda.amp import autocast
 from dataset.dataset_rendered_2 import DatasetRendered2, GetDataset
 from model.regressor_2Stage import Regressor2Stage
 from model.regressor_1Stage import Regressor1Stage
@@ -22,8 +24,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class CompositeModel(nn.Module):
-    def __init__(self, backbone, regressor):
+    def __init__(self, backbone, regressor, half_precision=False):
         super(CompositeModel, self).__init__()
+        self.half_precision = half_precision
         self.backbone = backbone
         self.regressor = regressor
 
@@ -34,7 +37,12 @@ class CompositeModel(nn.Module):
     def forward(self, x, x_gt=None, mask_gt=None):
 
         if x_gt != None:
-            x, debugs = self.backbone(x, True)
+            if self.half_precision:
+                with autocast():
+                    x, debugs = self.backbone(x, True)
+                x = x.type(torch.float32)
+            else:
+                x, debugs = self.backbone(x, True)
             results = self.regressor(x, x_gt, mask_gt)
             # todo: batch norm the whole backbone and merge two dicts:
             # https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python-taking-union-o
@@ -43,7 +51,13 @@ class CompositeModel(nn.Module):
                 results[-1][key] = val
             return results
         else:
-            x = self.backbone(x)
+
+            if self.half_precision:
+                with autocast():
+                    x = self.backbone(x)
+                x = x.type(torch.float32)
+            else:
+                x = self.backbone(x)
             return self.regressor(x, x_gt, mask_gt)
 
 
@@ -144,15 +158,20 @@ def train():
                         help="Weight decay, effectively this is an l2 loss for the weights.",
                         type=float,
                         default=config["training"]["weight_decay"] if "weight_decay" in config["training"] else 0)
+    default_acc = config["training"]["accumulation_steps"] if "accumulation_steps" in config["training"] else 1
     parser.add_argument("-acc", "--accumulation_steps", dest="accumulation_steps", action="store",
                         help="Accumulate gradient for a few steps before updating weights.",
                         type=float,
-                        default=config["training"]["accumulation_steps"] if "accumulation_steps" in config["training"] else 1)
-
+                        default=default_acc)
     parser.add_argument("-o", "--optimizer", dest="optimizer", action="store",
                         help="The optimizer used for training sgd or adam",
                         type=str,
                         default=config["training"]["optimizer"] if "optimizer" in config["training"] else "sgd")
+    default_precision = bool(config["training"]["half_precision"]) if "half_precision" in config["training"] else False
+    parser.add_argument("-hp", "--half_precision", dest="half_precision", action="store_const",
+                        help="Utilize half precision for the backbone of the network.",
+                        default=default_precision,
+                        const=False)
     parser.add_argument("-a", "--alpha_reg", dest="alpha_reg", action="store",
                         help="The factor with which the regression error is incorporated into the loss.",
                         type=float,
@@ -161,7 +180,6 @@ def train():
                         help="The factor with which mask error is incorporated into the loss.",
                         type=float,
                         default=config["training"]["alpha_sigma"])
-
 
     args = parser.parse_args(additional_args)
     main_device = f"cuda:{args.gpu_list[0]}"  # torch.cuda.device(args.gpu_list[0])
@@ -230,7 +248,7 @@ def train():
             #                           channels_sub=config["backbone"]["channels2"],
             #                           use_bn=True)
 
-    model = CompositeModel(backbone, regressor)
+    model = CompositeModel(backbone, regressor, args.half_precision)
 
     if len(args.gpu_list) > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -276,6 +294,9 @@ def train():
         return len(key_steps) - 1
     def lr_lambda(ep): return lr_scales[find_index(ep, key_steps)]
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=-1)
+
+    if args.half_precision:
+        scaler = GradScaler()
     # print(f"weight_decay (DEBUG): {args.weight_decay}")
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -372,10 +393,17 @@ def train():
                         loss_class_acc_sub[i] += torch.mean(class_loss).item()
 
                     loss = loss / float(args.accumulation_steps)
-                    loss.backward()
-                    if (i_batch + 1) % args.accumulation_steps == 0:
-                        optimizer.step()
-                        model.zero_grad()
+                    if args.half_precision:
+                        scaler.scale(loss).backward()
+                        if (i_batch + 1) % args.accumulation_steps == 0:
+                            scaler.step(optimizer)
+                            scaler.update()
+                            model.zero_grad()
+                    else:
+                        loss.backward()
+                        if (i_batch + 1) % args.accumulation_steps == 0:
+                            optimizer.step()
+                            model.zero_grad()
                 else:
                     with torch.no_grad():
                         x_real, sigma = model(ir)
