@@ -171,7 +171,7 @@ def train():
     parser.add_argument("-hp", "--half_precision", dest="half_precision", action="store_const",
                         help="Utilize half precision for the backbone of the network.",
                         default=default_precision,
-                        const=False)
+                        const=True)
     parser.add_argument("-a", "--alpha_reg", dest="alpha_reg", action="store",
                         help="The factor with which the regression error is incorporated into the loss.",
                         type=float,
