@@ -13,7 +13,7 @@ from model.regressor_1branch import Regressor1Branch
 from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from experiments.lines.model_lines_CR8_n import *
-from model.backbone import Backbone, BackboneSliced, BackboneSliced2, BackboneSliced3, BackboneNoSlice3
+from model.backbone import Backbone, BackboneSliced, BackboneSliced2, BackboneSliced3, BackboneNoSlice3, BackboneNoSlice4
 from model.regressor import Regressor, Regressor2, Reg_3stage
 from torch.utils.data import DataLoader
 import math
@@ -79,24 +79,28 @@ def sigma_loss(sigma, x, x_gt):  # sigma_sq is also called "variance"
         print("sigma: found nan")
     if torch.any(torch.isinf(sigma)):
         print("sigma: found inf")
-    eps = 0.01  # sqrt(0.00001) = 0.0003 ... that means we actually have approx 0.3 pixel of basic offset for sigma
-    term1 = torch.div(torch.square((x - x_gt) * 1024.0), sigma * sigma + eps)
+    #ideally this woudl be 0.001 so we are far away from the preferred precision of 0.1 pixel (0.1*0.1 = 0.01)
+    eps = 0.001  # sqrt(0.00001) = 0.0003 ... that means we actually have approx 0.3 pixel of basic offset for sigma
+    #print(f"max disparity error {torch.max(torch.abs(x-x_gt))}")
+    term1 = torch.div(torch.square(x - x_gt).clamp(0, 1) * (1024.0*1024.0), sigma * sigma + eps)
     term2 = torch.log(sigma * sigma + eps)
+    sigma_sq = sigma * sigma
     # term 3 is to stay positive(after all it is sigma^2)
     term3 = 0  # F.relu(-sigma)
     loss = term1 + term2 + term3
-    # print("term1")
-    # print(term1)
-    # print("term2")
-    # print(term2)
-    # print("max term1")
-    # print(torch.max(term1))
-    # print("max term2")
-    # print(torch.max(term2))
-    # print("max sigma:")
-    # print(torch.max(torch.abs(sigma_sq)))
-    # print("term 1 den:")
-    # print((2*torch.min(torch.abs(sigma_sq)) + eps))
+    #print("term1")
+    #print(term1)
+    #print("term2")
+    #print(term2)
+    #print("max term1")
+    #print(torch.max(term1))
+    #print("max term2")
+    #print(torch.max(term2))
+    #print("max sigma:")
+    #print(torch.max(torch.abs(sigma_sq)))
+    #print("term 1 den:")
+    #print((2*torch.min(torch.abs(sigma_sq)) + eps))
+    #print(f"maximum loss term: {torch.max(loss)}")
     if torch.any(torch.isnan(term1)):
         print("term1: found nan")
     if torch.any(torch.isinf(term1)):
@@ -175,10 +179,12 @@ def train():
     parser.add_argument("-a", "--alpha_reg", dest="alpha_reg", action="store",
                         help="The factor with which the regression error is incorporated into the loss.",
                         type=float,
+                        nargs="+",
                         default=config["training"]["alpha_reg"])
     parser.add_argument("-as", "--alpha_sigma", dest="alpha_sigma", action="store",
                         help="The factor with which mask error is incorporated into the loss.",
                         type=float,
+                        nargs="+",
                         default=config["training"]["alpha_sigma"])
 
     args = parser.parse_args(additional_args)
@@ -243,6 +249,10 @@ def train():
                                         channels=config["backbone"]["channels"],
                                         channels_sub=config["backbone"]["channels2"],
                                         use_bn=True)
+            #backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
+            #                            channels=config["backbone"]["channels"],
+            #                            channels_sub=config["backbone"]["channels2"],
+            #                            use_bn=True)
             #backbone = BackboneSliced3(slices=1, height=config["dataset"]["slice_in"]["height"],
             #                           channels=config["backbone"]["channels"],
             #                           channels_sub=config["backbone"]["channels2"],
@@ -281,10 +291,16 @@ def train():
         lr_scales = [1.0]
     key_steps.insert(0, -1)
 
+    #assert
     if isinstance(args.alpha_reg, list):
         alpha_regs = args.alpha_reg
     else:
         alpha_regs = [args.alpha_reg] * len(key_steps)
+
+    if isinstance(args.alpha_sigma, list):
+        alpha_sigmas = args.alpha_sigma
+    else:
+        alpha_sigmas = [args.alpha_sigma] * len(key_steps)
 
 
     def find_index(epoch, key_steps):
@@ -318,14 +334,15 @@ def train():
     step = -1
     for epoch in range(1, args.epochs):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
-        print('Epoch {}/{}'.format(epoch, args.epochs - 1))
+        print(f'Epoch {epoch}/{args.epochs - 1}')
         print('-' * 10)
         alpha_reg = alpha_regs[find_index(epoch-1, key_steps)]
+        alpha_sigma = float(alpha_sigmas[find_index(epoch-1, key_steps)])
 
         def get_lr(optimizer):
             for param_group in optimizer.param_groups:
                 return param_group['lr']
-        print(f"alpha_reg {alpha_reg}, learning_rate {get_lr(optimizer)}")
+        print(f"alpha_reg {alpha_reg}, alpha_sigma {alpha_sigma}, learning_rate {get_lr(optimizer)}")
 
         for phase in ['train', 'val']:
             print(phase)
@@ -364,9 +381,10 @@ def train():
                     x, sigma, class_losses, x_real, debug = model(ir, x_gt, mask_gt)
                     x_real = x_real.detach()
 
-                    debug_names = ["c1", "c2", "c3", "r", "mean_backbone_output"]
-                    for key, value in debug.items():
-                        writer.add_scalar(f'debug/{key}', value, step)
+                    # log weights and activations of different layers
+                    if False:
+                        for key, value in debug.items():
+                            writer.add_scalar(f'debug/{key}', value.item(), step)
 
                     optimizer.zero_grad()
                     loss = torch.mean(torch.abs(x - x_gt))  # mask_gt
@@ -377,11 +395,11 @@ def train():
 
                     loss = loss * alpha_reg
 
-                    if args.alpha_sigma != 0.0:
+                    if alpha_sigma != 0.0:
                         loss_sigma = sigma_loss(sigma, x_real, x_gt)
                         loss_sigma_acc += loss_sigma.item()
                         loss_sigma_acc_sub += loss_sigma.item()
-                        loss += loss_sigma * args.alpha_sigma
+                        loss += loss_sigma * alpha_sigma
 
                     if len(loss_class_acc) == 0:
                         loss_class_acc = [0] * len(class_losses)
@@ -411,8 +429,8 @@ def train():
                         # loss_disparity_acc += loss.item()
                         # loss_disparity_acc_sub += loss.item()
 
-                        if args.alpha_sigma != 0.0:
-                            loss_sigma = sigma_loss(sigma, x, x_gt)
+                        if alpha_sigma != 0.0:
+                            loss_sigma = sigma_loss(sigma, x_real, x_gt)
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
@@ -424,7 +442,7 @@ def train():
                 if i_batch % 100 == 99:
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
                                       loss_disparity_acc_sub / 100.0 * 1024, step)
-                    if args.alpha_sigma != 0.0:
+                    if alpha_sigma != 0.0:
                         writer.add_scalar(f'{phase}_subepoch/sigma_loss',
                                           loss_sigma_acc_sub / 100.0, step)
 
@@ -432,7 +450,7 @@ def train():
                         writer.add_scalar(f'{phase}_subepoch/regression_error', loss_reg_acc_sub / 100.0 * 1024, step)
 
                         combo_loss = loss_reg_acc_sub * alpha_reg + \
-                                     loss_sigma_acc_sub * args.alpha_sigma + sum(loss_class_acc_sub)
+                                     loss_sigma_acc_sub * alpha_sigma + sum(loss_class_acc_sub)
                         print("batch {} loss: {}".format(i_batch, combo_loss / 100))
                     else:  # val
                         print("batch {} disparity error: {}".format(i_batch, loss_disparity_acc_sub / 100 * 1024))
@@ -447,7 +465,7 @@ def train():
             #write progress every epoch!
             writer.add_scalar(f"{phase}/disparity",
                               loss_disparity_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
-            if args.alpha_sigma != 0.0:
+            if alpha_sigma != 0.0:
                 writer.add_scalar(f"{phase}/sigma(loss)",
                                   loss_sigma_acc / dataset_sizes[phase] * args.batch_size, step)
             for i, class_loss in enumerate(loss_class_acc):
@@ -456,7 +474,7 @@ def train():
             if phase == 'train':
                 writer.add_scalar(f"{phase}/regression_stage",
                                   loss_reg_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
-                combo_loss = loss_reg_acc * alpha_reg + loss_sigma_acc * args.alpha_sigma + sum(loss_class_acc_sub)
+                combo_loss = loss_reg_acc * alpha_reg + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
                 combo_loss *= 1.0 / dataset_sizes[phase] * args.batch_size
 
                 print(f"{phase} loss: {combo_loss}")

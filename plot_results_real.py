@@ -52,6 +52,9 @@ input_height = 2*17+1
 
 regressor = "trained_models/bb64_256c_16sc_256_8_lr02_regressor_chk.pt"
 backbone = "trained_models/bb64_256c_16sc_256_8_lr02_backbone_chk.pt"
+
+regressor = "trained_models/slice_2stage_class_31_regressor_chk.pt"
+backbone = "trained_models/slice_2stage_class_31_backbone_chk.pt"
 input_height = 128
 
 sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
@@ -78,10 +81,10 @@ dataset = DatasetCaptured(root_dir=dataset_path, from_ind=0, to_ind=800)
 #dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
 #dataset = DatasetRendered2(dataset_path, 0, 40000, tgt_res=tgt_res)
 
-fig, axs = plt.subplots(4, 1)
+fig, axs = plt.subplots(5, 1)
 for i, ir in enumerate(dataset):
-    bl = baselines[i%2]
-    #bl = -baselines[1]# Did i mix up left and right when creating the dataset?
+    #bl = baselines[i%2]
+    bl = -baselines[1]# Did i mix up left and right when creating the dataset?
     with torch.no_grad():
         ir = torch.tensor(ir, device=device).unsqueeze(0)
         #ir = ir[:, :, 100+1:(100+17*2+1)+1, :]
@@ -115,10 +118,15 @@ for i, ir in enumerate(dataset):
         axs[2].set_title('Depth single line')
         axs[2].plot(d[0, 0, :].squeeze())
 
-        #todo: the depth estimaion!
         axs[3].cla()
-        axs[3].set_title('Depth')
-        axs[3].imshow(d[0, :, :])
+        axs[3].set_title('sigma')
+        axs[3].plot(mask[0, 0, :].squeeze())
+
+        #todo: the depth estimaion!
+        axs[4].cla()
+        axs[4].set_title('Depth')
+        axs[4].imshow(d[0, :, :])
+
 
         plt.show(block=False)
         plt.waitforbuttonpress()

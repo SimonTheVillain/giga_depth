@@ -1443,12 +1443,13 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
 		const char* errstr = cudaGetErrorString(error);
 		std::cout << errstr << std::endl;
 	}
-	cudaDeviceSynchronize();
+	//TODO: Is there a sensible way of doing this on the GPU? Not synchronizing here!
+	//cudaDeviceSynchronize(); // the synchronization happens inherently with memcpy since it is on the default stream
     //download to cpu
     std::vector<int32_t> sizes_cpu(weights.size(0));
     cudaMemcpy(&sizes_cpu[0], sizes_gpu, sizeof(int32_t) * weights.size(0), cudaMemcpyDeviceToHost);
 
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize(); // the synchronization happens inherently with memcpy since it is on the default stream
     //accumulate the sizes to get the starting positions (on CPU)
     std::vector<int32_t> starting_inds_cpu(weights.size(0));
     int count = 0;

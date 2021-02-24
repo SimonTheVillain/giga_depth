@@ -229,15 +229,15 @@ class Classifier3Stage(nn.Module):
         mean_weights = {}
         accu = 0
         for c in self.c1:
-            accu += c.weight.abs().mean().item()
+            accu += c.weight.abs().mean()
         mean_weights["mean_weight_c1"] = accu
         accu = 0
         for c in self.c2:
-            accu += c.w.abs().mean().item()
+            accu += c.w.abs().mean()
         mean_weights["mean_weight_c2"] = accu
         accu = 0
         for c in self.c3:
-            accu += c.w.abs().mean().item()
+            accu += c.w.abs().mean()
         mean_weights["mean_weight_c3"] = accu
         return mean_weights
 
@@ -351,7 +351,7 @@ class Classifier3Stage(nn.Module):
                 x = x.reshape((bs, height, width, -1)).permute((0, 3, 1, 2))
                 loss = F.cross_entropy(x, inds2_gt) * mask
                 losses.append(loss.mean())
-                torch.cuda.synchronize()
+                #torch.cuda.synchronize()
 
             inds12_gt = inds_gt // self.classes[2]
             inds12_gt = inds12_gt
@@ -383,7 +383,7 @@ class Classifier3Stage(nn.Module):
                 x = x.reshape((bs, height, width, -1)).permute((0, 3, 1, 2))
                 loss = F.cross_entropy(x, inds3_gt) * mask
                 losses.append(loss.mean())
-                torch.cuda.synchronize()
+                #torch.cuda.synchronize()
 
             return inds123_real, losses
 
@@ -549,11 +549,11 @@ class Reg_3stage(nn.Module):
 
             x = (inds.type(torch.float32) + r) * (1.0 / float(classes123))
             x_real = x.reshape((bs, 1, height, width))
-            torch.cuda.synchronize()
+            #torch.cuda.synchronize()
 
             #lets check if the weights
             debugs = self.c.get_mean_weights()
-            debug_r = self.r2.w.abs().mean().item() + self.r3.w.abs().mean().item()
+            debug_r = self.r2.w.abs().mean() + self.r3.w.abs().mean()
             debugs["mean_w_reg"] = debug_r
 
 

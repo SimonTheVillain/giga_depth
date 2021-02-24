@@ -235,9 +235,9 @@ class SliceShort2(nn.Module):
             if with_debug:
                 x = self.conv_3(x)
 
-                debug = {"bb_mean_x_before_bn": x.abs().mean().item()}
+                debug = {"bb_mean_x_before_bn": x.abs().mean()}
                 x = self.bn3(x)
-                debug["bb_mean_x_after_bn"] = x.abs().mean().item()
+                debug["bb_mean_x_after_bn"] = x.abs().mean()
                 x = F.leaky_relu(x)
                 return x, debug
             else:
@@ -376,9 +376,9 @@ class BackboneNoSlice3(nn.Module):
             x = F.leaky_relu(self.bn_3(self.conv_3(x)))
             if with_debug:
                 x = self.conv_4(x)
-                debugs = {"bb_mean_x_before_bn": x.abs().mean().item()}
+                debugs = {"bb_mean_x_before_bn": x.abs().mean()}
                 x = self.bn_4(x)
-                debugs["bb_mean_x_after_bn"] = x.abs().mean().item()
+                debugs["bb_mean_x_after_bn"] = x.abs().mean()
                 x = F.leaky_relu(x)
                 return x, debugs
             else:
@@ -391,5 +391,69 @@ class BackboneNoSlice3(nn.Module):
             x = F.leaky_relu(self.conv_2(x))
             x = F.leaky_relu(self.conv_3(x))
             x = F.leaky_relu(self.conv_4(x))
+            return x
+
+
+# backboneNoSlice4 is similar to BackboneNoSlice3 but when downsampling the channels are split into a near and a far
+# receptive field near and far receptive field are concatenated at the output
+class BackboneNoSlice4(nn.Module):
+
+    @staticmethod
+    def radius():
+        return 12
+
+    def __init__(self, height=896, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64], use_bn=False):
+        super(BackboneNoSlice4, self).__init__()
+        self.height = height
+        self.features = channels_sub[3]
+        self.conv_start = nn.Conv2d(1, channels[0], 3, padding=(1, 1)) # receptive field (radius) = 1
+        self.conv_1 = nn.Conv2d(channels[0], channels[1], 5, padding=(2, 2)) # + 2 = 3
+        self.conv_down = nn.Conv2d(channels[1], channels[2] * 2, 5, padding=(2, 2), stride=(2, 2)) # +2 = 5
+
+        self.conv_2 = nn.Conv2d(channels_sub[0]*2, channels_sub[1]*2, 5, padding=(2, 2), groups=2)  # + 2 * 2 = 9
+        self.conv_3 = nn.Conv2d(channels_sub[1], channels_sub[2], 5, padding=(2, 2))  # + 2 * 2 = 13
+        self.conv_4 = nn.Conv2d(channels_sub[2], channels_sub[3], 5, padding=(2, 2))  # + 2 * 2 = 17
+
+        if use_bn:
+            self.bn_start = nn.BatchNorm2d(channels[0])
+            self.bn_1 = nn.BatchNorm2d(channels[1])
+            self.bn_down = nn.BatchNorm2d(channels[2]*2)
+            self.bn_2 = nn.BatchNorm2d(channels_sub[1]*2)
+            self.bn_3 = nn.BatchNorm2d(channels_sub[2])
+            self.bn_4 = nn.BatchNorm2d(channels_sub[3])
+
+    def forward(self, x, with_debug=False):
+        device = x.device
+        #print(nr_slices)
+        #print(x.shape)
+        if hasattr(self, 'bn_start'):
+            x = F.leaky_relu(self.bn_start(self.conv_start(x)))
+            x = F.leaky_relu(self.bn_1(self.conv_1(x)))
+            x = F.leaky_relu(self.bn_down(self.conv_down(x)))
+            x = F.leaky_relu(self.bn_2(self.conv_2(x)))
+
+            x, x_l = torch.split(x, int(x.shape[1]/2), 1)# split up the channels in two
+            x = F.leaky_relu(self.bn_3(self.conv_3(x)))
+            if with_debug:
+                x = self.conv_4(x)
+                debugs = {"bb_mean_x_before_bn": x.abs().mean()}
+                x = self.bn_4(x)
+                debugs["bb_mean_x_after_bn"] = x.abs().mean()
+                x = F.leaky_relu(x)
+                x = torch.cat((x, x_l), 1)
+                return x, debugs
+            else:
+                x = F.leaky_relu(self.bn_4(self.conv_4(x)))
+                x = torch.cat((x, x_l), 1)
+                return x
+        else:
+            x = F.leaky_relu(self.conv_start(x))
+            x = F.leaky_relu(self.conv_1(x))
+            x = F.leaky_relu(self.conv_down(x))
+            x = F.leaky_relu(self.conv_2(x))
+            x, x_l = torch.split(x, int(x.shape[1]/2), 1)# split up the output in two
+            x = F.leaky_relu(self.conv_3(x))
+            x = F.leaky_relu(self.conv_4(x))
+            x = torch.cat((x, x_l), 1)
             return x
 
