@@ -337,9 +337,9 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
 #small_gradient_experiment()
 #sys.exit(0)
 batch_size = 1#32*32# 32*32
-width = 60#8#8#8#8#60#8
+width = 608#8#8#8#60#8
 height = 1#4480#4480#448#4480#448
-classes = 32 # (classes per line)
+classes = 12 # (classes per line)
 m = 16
 n = 16#output channels
 absolute_random = False
@@ -352,7 +352,7 @@ absolute_random = False
 linear_custom = CondMul(classes * height, m, n).cuda(device)
 
 
-if False:
+if True:
     linear_ref = RefCondMul(classes * height, m, n).cuda(device) # 32 as output wouldn't work here
     linear_conv = RefCondMulConv(classes*height, m, n).cuda(device)
     compare_models(linear_custom, linear_ref, linear_conv, batch_size, width, height, classes)

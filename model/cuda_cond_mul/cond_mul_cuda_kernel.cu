@@ -683,6 +683,76 @@ __global__ void cond_mul_cuda_few_in_many_out_no_shared(
     }
 }
 
+template <bool set_size_at_0> //true for every but the very last
+__global__ void integrate_start_inds(
+        const size_t class_count,
+        int32_t *counters,
+        int stride){
+    const int base_ind = 32 * (threadIdx.y + blockIdx.x * blockDim.y);
+    const int lane = threadIdx.x;//warp lane
+    const int ind = (lane + base_ind) * stride;
+    if (ind>=class_count){
+        return;
+    }
+    unsigned int mask = __activemask();
+    int last_lane = __popc(mask) - 1;
+    int count_self = counters[ind];
+    int count;
+
+    //we assume the neighbour to the left
+    int sum = __shfl_up_sync(mask, count_self, 1);
+
+    //the first lane should be zero (relative offset within this block)
+    if(lane == 0){
+        sum = 0; //this only happens once
+    }
+
+    for(int i=1;i<=16;i*=2){ //1,2,4,8,16
+        int count_other = __shfl_up_sync(mask, sum, i);
+        if (lane>=i){ //if the access to the left is out of bounds we do not add the value
+            //printf("step %d, lane %d \n", i, lane);
+            sum += count_other;
+        }
+    }
+
+    if(set_size_at_0){
+        //on the last lane the input value + the sum (of all values left of it) is what we want to put out on the
+        //first lane
+        int overall_sum = count_self + sum;
+        //use highest active lane here!
+        overall_sum =__shfl_sync(mask, overall_sum, last_lane); //the last lane contains the sum over all images
+        if(lane == 0){
+            sum = overall_sum;
+        }
+    }
+
+    counters[ind] = sum;
+
+}
+
+__global__ void integrate_start_inds_back(
+        const size_t class_count,
+        int32_t *counters,
+        int stride){
+    const int base_ind = 32 * (threadIdx.y + blockIdx.x * blockDim.y);
+    const int lane = threadIdx.x;//warp lane
+    const int ind = (lane + base_ind) * stride;
+
+    if(ind >= class_count){
+        return;
+    }
+    int sum = counters[ind];
+    const unsigned int full_mask = 0xffffffff;
+    //get the offset from the very first element
+    int offset = __shfl_sync(full_mask, sum, 0);
+    if(lane != 0) {
+        sum += offset;
+    }
+    counters[ind] = sum;
+
+
+
+}
 
 __global__ void count_classes(
                 const size_t class_count,
@@ -697,6 +767,7 @@ __global__ void count_classes(
     if(ind_w >= class_count || ind_w < 0){
         printf("[count_classes]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
+    //TODO: utilize warp aggregated atomics here!!!
     atomicAdd(&counters[ind_w], 1);
 }
 
@@ -1443,11 +1514,71 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
 		const char* errstr = cudaGetErrorString(error);
 		std::cout << errstr << std::endl;
 	}
+    /******************************************************************************************/
+    //To generate starting indices, we accumulate the sample counts for each class.
+    // Algorithm works as follows:
+    // 1. load in the counts in groups of 32 and shuffle up the count -> store such that lane 0 stores the overall count
+    // 2. repeat at a increasing (x32) strides and set the very first index to 0
+    //   The first entry in each group will have the overall count.
+    //   The consecutive strides will have the relative offset from there.
+    // 3. with decresing (/32) strides update the relative offsets to absolute ones. Repeat till stride is zero
+    int class_count = weights.size(0);
+    //int32_t *starting_inds_gpu_2;
+    //cudaMalloc(&starting_inds_gpu_2, sizeof(int32_t) * class_count);
+    cudaMemcpy(starting_inds_gpu, sizes_gpu, sizeof(int32_t) * class_count, cudaMemcpyDeviceToDevice);
+    int step_size = 1;
+    //std::cout << "class_count " << class_count << std::endl;
+    while ( (class_count / step_size) > 32 ){
+        int groups_per_block = 4;
+        dim3 threads3(32, groups_per_block);
+        dim3 blocks3((class_count/step_size + threads3.x*threads3.y*threads3.z - 1) /  (threads3.x*threads3.y*threads3.z));
+        //std::cout << "up stride:" << step_size << "blocks " << blocks3.x << std::endl;
+        integrate_start_inds<true><<<blocks3, threads3>>>(
+                class_count,
+                starting_inds_gpu,
+                step_size); //stride
+        step_size *= 32;
+    }
+    dim3 threads3(32, 1);
+    dim3 blocks3((class_count/step_size + threads3.x*threads3.y*threads3.z - 1) /  (threads3.x*threads3.y*threads3.z));
+    // run kernel one last time! (don't write sum at first element!
+	dim3 blocks_int((overall_samples));
+
+    //std::cout << "last up stride:" << step_size << "blocks " << blocks3.x << std::endl;
+
+    integrate_start_inds<false><<<blocks3, threads3>>>(
+            class_count,
+            starting_inds_gpu,
+            step_size); //stride
+
+
+	while( step_size >= 32){
+	    step_size /= 32;
+	    //first action already is one step size below.
+	    //TODO: add offsets until step size equals 1
+        int groups_per_block = 4;
+        dim3 threads3(32, groups_per_block);
+        dim3 blocks3((class_count/step_size + threads3.x*threads3.y*threads3.z - 1) /  (threads3.x*threads3.y*threads3.z));
+
+        //std::cout << "down stride:" << step_size << "blocks " << blocks3.x << std::endl;
+        integrate_start_inds_back<<<blocks3, threads3>>>(
+                                                               class_count,
+                                                               starting_inds_gpu,
+                                                                step_size); //stride
+	}
+
+    /*
+    std::vector<int32_t> starting_inds_cpu_2(class_count);
+    cudaMemcpy(&starting_inds_cpu_2[0], starting_inds_gpu_2, sizeof(int32_t) * class_count, cudaMemcpyDeviceToHost);
+
+    //******************************************************************************************
 	//TODO: Is there a sensible way of doing this on the GPU? Not synchronizing here!
 	//cudaDeviceSynchronize(); // the synchronization happens inherently with memcpy since it is on the default stream
     //download to cpu
     std::vector<int32_t> sizes_cpu(weights.size(0));
     cudaMemcpy(&sizes_cpu[0], sizes_gpu, sizeof(int32_t) * weights.size(0), cudaMemcpyDeviceToHost);
+
+
 
     //cudaDeviceSynchronize(); // the synchronization happens inherently with memcpy since it is on the default stream
     //accumulate the sizes to get the starting positions (on CPU)
@@ -1458,7 +1589,15 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     //std::cout << "calculating the starting positions of " << weights.size(0) << "weights" << std::endl;
     for(int i=0;i<weights.size(0);i++){
         starting_inds_cpu[i] = count;
-        //std::cout << "starting_ind " << starting_inds_cpu[i] << std::endl;
+        //TODO: remove debug!
+        if(starting_inds_cpu[i] == starting_inds_cpu_2[i]){
+            std::cout << "starting_ind by cpu " << starting_inds_cpu[i] << " vs gpu: " << starting_inds_cpu_2[i] << std::endl;
+        }else{
+            std::cout << "starting_ind by cpu " << starting_inds_cpu[i] << " vs gpu: " << starting_inds_cpu_2[i] << " at class nr " << i << std::endl;
+
+        }
+
+        assert(starting_inds_cpu[i] == starting_inds_cpu_2[i]);
         count += sizes_cpu[i];
     }
 
@@ -1471,6 +1610,7 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
 
     //upload the starting indices for the individual weights
     cudaMemcpy(starting_inds_gpu, &starting_inds_cpu[0], sizeof(int32_t) * weights.size(0), cudaMemcpyHostToDevice);
+    */
 
     //setup lookup buffer
     setup_indices<<<blocks, threads>>>( weights.size(0),//nr of different classes//grad_output.size(0),
