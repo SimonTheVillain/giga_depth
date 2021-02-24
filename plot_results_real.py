@@ -53,8 +53,8 @@ input_height = 2*17+1
 regressor = "trained_models/bb64_256c_16sc_256_8_lr02_regressor_chk.pt"
 backbone = "trained_models/bb64_256c_16sc_256_8_lr02_backbone_chk.pt"
 
-regressor = "trained_models/slice_2stage_class_31_regressor_chk.pt"
-backbone = "trained_models/slice_2stage_class_31_backbone_chk.pt"
+regressor = "trained_models/slice_2stage_class_33_regressor_chk.pt"
+backbone = "trained_models/slice_2stage_class_33_backbone_chk.pt"
 input_height = 128
 
 sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
