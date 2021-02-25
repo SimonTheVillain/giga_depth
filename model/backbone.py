@@ -457,3 +457,52 @@ class BackboneNoSlice4(nn.Module):
             x = torch.cat((x, x_l), 1)
             return x
 
+# go a bit more u-shaped
+class BackboneU1(nn.Module):
+
+    def __init__(self):
+        super(BackboneU1, self).__init__()
+        self.start = nn.Conv2d(1, 8, 3, padding=1, stride=(2, 1))#putting this here gives us less than a millisecond
+        self.conv1 = nn.Conv2d(8, 16, 5, padding=2)  # reduce lines early on (gets down from 51 to 47ms)
+        self.convdown = nn.Conv2d(16, 32, 5, padding=2, stride=(1, 2))  # reduce colums right after
+
+        self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)
+        self.conv_sub2 = nn.Conv2d(64, 64, 5, padding=2)
+        self.conv_sub3 = nn.Conv2d(64, 64, 3, padding=1)
+        self.conv_sub4 = nn.Conv2d(64, 64, 1, padding=0)
+        self.conv_sub5 = nn.Conv2d(64, 32 * 4, 1, padding=0)  # todo: should this one have a kernel size bigger 1?
+
+        self.convout = nn.Conv2d(64, 64, 5, padding=2)
+
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn_down = nn.BatchNorm2d(32)
+
+        self.bnout = nn.BatchNorm2d(64)
+
+        self.bnsub1 = nn.BatchNorm2d(64)
+        self.bnsub2 = nn.BatchNorm2d(64)
+        self.bnsub3 = nn.BatchNorm2d(64)
+        self.bnsub4 = nn.BatchNorm2d(64)
+        self.bnsub5 = nn.BatchNorm2d(128)
+
+    def forward(self, x, with_debug=False):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn_down(self.convdown(x)))
+        x_l1 = x
+
+        x_l1 = F.leaky_relu(self.bnsub1(self.conv_sub1(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub2(self.conv_sub2(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub3(self.conv_sub3(x_l1)))  # these here are incredibly cheap
+        x_l1 = F.leaky_relu(self.bnsub4(self.conv_sub4(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub5(self.conv_sub5(x_l1)))
+        x_l1 = x_l1.reshape((x_l1.shape[0], 32, 2, 2, x_l1.shape[2], x_l1.shape[3]))
+        x_l1 = x_l1.permute((0, 1, 4, 2, 5, 3)).reshape((x_l1.shape[0], 32, x.shape[2], x.shape[3]))
+
+        x = torch.cat((x, x_l1), dim=1)
+        x = F.leaky_relu(self.bnout(self.convout(x)))
+        if with_debug:
+            debugs = {}
+            return x, debugs
+        return x

@@ -1,3 +1,5 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import cv2
 import torch
 import torch.nn as nn
@@ -5,7 +7,6 @@ import torch.nn.functional as F
 import numpy as np
 import numpy.matlib
 import matplotlib.pyplot as plt
-import os
 from model.model_CR9hs import Model_CR9_hsn
 from model.model_CR10hs import Model_CR10_hsn
 from model.model_CR10_1hs import Model_CR10_1_hsn
@@ -54,6 +55,214 @@ class Model_test(nn.Module):
         x = F.leaky_relu(self.conv4(x))
         return x
 
+#the model/backbone used in many if not most experiments
+class Model_test2(nn.Module):
+
+    def __init__(self):
+        super(Model_test2, self).__init__()
+        self.start = nn.Conv2d(1, 8, 3, padding=1)
+        self.conv1 = nn.Conv2d(8, 16, 5, padding=2)
+        self.convdown = nn.Conv2d(16, 32, 5, padding=2, stride=2)
+        self.conv2 = nn.Conv2d(32, 32, 5, padding=2)
+        self.conv3 = nn.Conv2d(32, 64, 5, padding=2)
+        self.conv4 = nn.Conv2d(64, 64, 5, padding=2)
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn_down = nn.BatchNorm2d(32)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.bn4 = nn.BatchNorm2d(64)
+
+
+    def forward(self, x):
+
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn_down(self.convdown(x)))
+        x = F.leaky_relu(self.bn2(self.conv2(x)))
+        x = F.leaky_relu(self.bn3(self.conv3(x)))
+        x = F.leaky_relu(self.bn4(self.conv4(x)))
+        return x
+
+# lets reduce the horizontal resolution in the second to first step!
+class Model_test3(nn.Module):
+
+    def __init__(self):
+        super(Model_test3, self).__init__()
+        self.start = nn.Conv2d(1, 8, 3, padding=1)
+        self.conv1 = nn.Conv2d(8, 16, 5, padding=2, stride=(2, 1))# reduce lines early on (gets down from 51 to 47ms)
+        self.convdown = nn.Conv2d(16, 32, 5, padding=2, stride=(1, 2))# reduce colums right after
+        self.conv2 = nn.Conv2d(32, 32, 5, padding=2)
+        self.conv3 = nn.Conv2d(32, 64, 5, padding=2)
+        self.conv4 = nn.Conv2d(64, 64, 5, padding=2)
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn_down = nn.BatchNorm2d(32)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.bn4 = nn.BatchNorm2d(64)
+
+    def forward(self, x):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn_down(self.convdown(x)))
+        x = F.leaky_relu(self.bn2(self.conv2(x)))
+        x = F.leaky_relu(self.bn3(self.conv3(x)))
+        x = F.leaky_relu(self.bn4(self.conv4(x)))
+        return x
+
+#go a bit more u-shaped
+class Model_test4(nn.Module):
+
+    def __init__(self):
+        super(Model_test4, self).__init__()
+        self.start = nn.Conv2d(1, 8, 3, padding=1)
+        self.conv1 = nn.Conv2d(8, 16, 5, padding=2, stride=(2, 1))# reduce lines early on (gets down from 51 to 47ms)
+        self.convdown = nn.Conv2d(16, 32, 5, padding=2, stride=(1, 2))# reduce colums right after
+
+        self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)
+        self.conv_sub2 = nn.Conv2d(64, 64, 5, padding=2)
+        self.conv_sub3 = nn.Conv2d(64, 64, 1, padding=0)
+        self.conv_sub4 = nn.Conv2d(64, 64, 1, padding=0)
+        self.conv_sub5 = nn.Conv2d(64, 32*4, 1, padding=0)#todo: should this one have a kernel size bigger 1?
+
+        self.conv2 = nn.Conv2d(32, 16, 5, padding=2)
+        self.conv3 = nn.Conv2d(16, 16, 5, padding=2)
+        self.conv4 = nn.Conv2d(16, 32, 5, padding=2)
+
+
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn_down = nn.BatchNorm2d(32)
+
+        self.bn2 = nn.BatchNorm2d(16)
+        self.bn3 = nn.BatchNorm2d(16)
+        self.bn4 = nn.BatchNorm2d(32)
+
+        self.bnsub1 = nn.BatchNorm2d(64)
+        self.bnsub2 = nn.BatchNorm2d(64)
+        self.bnsub3 = nn.BatchNorm2d(64)
+        self.bnsub4 = nn.BatchNorm2d(64)
+        self.bnsub5 = nn.BatchNorm2d(128)
+
+    def forward(self, x):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn_down(self.convdown(x)))
+        x_l1 = x
+        x = F.leaky_relu(self.bn2(self.conv2(x_l1)))
+        x = F.leaky_relu(self.bn3(self.conv3(x)))
+        x = F.leaky_relu(self.bn4(self.conv4(x)))
+
+        x_l1 = F.leaky_relu(self.bnsub1(self.conv_sub1(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub2(self.conv_sub2(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub3(self.conv_sub3(x_l1)))#these here are incredibly cheap
+        x_l1 = F.leaky_relu(self.bnsub4(self.conv_sub4(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub5(self.conv_sub5(x_l1)))
+        x_l1 = x_l1.reshape((x_l1.shape[0], 32, 2, 2, x_l1.shape[2], x_l1.shape[3]))
+        x_l1 = x_l1.permute((0, 1, 4, 2, 5, 3)).reshape((x_l1.shape[0], 32, x.shape[2], x.shape[3]))
+
+        x = torch.cat((x, x_l1), dim=1)
+        return x
+
+# go a bit more u-shaped
+class Model_test5(nn.Module):
+
+    def __init__(self):
+        super(Model_test5, self).__init__()
+        self.start = nn.Conv2d(1, 8, 3, padding=1, stride=(2, 1))#putting this here gives us less than a millisecond
+        self.conv1 = nn.Conv2d(8, 16, 5, padding=2)  # reduce lines early on (gets down from 51 to 47ms)
+        self.convdown = nn.Conv2d(16, 32, 5, padding=2, stride=(1, 2))  # reduce colums right after
+
+        self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)
+        self.conv_sub2 = nn.Conv2d(64, 64, 5, padding=2)
+        self.conv_sub3 = nn.Conv2d(64, 64, 1, padding=0)
+        self.conv_sub4 = nn.Conv2d(64, 64, 1, padding=0)
+        self.conv_sub5 = nn.Conv2d(64, 32 * 4, 1, padding=0)  # todo: should this one have a kernel size bigger 1?
+
+        self.convout = nn.Conv2d(64, 64, 3, padding=1)
+
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn_down = nn.BatchNorm2d(32)
+
+        self.bnout = nn.BatchNorm2d(64)
+
+        self.bnsub1 = nn.BatchNorm2d(64)
+        self.bnsub2 = nn.BatchNorm2d(64)
+        self.bnsub3 = nn.BatchNorm2d(64)
+        self.bnsub4 = nn.BatchNorm2d(64)
+        self.bnsub5 = nn.BatchNorm2d(128)
+
+    def forward(self, x):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn_down(self.convdown(x)))
+        x_l1 = x
+
+        x_l1 = F.leaky_relu(self.bnsub1(self.conv_sub1(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub2(self.conv_sub2(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub3(self.conv_sub3(x_l1)))  # these here are incredibly cheap
+        x_l1 = F.leaky_relu(self.bnsub4(self.conv_sub4(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub5(self.conv_sub5(x_l1)))
+        x_l1 = x_l1.reshape((x_l1.shape[0], 32, 2, 2, x_l1.shape[2], x_l1.shape[3]))
+        x_l1 = x_l1.permute((0, 1, 4, 2, 5, 3)).reshape((x_l1.shape[0], 32, x.shape[2], x.shape[3]))
+
+        x = torch.cat((x, x_l1), dim=1)
+        x = F.leaky_relu(self.bnout(self.convout(x)))
+
+        return x
+
+#same but more 3x3 convolutions and only 2 5x5 ones
+# go a bit more u-shaped
+class Model_test6(nn.Module):
+
+    def __init__(self):
+        super(Model_test6, self).__init__()
+        self.start = nn.Conv2d(1, 8, 3, padding=1,
+                               stride=(2, 1))  # putting this here gives us less than a millisecond
+        self.conv1 = nn.Conv2d(8, 16, 3, padding=1)  # reduce lines early on (gets down from 51 to 47ms)
+        self.convdown = nn.Conv2d(16, 32, 5, padding=2, stride=(1, 2))  # reduce colums right after
+
+        self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)
+        self.conv_sub2 = nn.Conv2d(64, 64, 3, padding=1)
+        self.conv_sub3 = nn.Conv2d(64, 64, 3, padding=1)
+        self.conv_sub4 = nn.Conv2d(64, 64, 1, padding=0)
+        self.conv_sub5 = nn.Conv2d(64, 32 * 4, 1, padding=0)  # todo: should this one have a kernel size bigger 1?
+
+        self.convout = nn.Conv2d(64, 64, 3, padding=1)
+
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn_down = nn.BatchNorm2d(32)
+
+        self.bnout = nn.BatchNorm2d(64)
+
+        self.bnsub1 = nn.BatchNorm2d(64)
+        self.bnsub2 = nn.BatchNorm2d(64)
+        self.bnsub3 = nn.BatchNorm2d(64)
+        self.bnsub4 = nn.BatchNorm2d(64)
+        self.bnsub5 = nn.BatchNorm2d(128)
+
+    def forward(self, x):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn_down(self.convdown(x)))
+        x_l1 = x
+
+        x_l1 = F.leaky_relu(self.bnsub1(self.conv_sub1(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub2(self.conv_sub2(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub3(self.conv_sub3(x_l1)))  # these here are incredibly cheap
+        x_l1 = F.leaky_relu(self.bnsub4(self.conv_sub4(x_l1)))
+        x_l1 = F.leaky_relu(self.bnsub5(self.conv_sub5(x_l1)))
+        x_l1 = x_l1.reshape((x_l1.shape[0], 32, 2, 2, x_l1.shape[2], x_l1.shape[3]))
+        x_l1 = x_l1.permute((0, 1, 4, 2, 5, 3)).reshape((x_l1.shape[0], 32, x.shape[2], x.shape[3]))
+
+        x = torch.cat((x, x_l1), dim=1)
+        x = F.leaky_relu(self.bnout(self.convout(x)))
+
+        return x
+
 class CompositeModel(nn.Module):
     def __init__(self, backbone, regressor):
         super(CompositeModel, self).__init__()
@@ -89,7 +298,7 @@ backbone = Backbone6_64()
 regressor = Regressor2Stage(64, 448, 608)
 model = CompositeModel(backbone, regressor)
 #model = Model_CR11_hn(core_image_height, class_count)
-model = Model_test()
+model = Model_test5()
 input_channels = 1
 batches = 1
 warm_up = True
@@ -99,7 +308,7 @@ torch.backends.cudnn.benchmark = True
 model.cuda()
 print(f"nr model params: {get_n_params(model)}")
 
-for half_precision in [True]:#, True]:
+for half_precision in [False, True]:#, True]:
 
     if half_precision:
         model.half()
