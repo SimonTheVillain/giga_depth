@@ -468,11 +468,11 @@ class BackboneU1(nn.Module):
 
         self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)
         self.conv_sub2 = nn.Conv2d(64, 64, 5, padding=2)
-        self.conv_sub3 = nn.Conv2d(64, 64, 3, padding=1)
+        self.conv_sub3 = nn.Conv2d(64, 64, 1, padding=0)
         self.conv_sub4 = nn.Conv2d(64, 64, 1, padding=0)
         self.conv_sub5 = nn.Conv2d(64, 32 * 4, 1, padding=0)  # todo: should this one have a kernel size bigger 1?
 
-        self.convout = nn.Conv2d(64, 64, 5, padding=2)
+        self.convout = nn.Conv2d(64, 64, 3, padding=1)
 
         self.bn_start = nn.BatchNorm2d(8)
         self.bn1 = nn.BatchNorm2d(16)
