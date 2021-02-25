@@ -13,7 +13,7 @@ from model.regressor_1branch import Regressor1Branch
 from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from experiments.lines.model_lines_CR8_n import *
-from model.backbone import Backbone, BackboneSliced, BackboneSliced2, BackboneSliced3, BackboneNoSlice3, BackboneNoSlice4, BackboneU1
+from model.backbone import *
 from model.regressor import Regressor, Regressor2, Reg_3stage
 from torch.utils.data import DataLoader
 import math
@@ -249,7 +249,14 @@ def train():
                                         channels=config["backbone"]["channels"],
                                         channels_sub=config["backbone"]["channels2"],
                                         use_bn=True)
-            backbone = BackboneU1()
+            if config["backbone"]["name"] == "BackboneU1":
+                backbone = BackboneU1()
+            if config["backbone"]["name"] == "BackboneU2":
+                print("BACKBONEU2")
+                backbone = BackboneU2()
+            if config["backbone"]["name"] == "BackboneU3":
+                print("BACKBONEU3")
+                backbone = BackboneU3()
             #backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
             #                            channels=config["backbone"]["channels"],
             #                            channels_sub=config["backbone"]["channels2"],

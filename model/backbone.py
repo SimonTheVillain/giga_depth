@@ -506,3 +506,89 @@ class BackboneU1(nn.Module):
             debugs = {}
             return x, debugs
         return x
+
+# go a bit more u-shaped
+class BackboneU2(nn.Module):
+
+    def __init__(self):
+        super(BackboneU2, self).__init__()
+        self.start = nn.Conv2d(1, 16, 5, padding=2, stride=2) # receptive field (radius) r = 2
+        self.conv1 = nn.Conv2d(16, 16, 5, padding=2)  #  + 2 * 2 = 6
+
+        self.conv_sub1 = nn.Conv2d(16, 32, 5, padding=2, stride=2) # + 2 * 2 = 10
+        self.conv_sub2 = nn.Conv2d(32, 64, 5, padding=2) # + 2*2*2 = 18
+        self.conv_sub3 = nn.Conv2d(64, 128, 1, padding=0)
+        self.conv_sub4 = nn.Conv2d(128, 32 * 4, 1, padding=0)  # todo: should this one have a kernel size bigger 1?
+
+        self.convout = nn.Conv2d(48, 64, 3, padding=1, groups=2) # 18 + 2*2 = 22 or 10 for the channels coming from the skip conn.
+
+        self.bn_start = nn.BatchNorm2d(16)
+        self.bn1 = nn.BatchNorm2d(16)
+
+        self.bnout = nn.BatchNorm2d(64)
+
+        self.bnsub1 = nn.BatchNorm2d(32)
+        self.bnsub2 = nn.BatchNorm2d(64)
+        self.bnsub3 = nn.BatchNorm2d(128)
+        self.bnsub4 = nn.BatchNorm2d(128)
+
+    def forward(self, x, with_debug=False):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x_skip = x
+
+        x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
+        x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
+        x = F.leaky_relu(self.bnsub3(self.conv_sub3(x)))  # these here are incredibly cheap
+        x = F.leaky_relu(self.bnsub4(self.conv_sub4(x)))
+        x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
+        x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+
+        x = torch.cat((x, x_skip), dim=1)
+        x = F.leaky_relu(self.bnout(self.convout(x)))
+        if with_debug:
+            debugs = {}
+            return x, debugs
+        return x
+
+# Forget the idea of saturating the tensor units! Try to be more minimalistic than U2
+class BackboneU3(nn.Module):
+
+    def __init__(self):
+        super(BackboneU3, self).__init__()
+        self.start = nn.Conv2d(1, 8, 5, padding=2, stride=2) # receptive field (radius) r = 2
+        self.conv1 = nn.Conv2d(8, 16, 3, padding=1)  #  + 2 * 1 = 4
+
+        self.conv_sub1 = nn.Conv2d(16, 32, 5, padding=2, stride=2) # + 2 * 2 = 8
+        self.conv_sub2 = nn.Conv2d(32, 64, 3, padding=1) # + 2*2*1 = 12
+        self.conv_sub3 = nn.Conv2d(64, 32 * 4, 3, padding=1) # + 2*2*1 = 18
+
+        self.convout = nn.Conv2d(48, 64, 3, padding=1, groups=2) # 18 + 2*2 = 20 or 8 for the channels coming from the skip conn.
+
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+
+
+        self.bnsub1 = nn.BatchNorm2d(32)
+        self.bnsub2 = nn.BatchNorm2d(64)
+        self.bnsub3 = nn.BatchNorm2d(128)
+
+        self.bnout = nn.BatchNorm2d(64)
+
+    def forward(self, x, with_debug=False):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x_skip = x
+
+        x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
+        x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
+        x = F.leaky_relu(self.bnsub3(self.conv_sub3(x)))
+        x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
+        x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+
+        x = torch.cat((x, x_skip), dim=1)
+        x = F.leaky_relu(self.bnout(self.convout(x)))
+        if with_debug:
+            debugs = {}
+            return x, debugs
+        return x

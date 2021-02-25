@@ -86,6 +86,7 @@ for i, ir in enumerate(dataset):
     #bl = baselines[i%2]
     bl = -baselines[1]# Did i mix up left and right when creating the dataset?
     with torch.no_grad():
+        #ir = ir[0] # for the rendered dataset ir is a tuple of ir, mask and gt
         ir = torch.tensor(ir, device=device).unsqueeze(0)
         #ir = ir[:, :, 100+1:(100+17*2+1)+1, :]
         ir = ir[:, :, 100:(100 + input_height), :]
@@ -112,15 +113,15 @@ for i, ir in enumerate(dataset):
 
         axs[1].cla()
         axs[1].set_title('X single line')
-        axs[1].plot(x[0, 0, 0, :].squeeze()*1024)
+        axs[1].plot(x[0, 0, 32, :].squeeze()*1024)
 
         axs[2].cla()
         axs[2].set_title('Depth single line')
-        axs[2].plot(d[0, 0, :].squeeze())
+        axs[2].plot(d[0, 32, :].squeeze())
 
         axs[3].cla()
         axs[3].set_title('sigma')
-        axs[3].plot(mask[0, 0, :].squeeze())
+        axs[3].plot(mask[0, 32, :].squeeze())
 
         #todo: the depth estimaion!
         axs[4].cla()
