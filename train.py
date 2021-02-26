@@ -257,6 +257,14 @@ def train():
             if config["backbone"]["name"] == "BackboneU3":
                 print("BACKBONEU3")
                 backbone = BackboneU3()
+
+            if config["backbone"]["name"] == "BackboneU4":
+                print("BACKBONEU4")
+                backbone = BackboneU4()
+
+            if config["backbone"]["name"] == "BackboneU5":
+                print("BACKBONEU5")
+                backbone = BackboneU5()
             #backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
             #                            channels=config["backbone"]["channels"],
             #                            channels_sub=config["backbone"]["channels2"],

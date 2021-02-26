@@ -592,3 +592,78 @@ class BackboneU3(nn.Module):
             debugs = {}
             return x, debugs
         return x
+
+# Skip the output network that once more operates at the target resolution
+#better utilization of the Tensor-cores than U3
+class BackboneU4(nn.Module):
+
+    def __init__(self):
+        super(BackboneU4, self).__init__()
+        self.start = nn.Conv2d(1, 8, 5, padding=2, stride=2)  # receptive field (radius) r = 2
+        self.conv1 = nn.Conv2d(8, 16, 3, padding=1)  # + 2 * 1 = 4
+        self.conv2 = nn.Conv2d(16, 32, 5, padding=2)  # + 2 * 2 = 8
+        self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)  # + 2 * 2 = 12
+        self.conv_sub2 = nn.Conv2d(64, 64, 3, padding=1)  # + 2*2*1 = 18
+        self.conv_sub3 = nn.Conv2d(64, 32 * 4, 3, padding=1)  # + 2*2*1 = 20
+
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn2 = nn.BatchNorm2d(32)
+
+        self.bnsub1 = nn.BatchNorm2d(64)
+        self.bnsub2 = nn.BatchNorm2d(64)
+        self.bnsub3 = nn.BatchNorm2d(128)
+
+    def forward(self, x, with_debug=False):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn2(self.conv2(x)))
+        x_skip = x
+
+        x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
+        x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
+        x = F.leaky_relu(self.bnsub3(self.conv_sub3(x)))
+        x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
+        x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+
+        x = torch.cat((x, x_skip), dim=1)
+        if with_debug:
+            debugs = {}
+            return x, debugs
+        return x
+
+# No final layer at target resolution and only 2 layers at the lowest resolution
+#better utilization of the Tensor-cores than U3
+class BackboneU5(nn.Module):
+
+    def __init__(self):
+        super(BackboneU5, self).__init__()
+        self.start = nn.Conv2d(1, 8, 5, padding=2, stride=2)  # receptive field (radius) r = 2
+        self.conv1 = nn.Conv2d(8, 16, 5, padding=2)  # + 2 * 2 = 6
+        self.conv2 = nn.Conv2d(16, 32, 5, padding=2)  # + 2 * 2 = 10
+        self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)  # + 2 * 2 = 14
+        self.conv_sub2 = nn.Conv2d(64, 32 * 4, 3, padding=1)  # + 2*2*1 = 20
+
+        self.bn_start = nn.BatchNorm2d(8)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.bn2 = nn.BatchNorm2d(32)
+
+        self.bnsub1 = nn.BatchNorm2d(64)
+        self.bnsub2 = nn.BatchNorm2d(128)
+
+    def forward(self, x, with_debug=False):
+        x = F.leaky_relu(self.bn_start(self.start(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn2(self.conv2(x)))
+        x_skip = x
+
+        x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
+        x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
+        x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
+        x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+
+        x = torch.cat((x, x_skip), dim=1)
+        if with_debug:
+            debugs = {}
+            return x, debugs
+        return x
