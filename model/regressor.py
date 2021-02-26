@@ -197,18 +197,27 @@ class Classifier3Stage(nn.Module):
                  classes=[16, 16, 16],
                  pad=[0, 8, 8],  # pad around classes
                  ch_latent=[[32, 32], [32, 32], [32, 32]],
-                 c3_line_div=1):#todo: make these of variable lengths
+                 c3_line_div=1,
+                 close_far_separation=False):#todo: make these of variable lengths
         super(Classifier3Stage, self).__init__()
         self.classes = classes
         self.pad = pad
+        self.close_far_separation = close_far_separation
         classes12 = classes[0] * classes[1]
 
         #todo: proper loop and encapsulation of the 3
-        ch_latent[0].insert(0, ch_in)
-        ch_latent[0].append(classes[0] + 2 * pad[0])
+
+        if close_far_separation:
+            ch_latent[0].insert(0, int(ch_in/2))
+            ch_latent[2].insert(0, int(ch_in/2))
+        else:
+            ch_latent[0].insert(0, ch_in)
+            ch_latent[2].insert(0, ch_in)
+
         ch_latent[1].insert(0, ch_in)
+
+        ch_latent[0].append(classes[0] + 2 * pad[0])
         ch_latent[1].append(classes[1] + 2 * pad[1])
-        ch_latent[2].insert(0, ch_in)
         ch_latent[2].append(classes[2] + 2 * pad[2])
         self.c1 = nn.ModuleList()
         self.c2 = nn.ModuleList()
@@ -217,7 +226,7 @@ class Classifier3Stage(nn.Module):
             self.c1.append(nn.Conv2d(height * ch_latent[0][i], height * ch_latent[0][i + 1], 1, groups=height))
 
         for i in range(0, len(ch_latent[1]) - 1):
-            self.c2.append(CondMul(height * classes[0], ch_latent[0][i], ch_latent[1][i + 1]))
+            self.c2.append(CondMul(height * classes[0], ch_latent[1][i], ch_latent[1][i + 1]))
 
         self.c3_line_div = c3_line_div
         heights = [int(height / c3_line_div)] * (len(ch_latent[2]) - 1)
@@ -242,6 +251,24 @@ class Classifier3Stage(nn.Module):
         return mean_weights
 
 
+    def get_close_segment(self, x_in):
+        if self.close_far_separation:
+            # the second half of channelss dedicated to close features
+            x = x_in[:, int(x_in.shape[1] / 2):, :, :]
+        else:
+            x = x_in
+        # convert from (b, c, h, w) to (b, h, w, c) to (b * h * w, c)
+        return x.permute((0, 2, 3, 1)).reshape((-1, x.shape[1])).contiguous()
+
+    def get_far_segment(self, x_in):
+        if self.close_far_separation:
+            # the first half of channels is dedicated to high-level features
+            x = x_in[:, :int(x_in.shape[1] / 2), :, :]
+        else:
+            x = x_in
+        # convert from (b, c, h, w) to (b, h, c, w) to (b, h*c, 1, w)
+        x = x.permute((0, 2, 1, 3)).reshape((x_in.shape[0], -1, 1, x_in.shape[3]))
+        return x
 
     def forward(self, x_in, inds_gt=None, mask_gt=None):
         bs = x_in.shape[0]  # batch size
@@ -256,8 +283,9 @@ class Classifier3Stage(nn.Module):
         classes23 = self.classes[1] * self.classes[2]
 
         # STEP 1:
+        x = self.get_far_segment(x_in)
         # convert from (b, c, h, w) to (b, h, c, w) to (b, h*c, 1, w)
-        x = x_in.permute((0, 2, 1, 3)).reshape((bs, -1, 1, width))
+        #x = x.permute((0, 2, 1, 3)).reshape((bs, -1, 1, width))
         for i in range(0, len(self.c1)):
             x = self.c1[i](x)
             if i < len(self.c1) - 1:
@@ -300,7 +328,7 @@ class Classifier3Stage(nn.Module):
 
 
         # STEP 3:
-        x = x_l
+        x = self.get_close_segment(x_in)
         for i in range(0, len(self.c3)):
             if i < len(self.c3) - 1:
                 x = F.leaky_relu(self.c3[i](x, inds12_l_scaled_lines))
@@ -370,7 +398,8 @@ class Classifier3Stage(nn.Module):
                 inds12_l = (inds12_l + classes12 * offsets).type(torch.int32).flatten()
                 inds12_l_scaled_lines = inds12.clamp(0, classes12 - 1) + classes12 * (offsets // self.c3_line_div)
                 inds12_l_scaled_lines = inds12_l_scaled_lines.type(torch.int32).flatten()
-                x = x_l
+
+                x = self.get_close_segment(x_in)
                 for i in range(0, len(self.c3)):
                     if i < len(self.c3) - 1:
                         x = F.leaky_relu(self.c3[i](x, inds12_l_scaled_lines))
@@ -403,7 +432,8 @@ class Reg_3stage(nn.Module):
                  ch_latent_c=[[32, 32], [32, 32], [32, 32]],  #these are of variable length
                  regress_neighbours=0,
                  reg_line_div=1,
-                 c3_line_div=1):
+                 c3_line_div=1,
+                 close_far_separation=False):
         super(Reg_3stage, self).__init__()
         if c3_line_div == 1 and len(ch_latent) != 0:
             print("You can't share weights between lines the classification c3 if there is  a per line backbone( "
@@ -431,7 +461,8 @@ class Reg_3stage(nn.Module):
                                   classes=classes,
                                   pad=pad,  # pad around classes
                                   ch_latent=ch_latent_c,
-                                  c3_line_div=c3_line_div)
+                                  c3_line_div=c3_line_div,
+                                  close_far_separation=close_far_separation)
 
         # only one output (regression!!
         # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
@@ -441,7 +472,10 @@ class Reg_3stage(nn.Module):
         #self.r1 = nn.Conv2d(height * ch_in, height * ch_latent_r[0], 1, groups=height)
         #self.r2 = CondMul(height * superclasses, ch_latent_r[0], ch_latent_r[1])
         #self.r3 = CondMul(height * classes123, ch_latent_r[1], 1)
-        self.r2 = CondMul(int(height / reg_line_div) * superclasses, ch_in, ch_latent_r[0])
+        if close_far_separation:
+            self.r2 = CondMul(int(height / reg_line_div) * superclasses, int(ch_in/2), ch_latent_r[0])
+        else:
+            self.r2 = CondMul(int(height / reg_line_div) * superclasses, ch_in, ch_latent_r[0])
         self.r3 = CondMul(height * classes123, ch_latent_r[0], 1)
 
         # kernels for masks:
@@ -463,7 +497,7 @@ class Reg_3stage(nn.Module):
         bs = x_in.shape[0]
         int_type = torch.int32
         device = x_in.device
-
+        x_for_r = self.c.get_close_segment(x_in)
         # reshape from (b, c, h, w) to (b, h, c, w) to (b, h * c, 1, w)
         x_in = x_in.permute((0, 2, 1, 3)).reshape((bs, -1, 1, width))
         # the first stage is to adapt to features to something that has meaning on this line!
@@ -498,8 +532,9 @@ class Reg_3stage(nn.Module):
 
             #x = F.leaky_relu(self.r1(x_in))
             # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-            x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
-            x_l = x_l.reshape((bs * height * width, -1)).contiguous()
+            #x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
+            #x_l = x_l.reshape((bs * height * width, -1)).contiguous()
+            x_l = x_for_r
             x = F.leaky_relu(self.r2(x_l, inds_super))
             r = self.r3(x, inds_l).flatten()
 
@@ -511,11 +546,11 @@ class Reg_3stage(nn.Module):
             inds_gt = (x_gt * classes123).type(torch.int32).clamp(0, classes123 - 1)
             inds, class_losses = self.c(x_l, inds_gt, mask_gt)
 
-            # todo: change this for multiline!
             #x = F.leaky_relu(self.r1(x_in))
             # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-            x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
-            x_l = x_l.reshape((bs * height * width, -1)).contiguous()
+            #x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
+            #x_l = x_l.reshape((bs * height * width, -1)).contiguous()
+            x_l = x_for_r
 
             # calculate the regression only x
             x_reg_combined = torch.zeros((bs, 1 + 2 * self.regress_neighbours, height, width),

@@ -232,7 +232,8 @@ def train():
                                ch_latent_c=config["regressor"]["class_bb"],  # todo: make these of variable length
                                regress_neighbours=config["regressor"]["regress_neighbours"],
                                reg_line_div=config["regressor"]["reg_line_div"],
-                               c3_line_div=config["regressor"]["c3_line_div"])
+                               c3_line_div=config["regressor"]["c3_line_div"],
+                               close_far_separation=config["regressor"]["close_far_separation"])
 
     if config["backbone"]["load_file"] != "":
         backbone = torch.load(config["backbone"]["load_file"])
