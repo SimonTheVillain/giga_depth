@@ -48,5 +48,6 @@ regressor:
   regress_neighbours: 1
   reg_line_div: 4
   c3_line_div: 8 #8 might be over the top but lets see how we fare with this!
+  close_far_separation: False
   sigma_mode: "conv"
 
