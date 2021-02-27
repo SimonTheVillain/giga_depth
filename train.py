@@ -233,7 +233,8 @@ def train():
                                regress_neighbours=config["regressor"]["regress_neighbours"],
                                reg_line_div=config["regressor"]["reg_line_div"],
                                c3_line_div=config["regressor"]["c3_line_div"],
-                               close_far_separation=config["regressor"]["close_far_separation"])
+                               close_far_separation=config["regressor"]["close_far_separation"],
+                               sigma_mode=config["regressor"]["sigma_mode"])
 
     if config["backbone"]["load_file"] != "":
         backbone = torch.load(config["backbone"]["load_file"])
@@ -459,7 +460,7 @@ def train():
                 if i_batch % 100 == 99:
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
                                       loss_disparity_acc_sub / 100.0 * 1024, step)
-                    if alpha_sigma != 0.0:
+                    if alpha_sigma > 1e-5: # only plot when the sigma loss has meaningful weight
                         writer.add_scalar(f'{phase}_subepoch/sigma_loss',
                                           loss_sigma_acc_sub / 100.0, step)
 
@@ -482,7 +483,7 @@ def train():
             #write progress every epoch!
             writer.add_scalar(f"{phase}/disparity",
                               loss_disparity_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
-            if alpha_sigma != 0.0:
+            if alpha_sigma > 1e-5:
                 writer.add_scalar(f"{phase}/sigma(loss)",
                                   loss_sigma_acc / dataset_sizes[phase] * args.batch_size, step)
             for i, class_loss in enumerate(loss_class_acc):

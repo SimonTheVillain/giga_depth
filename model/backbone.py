@@ -484,7 +484,7 @@ class BackboneU1(nn.Module):
         self.bnsub2 = nn.BatchNorm2d(64)
         self.bnsub3 = nn.BatchNorm2d(64)
         self.bnsub4 = nn.BatchNorm2d(64)
-        self.bnsub5 = nn.BatchNorm2d(128)
+        self.bnsub5 = nn.BatchNorm2d(32)
 
     def forward(self, x, with_debug=False):
         x = F.leaky_relu(self.bn_start(self.start(x)))
@@ -496,9 +496,10 @@ class BackboneU1(nn.Module):
         x_l1 = F.leaky_relu(self.bnsub2(self.conv_sub2(x_l1)))
         x_l1 = F.leaky_relu(self.bnsub3(self.conv_sub3(x_l1)))  # these here are incredibly cheap
         x_l1 = F.leaky_relu(self.bnsub4(self.conv_sub4(x_l1)))
-        x_l1 = F.leaky_relu(self.bnsub5(self.conv_sub5(x_l1)))
+        x_l1 = self.conv_sub5(x_l1)
         x_l1 = x_l1.reshape((x_l1.shape[0], 32, 2, 2, x_l1.shape[2], x_l1.shape[3]))
         x_l1 = x_l1.permute((0, 1, 4, 2, 5, 3)).reshape((x_l1.shape[0], 32, x.shape[2], x.shape[3]))
+        x_l1 = F.leaky_relu(self.bnsub5(x_l1))
 
         x = torch.cat((x, x_l1), dim=1)
         x = F.leaky_relu(self.bnout(self.convout(x)))
@@ -530,7 +531,7 @@ class BackboneU2(nn.Module):
         self.bnsub1 = nn.BatchNorm2d(32)
         self.bnsub2 = nn.BatchNorm2d(64)
         self.bnsub3 = nn.BatchNorm2d(128)
-        self.bnsub4 = nn.BatchNorm2d(128)
+        self.bnsub4 = nn.BatchNorm2d(32)
 
     def forward(self, x, with_debug=False):
         x = F.leaky_relu(self.bn_start(self.start(x)))
@@ -540,9 +541,10 @@ class BackboneU2(nn.Module):
         x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
         x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
         x = F.leaky_relu(self.bnsub3(self.conv_sub3(x)))  # these here are incredibly cheap
-        x = F.leaky_relu(self.bnsub4(self.conv_sub4(x)))
+        x = self.conv_sub4(x)
         x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
         x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+        x = F.leaky_relu(self.bnsub4(x))
 
         x = torch.cat((x, x_skip), dim=1)
         x = F.leaky_relu(self.bnout(self.convout(x)))
@@ -571,7 +573,7 @@ class BackboneU3(nn.Module):
 
         self.bnsub1 = nn.BatchNorm2d(32)
         self.bnsub2 = nn.BatchNorm2d(64)
-        self.bnsub3 = nn.BatchNorm2d(128)
+        self.bnsub3 = nn.BatchNorm2d(32)
 
         self.bnout = nn.BatchNorm2d(64)
 
@@ -582,9 +584,10 @@ class BackboneU3(nn.Module):
 
         x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
         x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
-        x = F.leaky_relu(self.bnsub3(self.conv_sub3(x)))
+        x = self.conv_sub3(x)
         x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
         x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+        x = F.leaky_relu(self.bnsub3(x))
 
         x = torch.cat((x, x_skip), dim=1)
         x = F.leaky_relu(self.bnout(self.convout(x)))
@@ -612,7 +615,7 @@ class BackboneU4(nn.Module):
 
         self.bnsub1 = nn.BatchNorm2d(64)
         self.bnsub2 = nn.BatchNorm2d(64)
-        self.bnsub3 = nn.BatchNorm2d(128)
+        self.bnsub3 = nn.BatchNorm2d(32)
 
     def forward(self, x, with_debug=False):
         x = F.leaky_relu(self.bn_start(self.start(x)))
@@ -622,9 +625,10 @@ class BackboneU4(nn.Module):
 
         x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
         x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
-        x = F.leaky_relu(self.bnsub3(self.conv_sub3(x)))
+        x = self.conv_sub3(x)
         x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
         x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+        x = F.leaky_relu(self.bnsub3(x))
 
         x = torch.cat((x, x_skip), dim=1)
         if with_debug:
@@ -649,7 +653,7 @@ class BackboneU5(nn.Module):
         self.bn2 = nn.BatchNorm2d(32)
 
         self.bnsub1 = nn.BatchNorm2d(64)
-        self.bnsub2 = nn.BatchNorm2d(128)
+        self.bnsub2 = nn.BatchNorm2d(32)
 
     def forward(self, x, with_debug=False):
         x = F.leaky_relu(self.bn_start(self.start(x)))
@@ -658,9 +662,10 @@ class BackboneU5(nn.Module):
         x_skip = x
 
         x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
-        x = F.leaky_relu(self.bnsub2(self.conv_sub2(x)))
+        x = self.conv_sub2(x)
         x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
         x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
+        x = F.leaky_relu(self.bnsub2(x))
 
         x = torch.cat((x, x_skip), dim=1)
         if with_debug:

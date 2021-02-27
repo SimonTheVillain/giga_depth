@@ -433,7 +433,8 @@ class Reg_3stage(nn.Module):
                  regress_neighbours=0,
                  reg_line_div=1,
                  c3_line_div=1,
-                 close_far_separation=False):
+                 close_far_separation=False, # split input up in high and low half and feed low->c1&c2 and high->c2/c3/r
+                 sigma_mode="line"): # "conv", "line", "class"
         super(Reg_3stage, self).__init__()
         if c3_line_div == 1 and len(ch_latent) != 0:
             print("You can't share weights between lines the classification c3 if there is  a per line backbone( "
@@ -483,12 +484,17 @@ class Reg_3stage(nn.Module):
         #todo: is it really the best using the raw input here. maybe we use the per line backbone?
         ch_latent_msk.insert(0, ch_in)
         ch_latent_msk.append(1)
-        for i in range(0, len(ch_latent_msk) - 1):
-            self.msk.append(nn.Conv2d(height * ch_latent_msk[i], height * ch_latent_msk[i + 1], 1, groups=height))
+        self.sigma_mode = sigma_mode
+        if sigma_mode == "line":
+            for i in range(0, len(ch_latent_msk) - 1):
+                self.msk.append(nn.Conv2d(height * ch_latent_msk[i], height * ch_latent_msk[i + 1], 1, groups=height))
+        if sigma_mode == "conv":
+            for i in range(0, len(ch_latent_msk) - 1):
+                self.msk.append(nn.Conv2d(ch_latent_msk[i], ch_latent_msk[i + 1], 1))
+        if sigma_mode == "class":
+            for i in range(0, len(ch_latent_msk) - 1):
+                self.msk.append(CondMul(height * classes123, ch_latent_msk[i], ch_latent_msk[i + 1]))
 
-        #self.msk1 = nn.Conv2d(height * ch_in, height * ch_latent_msk[0], 1, groups=height)
-        #self.msk2 = nn.Conv2d(height * ch_latent_msk[0], height * ch_latent_msk[1], 1, groups=height)
-        #self.msk3 = nn.Conv2d(height * ch_latent_msk[1], height, 1, groups=height)
 
     def forward(self, x_in, x_gt=None, mask_gt=None):
         height = x_in.shape[2]
@@ -498,8 +504,9 @@ class Reg_3stage(nn.Module):
         int_type = torch.int32
         device = x_in.device
         x_for_r = self.c.get_close_segment(x_in)
+
         # reshape from (b, c, h, w) to (b, h, c, w) to (b, h * c, 1, w)
-        x_in = x_in.permute((0, 2, 1, 3)).reshape((bs, -1, 1, width))
+        x_in = x_in.permute((0, 2, 1, 3)).reshape((bs, -1, 1, width)) # todo: maybe don't overwrite x_in here!
         # the first stage is to adapt to features to something that has meaning on this line!
         x = x_in
         for node in self.bb:
@@ -508,15 +515,23 @@ class Reg_3stage(nn.Module):
         #convert from (b, h * c, 1, w) to (b, h, c, w) to (b, c, h, w)
         x_l = x_l.reshape((bs, height, -1, width)).permute((0, 2, 1, 3))
 
-        # calculate the mask/confidence on these lines
-        x = x_in
-        for node in self.msk:
-            x = F.leaky_relu(node(x))
-        mask = x
+        if self.sigma_mode == "line":
+            # calculate the mask/confidence on these lines
+            x = x_in
+            for node in self.msk:
+                x = F.leaky_relu(node(x))
+            mask = x
 
-        # reshape from (b, h * c, 1, w) (c=1) to (b, h, c, w) to (b, c, h, w)
-        # or in short from (b, h, 1, w) to (b, 1, h, w)
-        mask = mask.reshape((bs, 1, height, -1))
+            # reshape from (b, h * c, 1, w) (c=1) to (b, h, c, w) to (b, c, h, w)
+            # or in short from (b, h, 1, w) to (b, 1, h, w)
+            mask = mask.reshape((bs, 1, height, -1))
+        if self.sigma_mode == "conv":
+            # todo: clean up the code around this so that we don't need to reshape here
+            # convert from (b, h * c, 1, w) to (b, h, c, w) to (b, c, h, w)
+            x = x_in.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
+            for node in self.msk:
+                x = F.leaky_relu(node(x))
+            mask = x
 
         # create vector with index offsets along the vertical dimension (1, 1, h, 0)
         line_offsets = torch.arange(0, height, device=device).unsqueeze(1).unsqueeze(0).unsqueeze(0)
@@ -539,8 +554,21 @@ class Reg_3stage(nn.Module):
             r = self.r3(x, inds_l).flatten()
 
             x = (inds.flatten().type(torch.float32) + r) * (1.0 / float(classes123))
-            x = x.reshape((bs, 1, height, width))
-            return x, mask
+            x_real = x.reshape((bs, 1, height, width))
+
+            if self.sigma_mode == "class":
+                # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
+                x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
+                x_l = x_l.reshape((bs * height * width, -1)).contiguous()
+                x = x_l
+                for node in self.msk:
+                    x = F.leaky_relu(node(x, inds_l))
+
+                # from (b * h * w, 1) to (b, 1, h, w)
+                mask = x.reshape((bs, 1, height, width))
+
+
+            return x_real, mask
         else:
 
             inds_gt = (x_gt * classes123).type(torch.int32).clamp(0, classes123 - 1)
@@ -591,5 +619,15 @@ class Reg_3stage(nn.Module):
             debug_r = self.r2.w.abs().mean() + self.r3.w.abs().mean()
             debugs["mean_w_reg"] = debug_r
 
+            if self.sigma_mode == "class":
+                # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
+                x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
+                x_l = x_l.reshape((bs * height * width, -1)).contiguous()
+                x = x_l
+                for node in self.msk:
+                    x = F.leaky_relu(node(x, inds_l))
+
+                # from (b * h * w, 1) to (b, 1, h, w)
+                mask = x.reshape((bs, 1, height, width))
 
             return x_reg_combined, mask, class_losses, x_real, debugs
