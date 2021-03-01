@@ -61,7 +61,12 @@ class CompositeModel(nn.Module):
             return self.regressor(x, x_gt, mask_gt)
 
 
-def sigma_loss(sigma, x, x_gt):  # sigma_sq is also called "variance"
+def sigma_loss(sigma, x, x_gt, mode):  # sigma_sq is also called "variance"
+    if mode == "mask":
+        # in the mask mode every pixel whose estimate is off by fewer than 0.5 pixel is valid
+        mask_gt = (torch.abs(x-x_gt) < (0.5 / 1024)).type(torch.float32)
+        return torch.abs(sigma - mask_gt).mean()# here we have it! proper mask
+
     if torch.any(torch.isnan(x)):
         print("x: found nan")
     if torch.any(torch.isinf(x)):
@@ -360,6 +365,8 @@ def train():
         def get_lr(optimizer):
             for param_group in optimizer.param_groups:
                 return param_group['lr']
+
+        #todo: Rename alpha_sigma according to the used training.sigma_mode
         print(f"alpha_reg {alpha_reg}, alpha_sigma {alpha_sigma}, learning_rate {get_lr(optimizer)}")
 
         for phase in ['train', 'val']:
@@ -414,7 +421,7 @@ def train():
                     loss = loss * alpha_reg
 
                     if alpha_sigma != 0.0:
-                        loss_sigma = sigma_loss(sigma, x_real, x_gt)
+                        loss_sigma = sigma_loss(sigma, x_real, x_gt, config["training"]["sigma_mode"])
                         loss_sigma_acc += loss_sigma.item()
                         loss_sigma_acc_sub += loss_sigma.item()
                         loss += loss_sigma * alpha_sigma
@@ -448,7 +455,7 @@ def train():
                         # loss_disparity_acc_sub += loss.item()
 
                         if alpha_sigma != 0.0:
-                            loss_sigma = sigma_loss(sigma, x_real, x_gt)
+                            loss_sigma = sigma_loss(sigma, x_real, x_gt, config["training"]["sigma_mode"])
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
@@ -460,7 +467,8 @@ def train():
                 if i_batch % 100 == 99:
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
                                       loss_disparity_acc_sub / 100.0 * 1024, step)
-                    if alpha_sigma > 1e-5: # only plot when the sigma loss has meaningful weight
+                    if alpha_sigma > 1e-6: # only plot when the sigma loss has meaningful weight
+                        # todo: Rename sigma_loss according to the used training.sigma_mode
                         writer.add_scalar(f'{phase}_subepoch/sigma_loss',
                                           loss_sigma_acc_sub / 100.0, step)
 
@@ -483,7 +491,8 @@ def train():
             #write progress every epoch!
             writer.add_scalar(f"{phase}/disparity",
                               loss_disparity_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
-            if alpha_sigma > 1e-5:
+            if alpha_sigma > 1e-6:
+                # todo: Rename sigma_loss according to the used training.sigma_mode
                 writer.add_scalar(f"{phase}/sigma(loss)",
                                   loss_sigma_acc / dataset_sizes[phase] * args.batch_size, step)
             for i, class_loss in enumerate(loss_class_acc):

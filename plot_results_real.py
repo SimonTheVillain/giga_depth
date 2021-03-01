@@ -53,8 +53,9 @@ input_height = 2*17+1
 regressor = "trained_models/bb64_256c_16sc_256_8_lr02_regressor_chk.pt"
 backbone = "trained_models/bb64_256c_16sc_256_8_lr02_backbone_chk.pt"
 
-regressor = "trained_models/slice_2stage_class_45_regressor_chk.pt"
-backbone = "trained_models/slice_2stage_class_45_backbone_chk.pt"
+regressor = "trained_models/slice_2stage_class_49_regressor_chk.pt"
+backbone = "trained_models/slice_2stage_class_49_backbone_chk.pt"
+
 input_height = 128
 
 sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
@@ -69,6 +70,7 @@ backbone.eval()
 
 regressor = torch.load(regressor)
 regressor.eval()
+#regressor.sigma_mode = "line" #only needed for 44 - 45
 
 device = torch.cuda.current_device()
 
@@ -77,29 +79,33 @@ model.to(device)
 model.eval()
 dataset = DatasetCaptured(root_dir=dataset_path, from_ind=0, to_ind=800)
 
-
-#dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
-#dataset = DatasetRendered2(dataset_path, 0, 40000, tgt_res=tgt_res)
+rendered = True
+if rendered:
+    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
+    dataset = DatasetRendered2(dataset_path, 0, 40000, tgt_res=tgt_res)
 
 fig, axs = plt.subplots(5, 1)
 for i, ir in enumerate(dataset):
     #bl = baselines[i%2]
     bl = -baselines[1]# Did i mix up left and right when creating the dataset?
+    if rendered:
+        bl = baselines[i % 2]
     with torch.no_grad():
-        #ir = ir[0] # for the rendered dataset ir is a tuple of ir, mask and gt
+        if rendered:
+            ir = ir[0] # for the rendered dataset ir is a tuple of ir, mask and gt
         ir = torch.tensor(ir, device=device).unsqueeze(0)
         #ir = ir[:, :, 100+1:(100+17*2+1)+1, :]
         ir = ir[:, :, 100:(100 + input_height), :]
 
         x, sigma = model(ir.contiguous())
-        mask, sigma_est = sigma_estimator(ir)
+        #mask, sigma_est = sigma_estimator(ir)
 
         #print(x)
         ir = ir.cpu().numpy()
         x = x.cpu().numpy()
         sigma = sigma.cpu().numpy()
-        sigma_est = sigma_est.cpu().numpy()
-        mask = mask.cpu().numpy()
+        #sigma_est = sigma_est.cpu().numpy()
+        #mask = mask.cpu().numpy()
 
         x_range = np.arange(0, tgt_res[0] / 2).astype(np.float32)
         den = focal_projector * (x_range[np.newaxis, ...] - principal[0]) - focal * (x[0, :, :] * res_projector - 511.5)
@@ -121,7 +127,7 @@ for i, ir in enumerate(dataset):
 
         axs[3].cla()
         axs[3].set_title('sigma')
-        axs[3].plot(mask[0, 32, :].squeeze())
+        axs[3].plot(sigma[0, 0, 32, :].squeeze())
 
         #todo: the depth estimaion!
         axs[4].cla()
