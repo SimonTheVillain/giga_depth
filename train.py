@@ -196,6 +196,12 @@ def train():
                         type=float,
                         nargs="+",
                         default=[0.1, 0.2, 0.3, 0.4, 0.5, 1, 2, 5])
+    parser.add_argument("-otr", "--relative_outlier_thresholds", dest="relative_outlier_thresholds", action="store",
+                        help="The thresholds for which the outlier ratios will be logged. "
+                             "The first value is the one every other is relative to.",
+                        type=float,
+                        nargs="+",
+                        default=[7, 0, 1, 2, 3, 4])
 
     args = parser.parse_args(additional_args)
     main_device = f"cuda:{args.gpu_list[0]}"  # torch.cuda.device(args.gpu_list[0])
@@ -204,6 +210,12 @@ def train():
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
+    #outlier_thresholds = {}
+    #for i, th in enumerate(args.outlier_thresholds):
+    #    outlier_thresholds[f"o({i})"] = (0, th)
+
+    #for i, th in enumerate(args.relative_outlier_thresholds[1:]):
+    #    outlier_thresholds[f"or({i}|{args.relative_outlier_thresholds[0]})"] = (args.relative_outlier_thresholds[1:], th)
     # slit loading and storing of models for Backbone and Regressor
     # load_regressor = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_regressor_chk.pt"
     # load_backbone = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_backbone_chk.pt"
@@ -502,9 +514,19 @@ def train():
                         writer.add_scalar(f'{phase}_subepoch/class_loss_{i}', class_loss / 100, step)
                         loss_class_acc_sub[i] = 0
 
+                    for i in args.relative_outlier_thresholds[1:]:
+                        ind_ref = args.relative_outlier_thresholds[0]
+                        ref = outlier_acc_sub[ind_ref] / 100
+                        tgt = outlier_acc_sub[i] / 100
+                        th_ref = args.outlier_thresholds[ind_ref]
+                        th_tgt = args.outlier_thresholds[i]
+                        writer.add_scalar(f"{phase}_sub_outlier_ratio/o({th_tgt}|{th_ref})",
+                                          (tgt - ref) / (1.0 - ref), step)
+
                     for i, th in enumerate(args.outlier_thresholds):
-                        writer.add_scalar(f"{phase}_sub_or/outlier_ratio_({th})", outlier_acc_sub[i] / 100, step)
+                        writer.add_scalar(f"{phase}_sub_outlier_ratio/o({th})", outlier_acc_sub[i] / 100, step)
                         outlier_acc_sub[i] = 0
+
 
                     loss_disparity_acc_sub = 0
                     loss_sigma_acc_sub = 0
@@ -518,10 +540,18 @@ def train():
                 writer.add_scalar(f"{phase}/sigma(loss)",
                                   loss_sigma_acc / dataset_sizes[phase] * args.batch_size, step)
 
+            for i in args.relative_outlier_thresholds[1:]:
+                ind_ref = args.relative_outlier_thresholds[0]
+                ref = outlier_acc[ind_ref] / dataset_sizes[phase] * args.batch_size
+                tgt = outlier_acc[i] / dataset_sizes[phase] * args.batch_size
+                th_ref = args.outlier_thresholds[ind_ref]
+                th_tgt = args.outlier_thresholds[i]
+                writer.add_scalar(f"{phase}_outlier_ratio/o({th_tgt}|{th_ref})",
+                                  (tgt - ref) / (1.0 - ref), step)
+
             for i, th in enumerate(args.outlier_thresholds):
-                writer.add_scalar(f"{phase}_or/outlier_ratio_({th})",
+                writer.add_scalar(f"{phase}_outlier_ratio/o({th})",
                                   outlier_acc[i] / dataset_sizes[phase] * args.batch_size, step)
-                outlier_acc[i] = 0
 
             for i, class_loss in enumerate(loss_class_acc):
                 # epoch_loss += class_loss / dataset_sizes[phase] * args.batch_size
