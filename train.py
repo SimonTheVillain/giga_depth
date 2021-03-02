@@ -191,6 +191,11 @@ def train():
                         type=float,
                         nargs="+",
                         default=config["training"]["alpha_sigma"])
+    parser.add_argument("-ot", "--outlier_thresholds", dest="outlier_thresholds", action="store",
+                        help="The thresholds for which the outlier ratios will be logged.",
+                        type=float,
+                        nargs="+",
+                        default=[0.1, 0.2, 0.3, 0.4, 0.5, 1, 2, 5])
 
     args = parser.parse_args(additional_args)
     main_device = f"cuda:{args.gpu_list[0]}"  # torch.cuda.device(args.gpu_list[0])
@@ -386,6 +391,9 @@ def train():
             loss_sigma_acc_sub = 0
             loss_class_acc_sub = []
 
+            outlier_acc = [0.0] * len(args.outlier_thresholds)
+            outlier_acc_sub = [0.0] * len(args.outlier_thresholds)
+
             model.zero_grad()
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
@@ -459,9 +467,18 @@ def train():
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
-                delta_disp = torch.mean(torch.abs(x_real - x_gt)).item()
+                delta = torch.abs(x_real - x_gt)
+                delta_disp = torch.mean(delta).item()
                 loss_disparity_acc += delta_disp
                 loss_disparity_acc_sub += delta_disp
+
+                focal_cam = 1115.0 #approx.
+                focal_projector = 850 # chosen in dataset etc
+                delta_scaled = delta * 1024.0 * focal_cam / focal_projector
+                for i, th in enumerate(args.outlier_thresholds):
+                    item = (delta_scaled > th).type(torch.float32).mean().item()
+                    outlier_acc[i] += item
+                    outlier_acc_sub[i] += item
 
                 # print progress every 99 steps!
                 if i_batch % 100 == 99:
@@ -484,6 +501,11 @@ def train():
                     for i, class_loss in enumerate(loss_class_acc_sub):
                         writer.add_scalar(f'{phase}_subepoch/class_loss_{i}', class_loss / 100, step)
                         loss_class_acc_sub[i] = 0
+
+                    for i, th in enumerate(args.outlier_thresholds):
+                        writer.add_scalar(f"{phase}_sub_or/outlier_ratio_({th})", outlier_acc_sub[i] / 100, step)
+                        outlier_acc_sub[i] = 0
+
                     loss_disparity_acc_sub = 0
                     loss_sigma_acc_sub = 0
                     loss_reg_acc_sub = 0
@@ -495,6 +517,12 @@ def train():
                 # todo: Rename sigma_loss according to the used training.sigma_mode
                 writer.add_scalar(f"{phase}/sigma(loss)",
                                   loss_sigma_acc / dataset_sizes[phase] * args.batch_size, step)
+
+            for i, th in enumerate(args.outlier_thresholds):
+                writer.add_scalar(f"{phase}_or/outlier_ratio_({th})",
+                                  outlier_acc[i] / dataset_sizes[phase] * args.batch_size, step)
+                outlier_acc[i] = 0
+
             for i, class_loss in enumerate(loss_class_acc):
                 # epoch_loss += class_loss / dataset_sizes[phase] * args.batch_size
                 writer.add_scalar(f"{phase}/class_loss{i}", class_loss / dataset_sizes[phase] * args.batch_size, step)
