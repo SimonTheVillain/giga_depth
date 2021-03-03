@@ -1,16 +1,17 @@
 training:
-  name: slice_2stage_class_43
+  name: slice_2stage_class_43_2
   batch_size: 8
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
   weight_decay: 1e-5
   alpha_reg: [500, 1000, 2000]
-  alpha_sigma: 0
+  alpha_sigma: [ 0, 0, 0 ]
+  sigma_mode: mask
   gpu_list: [0]
   epochs: 7
   key_epochs: [ 2, 4 ]
-  half_precision: False
+  half_precision: True
 
 dataset:
   path: ~/datasets/structure_core_unity
@@ -48,4 +49,5 @@ regressor:
   reg_line_div: 4
   c3_line_div: 8 #8 might be over the top but lets see how we fare with this!
   close_far_separation: True
+  sigma_mode: conv
 

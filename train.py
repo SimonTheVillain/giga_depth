@@ -195,15 +195,19 @@ def train():
                         help="The thresholds for which the outlier ratios will be logged.",
                         type=float,
                         nargs="+",
-                        default=[0.1, 0.2, 0.3, 0.4, 0.5, 1, 2, 5])
+                        default=[0.5, 1, 2, 5])
     parser.add_argument("-otr", "--relative_outlier_thresholds", dest="relative_outlier_thresholds", action="store",
                         help="The thresholds for which the outlier ratios will be logged. "
                              "The first value is the one every other is relative to.",
                         type=float,
                         nargs="+",
-                        default=[7, 0, 1, 2, 3, 4])
+                        default=[5, 0.1, 0.2, 0.3, 0.4])
 
     args = parser.parse_args(additional_args)
+
+    outlier_thresholds = list(set.union(set(args.outlier_thresholds), set(args.relative_outlier_thresholds)))
+
+
     main_device = f"cuda:{args.gpu_list[0]}"  # torch.cuda.device(args.gpu_list[0])
     # experiment_name = "cr8_2021_256_wide_reg_alpha10"
     # args.experiment_name = "slice_bb64_16_14_12c123_nobbeach_168sc_32_reg_lr01_alpha10_1nn"
@@ -403,8 +407,8 @@ def train():
             loss_sigma_acc_sub = 0
             loss_class_acc_sub = []
 
-            outlier_acc = [0.0] * len(args.outlier_thresholds)
-            outlier_acc_sub = [0.0] * len(args.outlier_thresholds)
+            outlier_acc = [0.0] * len(outlier_thresholds)
+            outlier_acc_sub = [0.0] * len(outlier_thresholds)
 
             model.zero_grad()
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
@@ -487,7 +491,7 @@ def train():
                 focal_cam = 1115.0 #approx.
                 focal_projector = 850 # chosen in dataset etc
                 delta_scaled = delta * 1024.0 * focal_cam / focal_projector
-                for i, th in enumerate(args.outlier_thresholds):
+                for i, th in enumerate(outlier_thresholds):
                     item = (delta_scaled > th).type(torch.float32).mean().item()
                     outlier_acc[i] += item
                     outlier_acc_sub[i] += item
@@ -511,21 +515,24 @@ def train():
                         print("batch {} disparity error: {}".format(i_batch, loss_disparity_acc_sub / 100 * 1024))
 
                     for i, class_loss in enumerate(loss_class_acc_sub):
+                        #if i in plotable_class_losses:
                         writer.add_scalar(f'{phase}_subepoch/class_loss_{i}', class_loss / 100, step)
                         loss_class_acc_sub[i] = 0
 
-                    for i in args.relative_outlier_thresholds[1:]:
-                        ind_ref = args.relative_outlier_thresholds[0]
+                    for th in args.relative_outlier_thresholds[1:]:
+                        i = outlier_thresholds.index(th)
+                        ind_ref = outlier_thresholds.index(args.relative_outlier_thresholds[0])
                         ref = outlier_acc_sub[ind_ref] / 100
                         tgt = outlier_acc_sub[i] / 100
-                        th_ref = args.outlier_thresholds[ind_ref]
-                        th_tgt = args.outlier_thresholds[i]
+                        th_ref = outlier_thresholds[ind_ref]
+                        th_tgt = outlier_thresholds[i]
                         writer.add_scalar(f"{phase}_sub_outlier_ratio/o({th_tgt}|{th_ref})",
                                           (tgt - ref) / (1.0 - ref), step)
 
-                    for i, th in enumerate(args.outlier_thresholds):
+                    for th in args.outlier_thresholds:
+                        i = outlier_thresholds.index(th)
                         writer.add_scalar(f"{phase}_sub_outlier_ratio/o({th})", outlier_acc_sub[i] / 100, step)
-                        outlier_acc_sub[i] = 0
+                    outlier_acc_sub = [0.0] * len(outlier_thresholds)
 
 
                     loss_disparity_acc_sub = 0
@@ -540,21 +547,24 @@ def train():
                 writer.add_scalar(f"{phase}/sigma(loss)",
                                   loss_sigma_acc / dataset_sizes[phase] * args.batch_size, step)
 
-            for i in args.relative_outlier_thresholds[1:]:
-                ind_ref = args.relative_outlier_thresholds[0]
+            for th in args.relative_outlier_thresholds[1:]:
+                i = outlier_thresholds.index(th)
+                ind_ref = outlier_thresholds.index(args.relative_outlier_thresholds[0])
                 ref = outlier_acc[ind_ref] / dataset_sizes[phase] * args.batch_size
                 tgt = outlier_acc[i] / dataset_sizes[phase] * args.batch_size
-                th_ref = args.outlier_thresholds[ind_ref]
-                th_tgt = args.outlier_thresholds[i]
+                th_ref = outlier_thresholds[ind_ref]
+                th_tgt = outlier_thresholds[i]
                 writer.add_scalar(f"{phase}_outlier_ratio/o({th_tgt}|{th_ref})",
                                   (tgt - ref) / (1.0 - ref), step)
 
-            for i, th in enumerate(args.outlier_thresholds):
+            for th in args.outlier_thresholds:
+                i = outlier_thresholds.index(th)
                 writer.add_scalar(f"{phase}_outlier_ratio/o({th})",
                                   outlier_acc[i] / dataset_sizes[phase] * args.batch_size, step)
 
             for i, class_loss in enumerate(loss_class_acc):
                 # epoch_loss += class_loss / dataset_sizes[phase] * args.batch_size
+                # if i in plotable_class_losses:
                 writer.add_scalar(f"{phase}/class_loss{i}", class_loss / dataset_sizes[phase] * args.batch_size, step)
             if phase == 'train':
                 writer.add_scalar(f"{phase}/regression_stage",
