@@ -62,8 +62,10 @@ baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # right, left. the left camera has 
 lines_only = True
 is_npy = True
 
-show_pcl = True
+show_pcl = False
+show_full = False
 rendered = True
+
 
 regressor = "trained_models/cr8_2021_32_scaled_sigma_regressor_chk.pt"
 backbone = "trained_models/cr8_2021_32_scaled_sigma_backbone_chk.pt"
@@ -85,8 +87,8 @@ backbone = "trained_models/slice_2stage_class_43_backbone_chk.pt"
 regressor = "trained_models/slice_2stage_class_50_regressor_chk.pt"
 backbone = "trained_models/slice_2stage_class_50_backbone_chk.pt"
 
-regressor = "trained_models/2stage_class_43_regressor_chk.pt"
-backbone = "trained_models/2stage_class_43_backbone_chk.pt"
+regressor = "trained_models/2stage_class_43_2_regressor_chk.pt"
+backbone = "trained_models/2stage_class_43_2_backbone_chk.pt"
 
 
 #sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
@@ -109,7 +111,10 @@ if regressor.height == 448:
     input_height = 2*448
     clip_from = 0
     if not show_pcl:
-        fig, axs = plt.subplots(1, 2)
+        if show_full:
+            fig, axs = plt.subplots(1, 2)
+        else:
+            fig, axs = plt.subplots(5, 1)
 else:
     if not show_pcl:
         fig, axs = plt.subplots(5, 1)
@@ -154,7 +159,7 @@ for i, ir in enumerate(dataset):
         if show_pcl:
             display_pcl(d, clip_from)
         else:
-            if regressor.height == 448:
+            if regressor.height == 448 and show_full:
                 axs[0].cla()
                 axs[0].set_title('IR Image')
                 axs[0].imshow(ir[0, 0, :, :])
