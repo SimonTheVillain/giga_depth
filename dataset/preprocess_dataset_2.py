@@ -4,8 +4,10 @@ import os
 from shutil import copyfile
 
 
-in_paths = ["/media/simon/datasets/structure_core_unity_2"]
-out_path = "/media/simon/ssd_data/data/datasets/structure_core_unity_2"
+in_paths = ["/media/simon/Windows/Dokumente und Einstellungen/simon/datasets/structure_core_unity",
+            "/media/simon/Windows/Dokumente und Einstellungen/simon/datasets/structure_core_unity_2",
+            "/media/simon/datasets/structure_core_unity_2"]
+out_path = "/home/simon/datasets/structure_core_unity"
 count = 0
 for path in in_paths:
 
