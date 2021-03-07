@@ -12,8 +12,8 @@ def downsample(image):
 
 def downsampleDepth(d):
     d = d.reshape(int(d.shape[0]/2), 2, int(d.shape[1]/2), 2)
-    d = np.mean(d, axis=3)
-    d = np.mean(d, axis=1)
+    d = np.min(d, axis=3)
+    d = np.min(d, axis=1)
     return d
 
 
@@ -141,19 +141,149 @@ class DatasetRendered2(data.Dataset):
         return grey, x_d, mask
 
 
+class DatasetRendered3(data.Dataset):
 
-def GetDataset(path, is_npy, tgt_res):
-    max_ind = 0
-    files = os.listdir(path)
-    for file in files:
-        if os.path.isfile(f"{path}/{file}"):
-            test = int(re.search(r'\d+', file).group())
-            if test > max_ind:
-                max_ind = test
-    datasets = {
-        'train': DatasetRendered2(path, 0, int(max_ind*9/10) - 1, tgt_res=tgt_res, is_npy=is_npy),
-        'val': DatasetRendered2(path, int(max_ind*9/10), max_ind, tgt_res=tgt_res, is_npy=is_npy)
-    }
-    return datasets
+    def __init__(self, root_dir, filenames,
+                 vertical_jitter=2, depth_threshold=15, noise=0.1,
+                 tgt_res=(1216, 896),
+                 tgt_cxy=(604, 457),
+                 debug=False,
+                 result_dir=""):
+
+        self.debug = debug
+        self.result_dir = result_dir
+        self.filenames = filenames
+        self.root_dir = root_dir
+        self.depth_threshold = depth_threshold
+        self.noise = noise
+
+
+        #these are the camera parameters applied to
+        self.depth_threshold = 20
+        self.src_res = (1401, 1001)
+        self.src_cxy = (700, 500)
+        self.tgt_res = tgt_res#(1216, 896)
+        self.tgt_cxy = tgt_cxy#(604, 457)
+        #the focal length is shared between src and target frame
+        self.focal = 1.1154399414062500e+03
+
+        self.readout_rect = (self.src_cxy[0]-self.tgt_cxy[0], self.src_cxy[1]-self.tgt_cxy[1],
+                             self.tgt_res[0], self.tgt_res[1])
+        self.vertical_jitter = vertical_jitter
+
+        # the projector intrinsics are only needed to calculate depth
+        # values are in the configuration of the unity rendering project
+        self.focal_projector = 850 #todo: get real value!
+        self.res_projector = 1024
+        self.baselines = {"left": 0.0634 - 0.07501, "right": 0.0634 - 0.0}
+
+    def __len__(self):
+        # * 2 since we are working with stereo images
+        return len(self.filenames) * 2
+
+    def __getitem__(self, idx):
+
+
+        side = "left"
+        if idx % 2 == 1:
+            side = "right"
+        idx = int(idx / 2)
+
+        file = self.filenames[idx]
+        bgr = cv2.imread(f"{self.root_dir}/{file}_{side}.jpg")
+        msk = cv2.imread(f"{self.root_dir}/{file}_{side}_msk.png", cv2.IMREAD_UNCHANGED)
+        d = cv2.imread(f"{self.root_dir}/{file}_{side}_d.exr", cv2.IMREAD_UNCHANGED)
+        v_offset = np.random.randint(-self.vertical_jitter, self.vertical_jitter)
+
+        if np.any(np.isnan(d)) or np.any(np.isinf(d)):
+            print(f"the depth file {file} is invalid (nan/inf) selecting random other:")
+            return self.__getitem__(np.random.randint(0, len(self.filenames)) * 2 + idx % 2)
+
+
+        rr = self.readout_rect
+        bgr = bgr[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0]+rr[2], :].astype(np.float32) * (1.0/255.0)
+        channel_weights = np.random.random(3) * 2
+        channel_weights = channel_weights / (np.sum(channel_weights) + 0.01)
+        channel_weights
+
+        grey = bgr[:, :, 0] * channel_weights[0] + \
+               bgr[:, :, 1] * channel_weights[1] + \
+               bgr[:, :, 2] * channel_weights[2]
+        grey += np.random.rand(grey.shape[0], grey.shape[1]) * np.random.rand() * self.noise
+        grey = grey.astype(np.float32)
+
+        msk = msk / 255
+        msk[d > self.depth_threshold] = 0
+        msk = msk[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0]+rr[2]].astype(np.float32)
+
+        # depth is used to generate the x-position(groundtruth) in the dot-projector.
+        depth = d[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0]+rr[2]]
+        # calculate x-poistion in real-world coordinates
+        depth = downsampleDepth(depth) # half the resolution of depth taking the closest sample
+        x_d = (np.arange(0, int(self.tgt_res[0]/2)) - self.tgt_cxy[0] * 0.5) * depth / (self.focal * 0.5)
+
+        if np.any(np.isnan(x_d)):
+            print("shit")
+        if np.any(np.isnan(d)):
+            print("shit")
+
+        # for the right sensor we want to shift the points 6.34cm to the right
+        # for the left sensor we want to shift the points approx 1.1cm to the left
+        x_d += self.baselines[side]
+        x_d = x_d * (self.focal_projector / depth) + float(self.res_projector - 1)/2.0
+        x_d = x_d * (1.0/float(self.res_projector))
+        x_d = x_d.astype(np.float32)
+
+        #downsample the mask. (prioritize invalid pixel!!!)
+        msk[msk == 0] = 2
+        msk = downsampleDepth(msk)
+        msk[msk == 2] = 0
+        msk[np.logical_or(x_d < 0, x_d >= 1.0)] = 0
+
+        #cv2.imshow("x_d", x_d)
+        #cv2.imshow("diff", np.abs(x_d - x_gt) * 100.0)
+
+        grey = np.expand_dims(grey, 0)
+        x_d = np.expand_dims(x_d, 0)
+        mask = np.expand_dims(msk, 0)
+        if self.debug:
+            return grey, x_d, mask, depth
+        return grey, x_d, mask
+
+
+def GetDataset(path, is_npy, tgt_res, version=2, debug=False):
+    if version == 3:
+        files = os.listdir(path)
+        #print(files)
+        keys = []
+        for file in files:
+            if os.path.isfile(f"{path}/{file}"):
+                keys.append(file.split("_")[0])
+
+        keys = list(set(keys))
+        #print(keys)
+        # split up training and validation set:
+        keys_train = keys[0:int((len(keys) * 95) / 100)]
+        keys_val = keys[int((len(keys) * 95) / 100):]
+
+        datasets = {
+            'train': DatasetRendered3(path, keys_train, tgt_res=tgt_res, debug=debug),
+            'val': DatasetRendered3(path, keys_val, tgt_res=tgt_res, debug=debug)
+        }
+        return datasets
+    if version == 2:
+        max_ind = 0
+        files = os.listdir(path)
+        for file in files:
+            if os.path.isfile(f"{path}/{file}"):
+                test = int(re.search(r'\d+', file).group())
+                if test > max_ind:
+                    max_ind = test
+
+        datasets = {
+            'train': DatasetRendered2(path, 0, int(max_ind*9/10) - 1, tgt_res=tgt_res, is_npy=is_npy, debug=debug),
+            'val': DatasetRendered2(path, int(max_ind*9/10), max_ind, tgt_res=tgt_res, is_npy=is_npy, debug=debug)
+        }
+        return datasets
 
 

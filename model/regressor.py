@@ -350,7 +350,7 @@ class Classifier3Stage(nn.Module):
             losses = []
             inds_gt = inds_gt.clamp(0, classes123 - 1)
             inds1_gt = inds_gt // classes23
-            loss = F.cross_entropy(x1, inds1_gt.squeeze(1).type(torch.int64)).mean()
+            loss = F.cross_entropy(x1, inds1_gt.squeeze(1).type(torch.int64), reduction='none')# .mean()
             losses.append(loss)
             inds1_gt = inds1_gt
             # also select the neighbouring superclasses
@@ -378,8 +378,8 @@ class Classifier3Stage(nn.Module):
                 #x = self.c3[1](x, inds1_l)
                 # from (b * h * w, c) to (b, h, w, c) to (b, c, h, w)
                 x = x.reshape((bs, height, width, -1)).permute((0, 3, 1, 2))
-                loss = F.cross_entropy(x, inds2_gt) * mask
-                loss_sum += loss.mean()
+                loss = F.cross_entropy(x, inds2_gt, reduction='none') * mask
+                loss_sum += loss# .mean()
                 #torch.cuda.synchronize()
             losses.append(loss_sum)
 
@@ -413,8 +413,8 @@ class Classifier3Stage(nn.Module):
                 #x = self.c3[2](x, inds12_l)
                 # from (b * h * w, c) to (b, h, w, c) to (b, c, h, w)
                 x = x.reshape((bs, height, width, -1)).permute((0, 3, 1, 2))
-                loss = F.cross_entropy(x, inds3_gt) * mask
-                loss_sum += loss.mean()
+                loss = F.cross_entropy(x, inds3_gt, reduction='none') * mask
+                loss_sum += loss# .mean()
                 #torch.cuda.synchronize()
             losses.append(loss_sum)
             return inds123_real, losses

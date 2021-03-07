@@ -1,16 +1,16 @@
 training:
-  name: slice_2stage_class_51
+  name: slice128_2stage_class_43
   batch_size: 8
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
   weight_decay: 1e-5
   alpha_reg: [500, 1000, 2000]
-  alpha_sigma: [0, 0, 0]
+  alpha_sigma: [ 0, 0, 0 ]
   sigma_mode: mask
   gpu_list: [0]
-  epochs: 10
-  key_epochs: [ 2, 4 ]
+  epochs: 13
+  key_epochs: [ 4, 8 ]
   half_precision: True
 
 dataset:
@@ -27,11 +27,11 @@ dataset:
 
 backbone:
   load_file: ""
-  name: BackboneNoSlice3
+  name: BackboneU5 # for the u-shaped backbone none of the parameters below has any value
   lines: 128
   slices: 1
-  channels: [16, 32, 64]
-  channels2: [64, 64, 64, 64]
+  channels: [8, 16, 32]
+  channels2: [32, 32, 64, 64]
 
 regressor:
   load_file: ""
@@ -41,7 +41,7 @@ regressor:
   bb: []
   classes: [16, 14, 12]
   padding: [0, 1, 2]
-  class_bb: [[32], [32], [32]]
+  class_bb: [[16], [16], [16]]
   superclasses: 336
   ch_reg: [32]
   msk: [16, 8]

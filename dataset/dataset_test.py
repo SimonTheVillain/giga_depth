@@ -1,10 +1,10 @@
-from dataset_rendered_2 import DatasetRendered2
+from dataset_rendered_2 import *
 import numpy as np
 import cv2
 import os
 import open3d as o3d
 
-dataset_path = os.path.expanduser("~/datasets/structure_core_unity")
+dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity")
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
@@ -17,7 +17,8 @@ baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # left, right
 focal *= 0.5
 principal = (principal[0] * 0.5, principal[1] * 0.5)
 
-dataset = DatasetRendered2(dataset_path, 0, 100, tgt_res=tgt_res, debug=True)
+datasets = GetDataset(dataset_path, False, tgt_res, version=2, debug=True)
+dataset = datasets["train"]
 
 def display_pcl(z):
     fx = 1115.44
@@ -45,6 +46,7 @@ for i, data in enumerate(dataset):
     cv2.imshow("ir", ir[0, :, :])
     cv2.imshow("gt", gt[0, :, :])
     cv2.imshow("mask", mask[0, :, :])
+    print(f"mask_minmax = {np.min(mask), np.max(mask)}")
     cv2.imshow("depth", depth*0.1)
     #calculating depth from gt! (according to the side of the ir camera)
     bl = baselines[(i + 0) % 2]
@@ -54,9 +56,9 @@ for i, data in enumerate(dataset):
     cv2.imshow("neg_disparity", -den * (1.0 / (focal_projector * focal)) * 0.1)#right camera with higher baseline
     d = -np.divide(bl * (focal_projector * focal), den)
     cv2.imshow("depth_by_gt", d*0.1)
-    cv2.imshow("depth_error", np.abs(d-depth))
+    #cv2.imshow("depth_error", np.abs(d-depth))
     cv2.waitKey()
-    display_pcl(depth)
+    #display_pcl(depth)
 
 
     #print(ir)
