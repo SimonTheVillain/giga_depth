@@ -1,6 +1,7 @@
 training:
-  name: slice256_2stage_class_43
-  batch_size: 8
+  name: slice128_2stage_class_43_acc
+  batch_size: 2
+  accumulation_steps: 4
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
@@ -9,8 +10,8 @@ training:
   alpha_sigma: [ 0, 0, 0 ]
   sigma_mode: mask
   gpu_list: [0]
-  epochs: 19
-  key_epochs: [ 6, 12 ]
+  epochs: 13
+  key_epochs: [ 4, 8 ]
   half_precision: False
 
 dataset:
@@ -20,10 +21,10 @@ dataset:
   tgt_res: [ 1216, 896 ]
   slice_in:
     start: 100
-    height: 256
+    height: 128
   slice_out:
     start: 50
-    height: 128
+    height: 64
 
 backbone:
   load_file: ""
@@ -37,7 +38,7 @@ regressor:
   load_file: ""
   name: Regv3
   ch_in: 64
-  lines: 128
+  lines: 64
   bb: []
   classes: [16, 14, 12]
   padding: [0, 1, 2]

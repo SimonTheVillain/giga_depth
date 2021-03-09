@@ -175,7 +175,10 @@ class DatasetRendered3(data.Dataset):
         # values are in the configuration of the unity rendering project
         self.focal_projector = 850 #todo: get real value!
         self.res_projector = 1024
-        self.baselines = {"left": 0.0634 - 0.07501, "right": 0.0634 - 0.0}
+        # compared to dataset v2 the baselines switched around in dataset v3.
+        # as with the original camera the baseline between left sensor and emitter is bigger than the one
+        # to the right sensor
+        self.baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
 
     def __len__(self):
         # * 2 since we are working with stereo images

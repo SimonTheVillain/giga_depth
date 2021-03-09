@@ -1,5 +1,5 @@
 training:
-  name: 2stage_class_43_3
+  name: 2stage_class_43_3_new
   batch_size: 2
   accumulation_steps: 8
   learning_rate: 4.0
@@ -9,12 +9,12 @@ training:
   alpha_reg: [500, 1000, 2000]
   alpha_sigma: 0
   gpu_list: [0]
-  epochs: 30
+  epochs: 31
   key_epochs: [ 10, 20 ]
   half_precision: False
 
 dataset:
-  path: ~/datasets/structure_core_unity
+  path: ~/datasets/structure_core_unity_2
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]

@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import torch
 import torch.nn as nn
 import matplotlib
@@ -47,7 +47,7 @@ class CompositeModel(nn.Module):
         return self.regressor(x, x_gt, mask_gt)
 
 dataset_path = "/media/simon/ssd_data/data/datasets/structure_core"
-
+dataset_version = 2
 
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
@@ -59,6 +59,10 @@ focal_projector = 850
 res_projector = 1024
 
 baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # right, left. the left camera has the higher baseline
+if dataset_version >= 3:
+    baselines = [0.0634, 0.0634 - 0.07501] # TODO: are the baselines really switched in the new dataset? is this right?
+    # it really seems like the left camera has a higher baseline
+
 lines_only = True
 is_npy = True
 
@@ -91,8 +95,8 @@ regressor = "trained_models/2stage_class_43_2_regressor_chk.pt"
 backbone = "trained_models/2stage_class_43_2_backbone_chk.pt"
 
 
-regressor = "trained_models/slice128_2stage_class_43_regressor_chk.pt"
-backbone = "trained_models/slice128_2stage_class_43_backbone_chk.pt"
+regressor = "trained_models/slice128_2stage_class_43_old_dataset_regressor_chk.pt"
+backbone = "trained_models/slice128_2stage_class_43_old_dataset_backbone_chk.pt"
 
 
 #sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"

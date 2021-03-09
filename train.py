@@ -546,7 +546,7 @@ def train():
                                           loss_sigma_acc_sub / 100.0, step)
 
                     if phase == 'train':
-                        writer.add_scalar(f'{phase}_subepoch/regression_error', loss_reg_acc_sub / 100.0 * 1024, step)
+                        writer.add_scalar(f'{phase}_subepoch/regression_error', loss_reg_acc_sub / mask_weight_acc_sub * 1024, step)
 
                         combo_loss = loss_reg_acc_sub * alpha_reg / mask_weight_acc_sub
                         combo_loss += sum(loss_class_acc_sub) / mask_weight_acc_sub

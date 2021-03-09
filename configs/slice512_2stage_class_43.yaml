@@ -1,6 +1,7 @@
 training:
-  name: slice_2stage_class_43_2
-  batch_size: 8
+  name: slice512_2stage_class_43
+  batch_size: 4
+  accumulation_steps: 2
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
@@ -9,8 +10,8 @@ training:
   alpha_sigma: [ 0, 0, 0 ]
   sigma_mode: mask
   gpu_list: [0]
-  epochs: 7
-  key_epochs: [ 2, 4 ]
+  epochs: 25
+  key_epochs: [ 8, 16 ]
   half_precision: True
 
 dataset:
