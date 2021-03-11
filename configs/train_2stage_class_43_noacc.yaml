@@ -1,45 +1,46 @@
 training:
-  name: slice512_2stage_class_43
-  batch_size: 4
-  accumulation_steps: 2
+  name: 2stage_class_43_noacc
+  batch_size: 2
+  accumulation_steps: 1
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
   weight_decay: 1e-5
   alpha_reg: [500, 1000, 2000]
-  alpha_sigma: [ 0, 0, 0 ]
+  alpha_sigma: [1e-7, 1e-5, 1e-3]
   sigma_mode: mask
   gpu_list: [0]
-  epochs: 41
-  key_epochs: [ 8, 16 ]
-  half_precision: True
+  epochs: 31
+  key_epochs: [ 10, 20 ]
+  half_precision: False
 
 dataset:
-  path: ~/datasets/structure_core_unity
+  path: ~/datasets/structure_core_unity_2
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]
   slice_in:
-    start: 100
-    height: 512
+    start: 0
+    height: 896
   slice_out:
-    start: 50
-    height: 256
+    start: 0
+    height: 448
 
 backbone:
   load_file: ""
   name: BackboneU5 # for the u-shaped backbone none of the parameters below has any value
-  lines: 128
+  lines: 896
   slices: 1
   channels: [8, 16, 32]
   channels2: [32, 32, 64, 64]
+  norm: batch
 
 regressor:
   load_file: ""
   name: Regv3
   ch_in: 64
-  lines: 256
-  bb: []
+  lines: 448
+  bb: [64, 64]
   classes: [16, 14, 12]
   padding: [0, 1, 2]
   class_bb: [[16], [16], [16]]
@@ -49,6 +50,6 @@ regressor:
   regress_neighbours: 1
   reg_line_div: 4
   c3_line_div: 8 #8 might be over the top but lets see how we fare with this!
-  close_far_separation: True
-  sigma_mode: conv
+  close_far_separation: False
+  sigma_mode: "conv"
 

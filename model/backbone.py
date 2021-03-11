@@ -640,7 +640,7 @@ class BackboneU4(nn.Module):
 #better utilization of the Tensor-cores than U3
 class BackboneU5(nn.Module):
 
-    def __init__(self):
+    def __init__(self, norm='batch'):
         super(BackboneU5, self).__init__()
         self.start = nn.Conv2d(1, 8, 5, padding=2, stride=2)  # receptive field (radius) r = 2
         self.conv1 = nn.Conv2d(8, 16, 5, padding=2)  # + 2 * 2 = 6
@@ -648,24 +648,32 @@ class BackboneU5(nn.Module):
         self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)  # + 2 * 2 = 14
         self.conv_sub2 = nn.Conv2d(64, 32 * 4, 3, padding=1)  # + 2*2*1 = 20
 
-        self.bn_start = nn.BatchNorm2d(8)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.bn2 = nn.BatchNorm2d(32)
+        if norm == 'batch':
+            self.n_start = nn.BatchNorm2d(8)
+            self.n1 = nn.BatchNorm2d(16)
+            self.n2 = nn.BatchNorm2d(32)
 
-        self.bnsub1 = nn.BatchNorm2d(64)
-        self.bnsub2 = nn.BatchNorm2d(32)
+            self.nsub1 = nn.BatchNorm2d(64)
+            self.nsub2 = nn.BatchNorm2d(32)
+        if norm == 'group':
+            self.n_start = nn.GroupNorm(2, 8)
+            self.n1 = nn.GroupNorm(2, 16)
+            self.n2 = nn.GroupNorm(4, 32)
+
+            self.nsub1 = nn.GroupNorm(8, 64)
+            self.nsub2 = nn.GroupNorm(4, 32)
 
     def forward(self, x, with_debug=False):
-        x = F.leaky_relu(self.bn_start(self.start(x)))
-        x = F.leaky_relu(self.bn1(self.conv1(x)))
-        x = F.leaky_relu(self.bn2(self.conv2(x)))
+        x = F.leaky_relu(self.n_start(self.start(x)))
+        x = F.leaky_relu(self.n1(self.conv1(x)))
+        x = F.leaky_relu(self.n2(self.conv2(x)))
         x_skip = x
 
-        x = F.leaky_relu(self.bnsub1(self.conv_sub1(x)))
+        x = F.leaky_relu(self.nsub1(self.conv_sub1(x)))
         x = self.conv_sub2(x)
         x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
         x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
-        x = F.leaky_relu(self.bnsub2(x))
+        x = F.leaky_relu(self.nsub2(x))
 
         x = torch.cat((x, x_skip), dim=1)
         if with_debug:

@@ -208,7 +208,7 @@ def train():
 
     #TODO: integrate these new parameters:
     apply_mask_reg_loss = True
-    dataset_version = 3
+    dataset_format = 3
 
 
     outlier_thresholds = list(set.union(set(args.outlier_thresholds), set(args.relative_outlier_thresholds)))
@@ -298,7 +298,7 @@ def train():
 
             if config["backbone"]["name"] == "BackboneU5":
                 print("BACKBONEU5")
-                backbone = BackboneU5()
+                backbone = BackboneU5(norm=config["backbone"]["norm"])
             #backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
             #                            channels=config["backbone"]["channels"],
             #                            channels_sub=config["backbone"]["channels2"],
@@ -375,7 +375,7 @@ def train():
     #    'val': DatasetRendered2(args.path, 20000*scale, 20500*scale, tgt_res=tgt_res, is_npy=args.is_npy)
     # }
     datasets = GetDataset(args.path, is_npy=args.is_npy, tgt_res=config["dataset"]["tgt_res"],
-                          version=dataset_version)
+                          version=dataset_format)
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=args.batch_size,
                                                   shuffle=shuffle, num_workers=args.num_workers)

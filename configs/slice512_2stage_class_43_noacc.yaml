@@ -1,7 +1,7 @@
 training:
-  name: slice512_2stage_class_43
-  batch_size: 4
-  accumulation_steps: 2
+  name: slice512_2stage_class_43_noacc
+  batch_size: 2
+  accumulation_steps: 1
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
@@ -33,6 +33,7 @@ backbone:
   slices: 1
   channels: [8, 16, 32]
   channels2: [32, 32, 64, 64]
+  norm: batch
 
 regressor:
   load_file: ""
