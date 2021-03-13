@@ -465,7 +465,7 @@ def train():
                     loss = loss * alpha_reg
 
                     if alpha_sigma != 0.0:
-                        loss_sigma = sigma_loss(sigma, x_real, x_gt, config["training"]["sigma_mode"])
+                        loss_sigma = sigma_loss(sigma, x_real, x_gt, mask_gt, config["training"]["sigma_mode"])
                         loss_sigma_acc += loss_sigma.item()
                         loss_sigma_acc_sub += loss_sigma.item()
                         loss += loss_sigma * alpha_sigma
