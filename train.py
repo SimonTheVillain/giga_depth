@@ -514,7 +514,7 @@ def train():
                             mask_weight_acc += 1.0
 
                         if alpha_sigma != 0.0:
-                            loss_sigma = sigma_loss(sigma, x_real, x_gt, config["training"]["sigma_mode"])
+                            loss_sigma = sigma_loss(sigma, x_real, x_gt, mask_gt, config["training"]["sigma_mode"])
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
