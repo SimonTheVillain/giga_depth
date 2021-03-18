@@ -453,6 +453,7 @@ class Reg_3stage(nn.Module):
 
         # the first latent layer for classification is shared
         self.bb = nn.ModuleList()
+        assert len(ch_latent) == 0 #something was wrong the last time i used ch_latent! Take a look before using it!
         ch_latent.insert(0, ch_in)
         for i in range(0, len(ch_latent) - 1):
             self.bb.append(nn.Conv2d(height * ch_latent[i], height * ch_latent[i+1], 1, groups=height))
