@@ -1,8 +1,8 @@
 training:
-  name: 2stage_class_43_noacc_3
+  name: 2stage_class_43_noacc_4
   batch_size: 2
   accumulation_steps: 1
-  learning_rate: 2.0
+  learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25, 0.025, 0.0025]
   momentum: 0.9
   weight_decay: 1e-4
@@ -28,9 +28,9 @@ dataset:
 
 backbone:
   load_file: ""
-  name: BackboneU5 # for the u-shaped backbone none of the parameters below has any value
+  name: BackboneU5Sliced # for the u-shaped backbone none of the parameters below has any value
   lines: 896
-  slices: 1
+  slices: 4
   channels: [8, 16, 32]
   channels2: [32, 32, 64, 64]
   norm: batch

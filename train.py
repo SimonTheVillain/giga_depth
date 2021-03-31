@@ -14,6 +14,7 @@ from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from experiments.lines.model_lines_CR8_n import *
 from model.backbone import *
+from model.backboneSliced import *
 from model.regressor import Regressor, Regressor2, Reg_3stage
 from torch.utils.data import DataLoader
 import math
@@ -299,6 +300,10 @@ def train():
             if config["backbone"]["name"] == "BackboneU5":
                 print("BACKBONEU5")
                 backbone = BackboneU5(norm=config["backbone"]["norm"])
+
+            if config["backbone"]["name"] == "BackboneU5Sliced":
+                print("BACKBONEU5Sliced")
+                backbone = BackboneU5Sliced(slices=config["backbone"]["slices"])
             #backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
             #                            channels=config["backbone"]["channels"],
             #                            channels_sub=config["backbone"]["channels2"],
