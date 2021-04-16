@@ -1,5 +1,5 @@
 training:
-  name: 2stage_class_43_noacc_4
+  name: 2stage_class_43_noacc_5
   batch_size: 2
   accumulation_steps: 1
   learning_rate: 2.0
@@ -7,12 +7,12 @@ training:
   momentum: 0.9
   weight_decay: 1e-4
   alpha_reg: [500, 1000, 2000, 4000, 4000]
-  alpha_sigma: [ 1e-7, 1e-5, 1e-4, 1e-3, 1e-3 ]
+  alpha_sigma: [ 0, 0, 0, 0, 0 ]
   sigma_mode: mask
   gpu_list: [0]
   epochs: 37
   key_epochs: [ 16, 24, 28, 32 ]
-  half_precision: True
+  half_precision: False
 
 dataset:
   path: ~/datasets/structure_core_unity
