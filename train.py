@@ -205,6 +205,12 @@ def train():
                         nargs="+",
                         default=[5, 0.1, 0.2, 0.3, 0.4])
 
+    parser.add_argument("-lcn", "--local_contrast_normalization", dest="LCN", action="store_const",
+                        help="Use Local Contrast Normalization to increase signal at the input. ",
+                        default=bool(config["backbone"]["local_contrast_norm"]),
+                        const=True)
+
+
     args = parser.parse_args(additional_args)
 
     #TODO: integrate these new parameters:
@@ -276,6 +282,9 @@ def train():
         # for param in backbone.parameters():
         #    param.requires_grad = False
     else:
+        #in_channels = 1
+        #if args.LCN:
+        #    in_channels = 2
         if args.is_npy:
             backbone = CR8_bb_short(channels=config["backbone"]["channels"],
                                     channels_sub=config["backbone"]["channels2"])
@@ -299,11 +308,11 @@ def train():
 
             if config["backbone"]["name"] == "BackboneU5":
                 print("BACKBONEU5")
-                backbone = BackboneU5(norm=config["backbone"]["norm"])
+                backbone = BackboneU5(norm=config["backbone"]["norm"], lcn=args.LCN)
 
             if config["backbone"]["name"] == "BackboneU5Sliced":
                 print("BACKBONEU5Sliced")
-                backbone = BackboneU5Sliced(slices=config["backbone"]["slices"])
+                backbone = BackboneU5Sliced(slices=config["backbone"]["slices"], lcn=args.LCN)
             #backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
             #                            channels=config["backbone"]["channels"],
             #                            channels_sub=config["backbone"]["channels2"],

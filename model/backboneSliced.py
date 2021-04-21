@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.residual_block import ResidualBlock_shrink
+from common.common import LCN_tensors
 
 
 
@@ -9,10 +10,10 @@ from model.residual_block import ResidualBlock_shrink
 #better utilization of the Tensor-cores than U3
 class BackboneU5Slice(nn.Module):
 
-    def __init__(self, pad=''):
+    def __init__(self, pad='', in_channels=1):
         super(BackboneU5Slice, self).__init__()
         self.pad = pad
-        self.start = nn.Conv2d(1, 8, 5, padding=(0, 2), stride=2)  # receptive field (radius) r = 2
+        self.start = nn.Conv2d(in_channels, 8, 5, padding=(0, 2), stride=2)  # receptive field (radius) r = 2
         self.conv1 = nn.Conv2d(8, 16, 5, padding=(0, 2))  # + 2 * 2 = 6
         self.conv2 = nn.Conv2d(16, 32, 5, padding=(0, 2))  # + 2 * 2 = 10
         self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=(0, 2), stride=2)  # + 2 * 2 = 14
@@ -69,21 +70,27 @@ class BackboneU5Slice(nn.Module):
 #better utilization of the Tensor-cores than U3
 class BackboneU5Sliced(nn.Module):
 
-    def __init__(self, slices):
+    def __init__(self, slices, lcn=False):
         super(BackboneU5Sliced, self).__init__()
+        in_channels = 1
+        self.LCN = lcn
+        if lcn:
+            in_channels = 2
         assert slices > 1, "This model requires more than 1 slice to operate correctly"
         self.slices = nn.ModuleList()
         for i in range(slices):
             if i == 0:
-                self.slices.append(BackboneU5Slice('top'))
+                self.slices.append(BackboneU5Slice('top', in_channels=in_channels))
             else:
                 if i == (slices - 1):
-                    self.slices.append(BackboneU5Slice('bottom'))
+                    self.slices.append(BackboneU5Slice('bottom', in_channels=in_channels))
                 else:
-                    self.slices.append(BackboneU5Slice())
+                    self.slices.append(BackboneU5Slice(in_channels=in_channels))
 
 
     def forward(self, x, with_debug=False):
+        if self.LCN:
+            x = torch.cat((x, LCN_tensors(x)), 1)
         outputs = []
         pad = 18
         split = int(x.shape[2] / len(self.slices))

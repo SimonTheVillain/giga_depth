@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import os
 import re
+from common.common import LCN
 
 def downsample(image):
     image = image.reshape(int(image.shape[0]/2), 2, int(image.shape[1]/2), 2)
@@ -185,8 +186,6 @@ class DatasetRendered3(data.Dataset):
         return len(self.filenames) * 2
 
     def __getitem__(self, idx):
-
-
         side = "left"
         if idx % 2 == 1:
             side = "right"
@@ -198,9 +197,13 @@ class DatasetRendered3(data.Dataset):
         d = cv2.imread(f"{self.root_dir}/{file}_{side}_d.exr", cv2.IMREAD_UNCHANGED)
         v_offset = np.random.randint(-self.vertical_jitter, self.vertical_jitter)
 
-        if np.any(np.isnan(d)) or np.any(np.isinf(d)):
-            print(f"the depth file {file} is invalid (nan/inf) selecting random other:")
+        if d is None:
+            print(f"the depth file {file} is invalid nonetype. selecting random other!")
             return self.__getitem__(np.random.randint(0, len(self.filenames)) * 2 + idx % 2)
+        else:
+            if np.any(np.isnan(d)) or np.any(np.isinf(d)):
+                print(f"the depth file {file} is invalid (nan/inf). selecting random other!")
+                return self.__getitem__(np.random.randint(0, len(self.filenames)) * 2 + idx % 2)
 
 
         rr = self.readout_rect

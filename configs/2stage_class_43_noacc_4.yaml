@@ -15,7 +15,7 @@ training:
   half_precision: True
 
 dataset:
-  path: ~/datasets/structure_core_unity
+  path: ~/datasets/structure_core_unity_3
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]

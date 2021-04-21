@@ -1,17 +1,16 @@
 training:
-  name: 2stage_class_43_noacc_5
-  batch_size: 2
-  accumulation_steps: 1
-  learning_rate: 2.0
-  lr_scales: [1.0, 0.5, 0.25, 0.025, 0.0025]
+  name: 2stage_class_52
+  batch_size: 1
+  learning_rate: 4.0
+  lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
-  weight_decay: 1e-4
-  alpha_reg: [500, 1000, 2000, 4000, 4000]
-  alpha_sigma: [ 0, 0, 0, 0, 0 ]
+  weight_decay: 1e-5
+  alpha_reg: [500, 1000, 2000]
+  alpha_sigma: [0, 0, 0]
   sigma_mode: mask
   gpu_list: [0]
-  epochs: 37
-  key_epochs: [ 16, 24, 28, 32 ]
+  epochs: 19
+  key_epochs: [ 6, 12 ]
   half_precision: False
 
 dataset:
@@ -28,12 +27,14 @@ dataset:
 
 backbone:
   load_file: ""
-  name: BackboneU5Sliced # for the u-shaped backbone none of the parameters below has any value
+  name: BackboneU5Sliced
+  input_channels: 2
   lines: 896
   slices: 4
-  channels: [8, 16, 32]
-  channels2: [32, 32, 64, 64]
+  channels: [16, 32, 64]
+  channels2: [64, 64, 64, 64]
   norm: batch
+  local_contrast_norm: False
 
 regressor:
   load_file: ""
@@ -43,7 +44,7 @@ regressor:
   bb: []
   classes: [16, 14, 12]
   padding: [0, 1, 2]
-  class_bb: [[16], [16], [16]]
+  class_bb: [[32], [32], [32]]
   superclasses: 336
   ch_reg: [32]
   msk: [16, 8]

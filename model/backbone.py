@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.residual_block import ResidualBlock_shrink
+from common.common import LCN_tensors
+import cv2 #TODO: remove for debug measures
 
 
 # same as the linewise cr8_no_residual_light. It seems like a good compromise
@@ -640,9 +642,13 @@ class BackboneU4(nn.Module):
 #better utilization of the Tensor-cores than U3
 class BackboneU5(nn.Module):
 
-    def __init__(self, norm='batch'):
+    def __init__(self, norm='batch', lcn=False):
         super(BackboneU5, self).__init__()
-        self.start = nn.Conv2d(1, 8, 5, padding=2, stride=2)  # receptive field (radius) r = 2
+        in_channels = 1
+        self.LCN = lcn
+        if lcn:
+            in_channels = 2
+        self.start = nn.Conv2d(in_channels, 8, 5, padding=2, stride=2)  # receptive field (radius) r = 2
         self.conv1 = nn.Conv2d(8, 16, 5, padding=2)  # + 2 * 2 = 6
         self.conv2 = nn.Conv2d(16, 32, 5, padding=2)  # + 2 * 2 = 10
         self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)  # + 2 * 2 = 14
@@ -664,44 +670,8 @@ class BackboneU5(nn.Module):
             self.nsub2 = nn.GroupNorm(4, 32)
 
     def forward(self, x, with_debug=False):
-        x = F.leaky_relu(self.n_start(self.start(x)))
-        x = F.leaky_relu(self.n1(self.conv1(x)))
-        x = F.leaky_relu(self.n2(self.conv2(x)))
-        x_skip = x
-
-        x = F.leaky_relu(self.nsub1(self.conv_sub1(x)))
-        x = self.conv_sub2(x)
-        x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
-        x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], 32, x_skip.shape[2], x_skip.shape[3]))
-        x = F.leaky_relu(self.nsub2(x))
-
-        x = torch.cat((x, x_skip), dim=1)
-        if with_debug:
-            debugs = {}
-            return x, debugs
-        return x
-
-
-# No final layer at target resolution and only 2 layers at the lowest resolution
-#better utilization of the Tensor-cores than U3
-class BackboneU5Sliced(nn.Module):
-
-    def __init__(self, slices):
-        super(BackboneU5, self).__init__()
-        self.start = nn.Conv2d(1, 8, 5, padding=2, stride=2)  # receptive field (radius) r = 2
-        self.conv1 = nn.Conv2d(8, 16, 5, padding=2)  # + 2 * 2 = 6
-        self.conv2 = nn.Conv2d(16, 32, 5, padding=2)  # + 2 * 2 = 10
-        self.conv_sub1 = nn.Conv2d(32, 64, 5, padding=2, stride=2)  # + 2 * 2 = 14
-        self.conv_sub2 = nn.Conv2d(64, 32 * 4, 3, padding=1)  # + 2*2*1 = 20
-
-        self.n_start = nn.BatchNorm2d(8)
-        self.n1 = nn.BatchNorm2d(16)
-        self.n2 = nn.BatchNorm2d(32)
-
-        self.nsub1 = nn.BatchNorm2d(64)
-        self.nsub2 = nn.BatchNorm2d(32)
-
-    def forward(self, x, with_debug=False):
+        if self.LCN:
+            x = torch.cat((x, LCN_tensors(x)), 1)
         x = F.leaky_relu(self.n_start(self.start(x)))
         x = F.leaky_relu(self.n1(self.conv1(x)))
         x = F.leaky_relu(self.n2(self.conv2(x)))

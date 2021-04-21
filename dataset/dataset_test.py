@@ -3,8 +3,9 @@ import numpy as np
 import cv2
 import os
 import open3d as o3d
+from common.common import LCN
 
-dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity")
+dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity_3")
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
@@ -17,7 +18,7 @@ baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # left, right
 focal *= 0.5
 principal = (principal[0] * 0.5, principal[1] * 0.5)
 
-datasets = GetDataset(dataset_path, False, tgt_res, version=2, debug=True)
+datasets = GetDataset(dataset_path, False, tgt_res, version=3, LCN=True, debug=True)
 dataset = datasets["train"]
 
 def display_pcl(z):
@@ -44,10 +45,14 @@ def display_pcl(z):
 for i, data in enumerate(dataset):
     ir, gt, mask, depth = data
     cv2.imshow("ir", ir[0, :, :])
+    lcn = LCN(ir[0, :, :])
+    cv2.imshow("LCN", ir[1, :, :])
     cv2.imshow("gt", gt[0, :, :])
     cv2.imshow("mask", mask[0, :, :])
-    print(f"mask_minmax = {np.min(mask), np.max(mask)}")
+    #print(f"mask_minmax = {np.min(mask), np.max(mask)}")
     cv2.imshow("depth", depth*0.1)
+
+
     #calculating depth from gt! (according to the side of the ir camera)
     bl = baselines[(i + 0) % 2]
     x = np.arange(0, tgt_res[0]/2).astype(np.float32)
