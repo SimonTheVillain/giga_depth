@@ -1,6 +1,6 @@
 training:
   name: 2stage_class_52
-  batch_size: 1
+  batch_size: 2
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25]
   momentum: 0.9
