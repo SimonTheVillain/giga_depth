@@ -197,6 +197,9 @@ class DatasetRendered3(data.Dataset):
         d = cv2.imread(f"{self.root_dir}/{file}_{side}_d.exr", cv2.IMREAD_UNCHANGED)
         v_offset = np.random.randint(-self.vertical_jitter, self.vertical_jitter)
 
+        if msk is None:
+            print(f"The msk file {file} is invalid nonetype. select random other!")
+            return self.__getitem__(np.random.randint(0, len(self.filenames)) * 2 + idx %2)
         if d is None:
             print(f"the depth file {file} is invalid nonetype. selecting random other!")
             return self.__getitem__(np.random.randint(0, len(self.filenames)) * 2 + idx % 2)
