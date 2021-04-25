@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import matplotlib
-from dataset.dataset_rendered_2 import DatasetRendered2
+from dataset.dataset_rendered_2 import *
 from dataset.dataset_captured import DatasetCaptured
 from experiments.lines.model_lines_CR8_n import *
 
@@ -99,6 +99,10 @@ regressor = "trained_models/slice128_2stage_class_43_old_dataset_regressor_chk.p
 backbone = "trained_models/slice128_2stage_class_43_old_dataset_backbone_chk.pt"
 
 
+regressor = "trained_models/slice256_2stage_class_54_regressor.pt"
+backbone = "trained_models/slice256_2stage_class_54_backbone.pt"
+
+
 #sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
 #sigma_estimator = torch.load(sigma_estimator)
 #sigma_estimator.eval()
@@ -131,11 +135,12 @@ device = torch.cuda.current_device()
 model = CompositeModel(backbone, regressor)
 model.to(device)
 model.eval()
-dataset = DatasetCaptured(root_dir=dataset_path, from_ind=0, to_ind=800)
 
 if rendered:
-    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity"
-    dataset = DatasetRendered2(dataset_path, 0, 40000, tgt_res=tgt_res)
+    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity_3"
+    dataset = GetDataset(dataset_path, is_npy=False, tgt_res=(1216, 896), version=3)["val"]
+else:
+    dataset = DatasetCaptured(root_dir=dataset_path, from_ind=0, to_ind=800)
 
 
 for i, ir in enumerate(dataset):

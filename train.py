@@ -121,6 +121,7 @@ def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "varia
 
 
 def train():
+    #todo: put that configuration part into a separate file!
     with open("configs/default.yaml", "r") as ymlfile:
         config = yaml.safe_load(ymlfile)
 
@@ -282,9 +283,7 @@ def train():
         # for param in backbone.parameters():
         #    param.requires_grad = False
     else:
-        #in_channels = 1
-        #if args.LCN:
-        #    in_channels = 2
+        #todo: put that selection into a separate file
         if args.is_npy:
             backbone = CR8_bb_short(channels=config["backbone"]["channels"],
                                     channels_sub=config["backbone"]["channels2"])
@@ -313,14 +312,6 @@ def train():
             if config["backbone"]["name"] == "BackboneU5Sliced":
                 print("BACKBONEU5Sliced")
                 backbone = BackboneU5Sliced(slices=config["backbone"]["slices"], lcn=args.LCN)
-            #backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
-            #                            channels=config["backbone"]["channels"],
-            #                            channels_sub=config["backbone"]["channels2"],
-            #                            use_bn=True)
-            #backbone = BackboneSliced3(slices=1, height=config["dataset"]["slice_in"]["height"],
-            #                           channels=config["backbone"]["channels"],
-            #                           channels_sub=config["backbone"]["channels2"],
-            #                           use_bn=True)
 
     model = CompositeModel(backbone, regressor, args.half_precision)
 

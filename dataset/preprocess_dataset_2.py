@@ -4,10 +4,10 @@ import os
 from shutil import copyfile
 
 
-in_paths = ["/media/simon/Windows/Dokumente und Einstellungen/simon/datasets/structure_core_unity",
-            "/media/simon/Windows/Dokumente und Einstellungen/simon/datasets/structure_core_unity_2",
-            "/media/simon/datasets/structure_core_unity_2"]
-out_path = "/home/simon/datasets/structure_core_unity"
+in_paths = ["/media/simon/LaCie/structure_core_unity_0",
+            "/media/simon/LaCie/structure_core_unity_1",
+            "/media/simon/LaCie/structure_core_unity_2"]
+out_path = "/media/simon/LaCie/datasets/structure_core_unity_4"
 count = 0
 for path in in_paths:
 
@@ -31,6 +31,7 @@ for path in in_paths:
                 continue
         skip = False
 
+        invalid = False
         if skip:
             continue
         for side in ["left", "right"]:
@@ -75,6 +76,24 @@ for path in in_paths:
             #most optimal storage of the png file
             cv2.imwrite(f"{out_path}/{count}_{side}_msk.png", msk, [cv2.IMWRITE_PNG_COMPRESSION, 9])
 
+            #for some reason some of the files tend to be corrupted / or non-existent
+            msk = cv2.imread(f"{out_path}/{count}_{side}_msk.png", cv2.IMREAD_UNCHANGED)
+            if msk is None:
+                print(f"{out_path}/{count}_{side}_msk.exr does not exist!?")
+                invalid = True
+
+            depth = cv2.imread(f"{out_path}/{count}_{side}_d.exr", cv2.IMREAD_UNCHANGED)
+            if depth is None:
+                print(f"{out_path}/{count}_{side}_d.exr does not exist!?")
+                invalid = True
+            else:
+                if np.any(np.isnan(depth)) or np.any(np.isinf(depth)):
+                    print(f"{out_path}/{count}_{side}_d.exr has nan and or inf!?")
+
+
             cv2.waitKey(1)
 
-        count += 1
+        if invalid:
+            print(f"Invalid output at {count}")
+        else:
+            count += 1
