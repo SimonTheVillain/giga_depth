@@ -35,7 +35,7 @@ class CompositeModel(nn.Module):
         # another TODO: set affine parameters to false!
         # self.bn = nn.BatchNorm2d(64, affine=False)
 
-    def forward(self, x, x_gt=None, mask_gt=None):
+    def forward(self, x, x_gt=None):
 
         if x_gt != None:
             if self.half_precision:
@@ -44,7 +44,7 @@ class CompositeModel(nn.Module):
                 x = x.type(torch.float32)
             else:
                 x, debugs = self.backbone(x, True)
-            results = self.regressor(x, x_gt, mask_gt)
+            results = self.regressor(x, x_gt)
             # todo: batch norm the whole backbone and merge two dicts:
             # https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python-taking-union-o
             # z = {**x, **y}
@@ -59,13 +59,15 @@ class CompositeModel(nn.Module):
                 x = x.type(torch.float32)
             else:
                 x = self.backbone(x)
-            return self.regressor(x, x_gt, mask_gt)
+            return self.regressor(x, x_gt)
 
 
 def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "variance"
+    if mode == "mask_direct":
+        return torch.abs(sigma - mask_gt).mean()
     if mode == "mask":
         # in the mask mode every pixel whose estimate is off by fewer than 0.5 pixel is valid
-        mask_gt_generated = (torch.abs(x-x_gt) < (0.5 / 1024)).type(torch.float32)
+        mask_gt_generated = (torch.abs(x-x_gt) < (0.5 / 1024.0)).type(torch.float32)
         mask_gt_generated[mask_gt == 0.0] = 0
         return torch.abs(sigma - mask_gt).mean()# here we have it! proper mask
 
@@ -95,19 +97,6 @@ def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "varia
     # term 3 is to stay positive(after all it is sigma^2)
     term3 = 0  # F.relu(-sigma)
     loss = term1 + term2 + term3
-    #print("term1")
-    #print(term1)
-    #print("term2")
-    #print(term2)
-    #print("max term1")
-    #print(torch.max(term1))
-    #print("max term2")
-    #print(torch.max(term2))
-    #print("max sigma:")
-    #print(torch.max(torch.abs(sigma_sq)))
-    #print("term 1 den:")
-    #print((2*torch.min(torch.abs(sigma_sq)) + eps))
-    #print(f"maximum loss term: {torch.max(loss)}")
     if torch.any(torch.isnan(term1)):
         print("term1: found nan")
     if torch.any(torch.isinf(term1)):
@@ -211,8 +200,16 @@ def train():
                         default=bool(config["backbone"]["local_contrast_norm"]),
                         const=True)
 
+    parser.add_argument("-ew", "--edge_weight", dest="edge_weight", action="store",
+                        help="Giving the depth estimate more weight at the edges.",
+                        nargs="+",
+                        default=config["training"]["edge_weight"])
+
 
     args = parser.parse_args(additional_args)
+
+
+
 
     #TODO: integrate these new parameters:
     apply_mask_reg_loss = True
@@ -288,11 +285,14 @@ def train():
             backbone = CR8_bb_short(channels=config["backbone"]["channels"],
                                     channels_sub=config["backbone"]["channels2"])
         else:
-            backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
-                                        channels=config["backbone"]["channels"],
-                                        channels_sub=config["backbone"]["channels2"],
-                                        use_bn=True)
+            if config["backbone"]["name"] == "BackboneNoSlice":
+                print("BackboneNoSlice3")
+                backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
+                                            channels=config["backbone"]["channels"],
+                                            channels_sub=config["backbone"]["channels2"],
+                                            use_bn=True)
             if config["backbone"]["name"] == "BackboneU1":
+                print("BACKBONEU1")
                 backbone = BackboneU1()
             if config["backbone"]["name"] == "BackboneU2":
                 print("BACKBONEU2")
@@ -357,6 +357,11 @@ def train():
     else:
         alpha_sigmas = [args.alpha_sigma] * len(key_steps)
 
+    if isinstance(args.edge_weight, list):
+        edge_weights = args.edge_weight
+    else:
+        edge_weights = [args.edge_weight] * len(key_steps)
+
 
     def find_index(epoch, key_steps):
         for i in range(0, len(key_steps)):
@@ -394,6 +399,7 @@ def train():
         print('-' * 10)
         alpha_reg = alpha_regs[find_index(epoch-1, key_steps)]
         alpha_sigma = float(alpha_sigmas[find_index(epoch-1, key_steps)])
+        edge_weight = float(edge_weights[find_index(epoch-1, key_steps)])
 
         def get_lr(optimizer):
             for param_group in optimizer.param_groups:
@@ -429,10 +435,12 @@ def train():
             model.zero_grad()
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
-                ir, x_gt, mask_gt = sampled_batch
+                ir, x_gt, mask_gt, edge_mask = sampled_batch
                 ir = ir.to(main_device)
                 mask_gt = mask_gt.to(main_device)
                 x_gt = x_gt.to(main_device)
+                edge_mask = (edge_mask * edge_weight + 1).to(main_device)
+
                 # todo: instead of a query the slice variable should be set accordingly further up!
                 if not args.is_npy and slice:
                     slice_in = (config["dataset"]["slice_in"]["start"], config["dataset"]["slice_in"]["height"])
@@ -440,10 +448,11 @@ def train():
                     ir = ir[:, :, slice_in[0]:slice_in[0] + slice_in[1], :]
                     x_gt = x_gt[:, :, slice_gt[0]:slice_gt[0] + slice_gt[1], :]
                     mask_gt = mask_gt[:, :, slice_gt[0]:slice_gt[0] + slice_gt[1], :]
+                    edge_mask = edge_mask[:, :, slice_gt[0]:slice_gt[0] + slice_gt[1], :]
 
                 if phase == 'train':
                     torch.autograd.set_detect_anomaly(True)
-                    x, sigma, class_losses, x_real, debug = model(ir, x_gt, mask_gt)
+                    x, sigma, class_losses, x_real, debug = model(ir, x_gt)
                     x_real = x_real.detach()
 
                     # log weights and activations of different layers
@@ -456,17 +465,19 @@ def train():
                     #masked_reg = torch.mean(torch.abs(x - x_gt) * mask_gt) * (1.0 / mask_mean)
 
                     if apply_mask_reg_loss:
-                        loss = torch.mean(torch.abs(x - x_gt) * mask_gt)
+                        loss = torch.mean(torch.abs(x - x_gt) * mask_gt * edge_mask)
+                        loss_reg = torch.mean(torch.abs(x - x_gt) * mask_gt)
                         mask_gt_weight = mask_gt.mean().item()
                         mask_weight_acc_sub += mask_gt_weight
                         mask_weight_acc += mask_gt_weight
                     else:
-                        loss = torch.mean(torch.abs(x - x_gt))
+                        loss = torch.mean(torch.abs(x - x_gt) * edge_mask)
+                        loss_reg = torch.mean(torch.abs(x - x_gt))
                         mask_weight_acc_sub += 1.0
                         mask_weight_acc += 1.0
 
-                    loss_reg_acc += loss.item()
-                    loss_reg_acc_sub += loss.item()
+                    loss_reg_acc += loss_reg.item()
+                    loss_reg_acc_sub += loss_reg.item()
                     loss = loss * alpha_reg
 
                     if alpha_sigma != 0.0:
@@ -482,13 +493,13 @@ def train():
 
                     for i, class_loss in enumerate(class_losses):
                         if apply_mask_reg_loss:
-                            loss += torch.mean(class_loss * mask_gt)
-                            mean_class_loss = torch.mean(class_loss * mask_gt).item()
+                            loss += torch.mean(class_loss * mask_gt * edge_mask)
+                            mean_class_loss = torch.mean(class_loss * mask_gt * edge_mask).item()
                             loss_class_acc[i] += mean_class_loss
                             loss_class_acc_sub[i] += mean_class_loss
                         else:
-                            loss += torch.mean(class_loss)
-                            mean_class_loss = torch.mean(class_loss).item()
+                            loss += torch.mean(class_loss * edge_mask)
+                            mean_class_loss = torch.mean(class_loss * edge_mask).item()
                             loss_class_acc[i] += mean_class_loss
                             loss_class_acc_sub[i] += mean_class_loss
 

@@ -17,7 +17,10 @@ def downsampleDepth(d):
     d = np.min(d, axis=1)
     return d
 
-
+def dilatation(src, r):
+    element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (r, r))
+    dilation_dst = cv2.dilate(src, element)
+    return dilation_dst
 
 
 class DatasetRendered2(data.Dataset):
@@ -256,9 +259,21 @@ class DatasetRendered3(data.Dataset):
         grey = np.expand_dims(grey, 0)
         x_d = np.expand_dims(x_d, 0)
         mask = np.expand_dims(msk, 0)
+
+        # todo: sobel on depth
+        #  threshold
+        grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
+        edge_threshold = 0.1 # a 10 centimeter threshold!!!!
+        edges = (grad_x * grad_x + grad_y * grad_y) > edge_threshold * edge_threshold
+        edges = edges.astype(np.float32)
+        #  dilate
+        edges = dilatation(edges, 10)
+        edges = np.expand_dims(edges, 0)
+
         if self.debug:
-            return grey, x_d, mask, depth
-        return grey, x_d, mask
+            return grey, x_d, mask, edges, depth
+        return grey, x_d, mask, edges
 
 
 def GetDataset(path, is_npy, tgt_res, version=2, debug=False):

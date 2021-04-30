@@ -270,7 +270,7 @@ class Classifier3Stage(nn.Module):
         x = x.permute((0, 2, 1, 3)).reshape((x_in.shape[0], -1, 1, x_in.shape[3]))
         return x
 
-    def forward(self, x_in, inds_gt=None, mask_gt=None):
+    def forward(self, x_in, inds_gt=None):
         bs = x_in.shape[0]  # batch size
         height = x_in.shape[2]
         width = x_in.shape[3]
@@ -500,7 +500,7 @@ class Reg_3stage(nn.Module):
                 self.msk.append(CondMul(height * classes123, ch_latent_msk[i], ch_latent_msk[i + 1]))
 
 
-    def forward(self, x_in, x_gt=None, mask_gt=None):
+    def forward(self, x_in, x_gt=None):
         height = x_in.shape[2]
         width = x_in.shape[3]
         classes123 = self.classes[0] * self.classes[1] * self.classes[2]
@@ -576,7 +576,7 @@ class Reg_3stage(nn.Module):
         else:
 
             inds_gt = (x_gt * classes123).type(torch.int32).clamp(0, classes123 - 1)
-            inds, class_losses = self.c(x_l, inds_gt, mask_gt)
+            inds, class_losses = self.c(x_l, inds_gt)
 
             #x = F.leaky_relu(self.r1(x_in))
             # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)

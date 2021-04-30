@@ -18,7 +18,7 @@ baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # left, right
 focal *= 0.5
 principal = (principal[0] * 0.5, principal[1] * 0.5)
 
-datasets = GetDataset(dataset_path, False, tgt_res, version=3, LCN=True, debug=True)
+datasets = GetDataset(dataset_path, False, tgt_res, version=3, debug=True)
 dataset = datasets["train"]
 
 def display_pcl(z):
@@ -43,14 +43,15 @@ def display_pcl(z):
     o3d.visualization.draw_geometries([pcd])
 
 for i, data in enumerate(dataset):
-    ir, gt, mask, depth = data
+    ir, gt, mask, edges, depth = data
     cv2.imshow("ir", ir[0, :, :])
     lcn = LCN(ir[0, :, :])
-    cv2.imshow("LCN", ir[1, :, :])
+    cv2.imshow("LCN", lcn)
     cv2.imshow("gt", gt[0, :, :])
     cv2.imshow("mask", mask[0, :, :])
     #print(f"mask_minmax = {np.min(mask), np.max(mask)}")
     cv2.imshow("depth", depth*0.1)
+    cv2.imshow("edges", edges[0, :, :])
 
 
     #calculating depth from gt! (according to the side of the ir camera)
