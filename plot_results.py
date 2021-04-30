@@ -66,7 +66,7 @@ if dataset_version >= 3:
 lines_only = True
 is_npy = True
 
-show_pcl = True
+show_pcl = False
 show_full = False
 rendered = True
 
@@ -107,6 +107,10 @@ backbone = "trained_models/2stage_class_52_backbone.pt"
 
 regressor = "trained_models/slice256_2stage_class_58_regressor_chk.pt"
 backbone = "trained_models/slice256_2stage_class_58_backbone_chk.pt"
+
+
+regressor = "trained_models/slice256_2stage_class_59_regressor_chk.pt"
+backbone = "trained_models/slice256_2stage_class_59_backbone_chk.pt"
 
 
 #sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"

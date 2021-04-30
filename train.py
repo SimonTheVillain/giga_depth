@@ -285,7 +285,7 @@ def train():
             backbone = CR8_bb_short(channels=config["backbone"]["channels"],
                                     channels_sub=config["backbone"]["channels2"])
         else:
-            if config["backbone"]["name"] == "BackboneNoSlice":
+            if config["backbone"]["name"] == "BackboneNoSlice3":
                 print("BackboneNoSlice3")
                 backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
                                             channels=config["backbone"]["channels"],

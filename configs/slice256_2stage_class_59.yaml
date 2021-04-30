@@ -28,7 +28,7 @@ dataset:
 
 backbone:
   load_file: ""
-  name: BackboneU5
+  name: BackboneNoSlice3
   input_channels: 2
   lines: 128
   slices: 1
