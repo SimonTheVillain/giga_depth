@@ -10,8 +10,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 
-
-
 class CompositeModel(nn.Module):
     def __init__(self, backbone, regressor):
         super(CompositeModel, self).__init__()

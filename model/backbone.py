@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.residual_block import ResidualBlock_shrink
-from common.common import LCN_tensors
+from common.common import LCN, LCN_tensors
 import cv2 #TODO: remove for debug measures
 
 
@@ -346,11 +346,17 @@ class BackboneNoSlice3(nn.Module):
     def radius():
         return 12
 
-    def __init__(self, height=896, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64], use_bn=False):
+    def __init__(self, height=896, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64], use_bn=False, lcn=False):
         super(BackboneNoSlice3, self).__init__()
+        in_channels = 1
+        if lcn:
+            in_channels = 2
+            self.lcn = LCN()
+        self.use_lcn = lcn
+
         self.height = height
         self.features = channels_sub[3]
-        self.conv_start = nn.Conv2d(1, channels[0], 3, padding=(1, 1))
+        self.conv_start = nn.Conv2d(in_channels, channels[0], 3, padding=(1, 1))
         self.conv_1 = nn.Conv2d(channels[0], channels[1], 5, padding=(2, 2))
         self.conv_down = nn.Conv2d(channels[1], channels[2], 5, padding=(2, 2), stride=(2, 2))
 
@@ -368,6 +374,9 @@ class BackboneNoSlice3(nn.Module):
 
     def forward(self, x, with_debug=False):
         device = x.device
+        if self.use_lcn:
+            x = torch.cat((x, self.lcn(x)), 1)
+
         #print(nr_slices)
         #print(x.shape)
         if hasattr(self, 'bn_start'):
@@ -645,7 +654,8 @@ class BackboneU5(nn.Module):
     def __init__(self, norm='batch', lcn=False):
         super(BackboneU5, self).__init__()
         in_channels = 1
-        self.LCN = lcn
+        self.use_lcn = lcn
+        #self.lcn = LCN()
         if lcn:
             in_channels = 2
         self.start = nn.Conv2d(in_channels, 8, 5, padding=2, stride=2)  # receptive field (radius) r = 2
@@ -670,7 +680,7 @@ class BackboneU5(nn.Module):
             self.nsub2 = nn.GroupNorm(4, 32)
 
     def forward(self, x, with_debug=False):
-        if self.LCN:
+        if self.use_lcn:
             x = torch.cat((x, LCN_tensors(x)), 1)
         x = F.leaky_relu(self.n_start(self.start(x)))
         x = F.leaky_relu(self.n1(self.conv1(x)))

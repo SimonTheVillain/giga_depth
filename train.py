@@ -20,6 +20,7 @@ from torch.utils.data import DataLoader
 import math
 import argparse
 import yaml
+from params import parse_args
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -60,6 +61,20 @@ class CompositeModel(nn.Module):
             else:
                 x = self.backbone(x)
             return self.regressor(x, x_gt)
+
+
+class MaskLoss(nn.Module):
+    def __init__(self, type="mask"):
+        super(MaskLoss, self).__init__()
+        self.type = type
+        if type=="mask":
+            self.loss = torch.nn.BCEWithLogitsLoss()
+        else:
+            print("loss not implemented yet")
+
+    def forward(self, sigma, x, x_gt, mask_gt):
+        if self.type == "mask":
+            return self.loss(sigma, mask_gt)
 
 
 def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "variance"
@@ -110,111 +125,13 @@ def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "varia
 
 
 def train():
-    #todo: put that configuration part into a separate file!
-    with open("configs/default.yaml", "r") as ymlfile:
-        config = yaml.safe_load(ymlfile)
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config_file", dest="config", action="store",
-                        help="Load the config file with parameters.",
-                        default="")
-    args, additional_args = parser.parse_known_args()
-    if args.config != "":
-        with open(args.config, "r") as ymlfile:
-            config = yaml.safe_load(ymlfile)
-            # todo: recursively merge both config structures!!!!!!!
-    # parser.add_argument("-V", "--version", help="show program version", action="store_true")
-    parser.add_argument("-d", "--dataset_path", dest="path", action="store",
-                        help="Path to the dataset.",
-                        default=os.path.expanduser(config["dataset"]["path"]))
-    parser.add_argument("-npy", "--npy_dataset", dest="is_npy", action="store_const",
-                        help="Loads data directly form numpy files",
-                        default=bool(config["dataset"]["is_npy"]), const=True)
-    parser.add_argument("-b", "--batch_size", dest="batch_size", action="store",
-                        help="The batch size during training",
-                        type=int,
-                        default=int(config["training"]["batch_size"]))
-    parser.add_argument("-e", "--epochs", dest="epochs", action="store",
-                        help="The number of epochs before quitting training.",
-                        default=config["training"]["epochs"])
-    parser.add_argument("-n", "--experiment_name", dest="experiment_name", action="store",
-                        help="The name of this training for tensorboard and checkpoints.",
-                        default=config["training"]["name"])
-    parser.add_argument("-w", "--num_workers", dest="num_workers", action="store",
-                        help="The number of threads working on loading and preprocessing data.",
-                        type=int,
-                        default=config["dataset"]["workers"])
-    parser.add_argument("-g", "--gpu_list", dest="gpu_list", action="store",
-                        nargs="+", type=int,
-                        default=list(range(0, torch.cuda.device_count())))
-    parser.add_argument("-r", "--learning_rate", dest="learning_rate", action="store",
-                        help="Learning rate for gradient descent algorithm.",
-                        type=float,
-                        default=config["training"]["learning_rate"])
-    parser.add_argument("-m", "--momentum", dest="momentum", action="store",
-                        help="Momentum for gradient descent algorithm.",
-                        type=float,
-                        default=config["training"]["momentum"])
-    parser.add_argument("-wd", "--weight_decay", dest="weight_decay", action="store",
-                        help="Weight decay, effectively this is an l2 loss for the weights.",
-                        type=float,
-                        default=config["training"]["weight_decay"] if "weight_decay" in config["training"] else 0)
-    default_acc = config["training"]["accumulation_steps"] if "accumulation_steps" in config["training"] else 1
-    parser.add_argument("-acc", "--accumulation_steps", dest="accumulation_steps", action="store",
-                        help="Accumulate gradient for a few steps before updating weights.",
-                        type=float,
-                        default=default_acc)
-    parser.add_argument("-o", "--optimizer", dest="optimizer", action="store",
-                        help="The optimizer used for training sgd or adam",
-                        type=str,
-                        default=config["training"]["optimizer"] if "optimizer" in config["training"] else "sgd")
-    default_precision = bool(config["training"]["half_precision"]) if "half_precision" in config["training"] else False
-    parser.add_argument("-hp", "--half_precision", dest="half_precision", action="store_const",
-                        help="Utilize half precision for the backbone of the network.",
-                        default=default_precision,
-                        const=True)
-    parser.add_argument("-a", "--alpha_reg", dest="alpha_reg", action="store",
-                        help="The factor with which the regression error is incorporated into the loss.",
-                        type=float,
-                        nargs="+",
-                        default=config["training"]["alpha_reg"])
-    parser.add_argument("-as", "--alpha_sigma", dest="alpha_sigma", action="store",
-                        help="The factor with which mask error is incorporated into the loss.",
-                        type=float,
-                        nargs="+",
-                        default=config["training"]["alpha_sigma"])
-    parser.add_argument("-ot", "--outlier_thresholds", dest="outlier_thresholds", action="store",
-                        help="The thresholds for which the outlier ratios will be logged.",
-                        type=float,
-                        nargs="+",
-                        default=[0.5, 1, 2, 5])
-    parser.add_argument("-otr", "--relative_outlier_thresholds", dest="relative_outlier_thresholds", action="store",
-                        help="The thresholds for which the outlier ratios will be logged. "
-                             "The first value is the one every other is relative to.",
-                        type=float,
-                        nargs="+",
-                        default=[5, 0.1, 0.2, 0.3, 0.4])
-
-    parser.add_argument("-lcn", "--local_contrast_normalization", dest="LCN", action="store_const",
-                        help="Use Local Contrast Normalization to increase signal at the input. ",
-                        default=bool(config["backbone"]["local_contrast_norm"]),
-                        const=True)
-
-    parser.add_argument("-ew", "--edge_weight", dest="edge_weight", action="store",
-                        help="Giving the depth estimate more weight at the edges.",
-                        nargs="+",
-                        default=config["training"]["edge_weight"])
-
-
-    args = parser.parse_args(additional_args)
-
-
-
+    args, config = parse_args() # todo: rename to params
 
     #TODO: integrate these new parameters:
     apply_mask_reg_loss = True
     dataset_format = 3
 
+    mask_loss = MaskLoss(config["training"]["sigma_mode"])
 
     outlier_thresholds = list(set.union(set(args.outlier_thresholds), set(args.relative_outlier_thresholds)))
 
@@ -225,29 +142,6 @@ def train():
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
-    #outlier_thresholds = {}
-    #for i, th in enumerate(args.outlier_thresholds):
-    #    outlier_thresholds[f"o({i})"] = (0, th)
-
-    #for i, th in enumerate(args.relative_outlier_thresholds[1:]):
-    #    outlier_thresholds[f"or({i}|{args.relative_outlier_thresholds[0]})"] = (args.relative_outlier_thresholds[1:], th)
-    # slit loading and storing of models for Backbone and Regressor
-    # load_regressor = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_regressor_chk.pt"
-    # load_backbone = "trained_models/line_bb64_16_14_12c123_32_32_32_64bb_42sc_64_128_reg_lr01_alpha50_1nn_backbone_chk.pt"
-
-    # not loading any pretrained part of any model whatsoever
-    # load_regressor = ""
-    # load_backbone = ""
-
-    # num_epochs = 5000
-    # todo: either do only 100 lines at a time, or go for
-    # tgt_res = (1216, 896)
-    # alpha = 1.0 * (1.0 / 4.0) * 1.0  # usually this is 0.1
-    # alpha = 10.0 #todo: back to 10 for quicker convergence!?
-    # alpha_sigma = 0#1e-10  # how much weight do we give correct confidence measures
-    # learning_rate = 0.2 # learning rate of 0.2 was sufficient for many applications
-    # learning_rate = 0.01  # 0.02 for the branchless regressor (smaller since we feel it's not entirely stable)
-    # momentum = 0.90
     shuffle = True
     slice = True
 
@@ -290,7 +184,7 @@ def train():
                 backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
                                             channels=config["backbone"]["channels"],
                                             channels_sub=config["backbone"]["channels2"],
-                                            use_bn=True)
+                                            use_bn=True, lcn=args.LCN)
             if config["backbone"]["name"] == "BackboneU1":
                 print("BACKBONEU1")
                 backbone = BackboneU1()
@@ -481,7 +375,7 @@ def train():
                     loss = loss * alpha_reg
 
                     if alpha_sigma != 0.0:
-                        loss_sigma = sigma_loss(sigma, x_real, x_gt, mask_gt, config["training"]["sigma_mode"])
+                        loss_sigma = mask_loss(sigma, x_real, x_gt, mask_gt)
                         loss_sigma_acc += loss_sigma.item()
                         loss_sigma_acc_sub += loss_sigma.item()
                         loss += loss_sigma * alpha_sigma
@@ -530,7 +424,7 @@ def train():
                             mask_weight_acc += 1.0
 
                         if alpha_sigma != 0.0:
-                            loss_sigma = sigma_loss(sigma, x_real, x_gt, mask_gt, config["training"]["sigma_mode"])
+                            loss_sigma = mask_loss(sigma, x_real, x_gt, mask_gt)
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
