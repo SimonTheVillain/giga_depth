@@ -113,6 +113,10 @@ regressor = "trained_models/slice256_2stage_class_59_regressor_chk.pt"
 backbone = "trained_models/slice256_2stage_class_59_backbone_chk.pt"
 
 
+regressor = "trained_models/slice256_2stage_class_61_regressor_chk.pt"
+backbone = "trained_models/slice256_2stage_class_61_backbone_chk.pt"
+
+
 #sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
 #sigma_estimator = torch.load(sigma_estimator)
 #sigma_estimator.eval()

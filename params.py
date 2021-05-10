@@ -4,6 +4,13 @@ import os
 import torch
 
 
+def merge_configs(default, additional):
+    merged = default.copy()
+    for key1 in additional:
+        for key2 in additional[key1]:
+            merged[key1][key2] = additional[key1][key2]
+    return merged
+
 def parse_args():
     with open("configs/default.yaml", "r") as ymlfile:
         config = yaml.safe_load(ymlfile)
@@ -15,7 +22,8 @@ def parse_args():
     args, additional_args = parser.parse_known_args()
     if args.config != "":
         with open(args.config, "r") as ymlfile:
-            config = yaml.safe_load(ymlfile)
+            configNew = yaml.safe_load(ymlfile)
+            config = merge_configs(config, configNew)
             # todo: recursively merge both config structures!!!!!!!
     # parser.add_argument("-V", "--version", help="show program version", action="store_true")
     parser.add_argument("-d", "--dataset_path", dest="path", action="store",
@@ -98,6 +106,11 @@ def parse_args():
                         help="Giving the depth estimate more weight at the edges.",
                         nargs="+",
                         default=config["training"]["edge_weight"])
+
+    parser.add_argument("-p", "--pad_projector", dest="pad_proj", action="store",
+                        help="Instead of assuming the projector having the same size, "
+                             "we extend it a bit to the left and right",
+                        default=float(config["dataset"]["pad_proj"]))
 
     args = parser.parse_args(additional_args)
 

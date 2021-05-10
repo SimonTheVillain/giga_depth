@@ -13,6 +13,7 @@ dataset:
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]
+  pad_proj: 0.1
   slice_in:
     start: 0
     height: 896

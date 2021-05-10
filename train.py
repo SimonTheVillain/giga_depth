@@ -129,7 +129,7 @@ def train():
 
     #TODO: integrate these new parameters:
     apply_mask_reg_loss = True
-    dataset_format = 3
+    dataset_format = 4
 
     mask_loss = MaskLoss(config["training"]["sigma_mode"])
 
@@ -333,6 +333,13 @@ def train():
                 ir = ir.to(main_device)
                 mask_gt = mask_gt.to(main_device)
                 x_gt = x_gt.to(main_device)
+
+                #scale the normalized x_pos so it extends a bit to the left and right of the projector
+                x_gt = x_gt * (1.0 / (1.0 + 2.0 * args.pad_proj)) + args.pad_proj
+                #cv2.imshow("x", x_gt[0,0,:,:].detach().cpu().numpy())
+                #cv2.waitKey()
+                mask_gt[torch.logical_or(x_gt < 0.0, x_gt > 1.0)] = 0
+
                 edge_mask = (edge_mask * edge_weight + 1).to(main_device)
 
                 # todo: instead of a query the slice variable should be set accordingly further up!
@@ -348,7 +355,7 @@ def train():
                     torch.autograd.set_detect_anomaly(True)
                     x, sigma, class_losses, x_real, debug = model(ir, x_gt)
                     x_real = x_real.detach()
-
+                    delta = torch.abs(x - x_gt) * (1.0 + 2.0 * args.pad_proj)
                     # log weights and activations of different layers
                     if False:
                         for key, value in debug.items():
@@ -359,14 +366,14 @@ def train():
                     #masked_reg = torch.mean(torch.abs(x - x_gt) * mask_gt) * (1.0 / mask_mean)
 
                     if apply_mask_reg_loss:
-                        loss = torch.mean(torch.abs(x - x_gt) * mask_gt * edge_mask)
-                        loss_reg = torch.mean(torch.abs(x - x_gt) * mask_gt)
+                        loss = torch.mean(delta * mask_gt * edge_mask)
+                        loss_reg = torch.mean(delta * mask_gt)
                         mask_gt_weight = mask_gt.mean().item()
                         mask_weight_acc_sub += mask_gt_weight
                         mask_weight_acc += mask_gt_weight
                     else:
-                        loss = torch.mean(torch.abs(x - x_gt) * edge_mask)
-                        loss_reg = torch.mean(torch.abs(x - x_gt))
+                        loss = torch.mean(delta * edge_mask)
+                        loss_reg = torch.mean(delta)
                         mask_weight_acc_sub += 1.0
                         mask_weight_acc += 1.0
 
@@ -428,7 +435,7 @@ def train():
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
-                delta = torch.abs(x_real - x_gt)
+                delta = torch.abs(x_real - x_gt) * (1.0 + 2.0 * args.pad_proj)
                 if apply_mask_reg_loss:
                     delta_disp = torch.mean(delta * mask_gt).item()
                     loss_disparity_acc += delta_disp
@@ -438,9 +445,9 @@ def train():
                     loss_disparity_acc += delta_disp
                     loss_disparity_acc_sub += delta_disp
 
-                focal_cam = 1115.0 #approx.
-                focal_projector = 850 # chosen in dataset etc
-                delta_scaled = delta * 1024.0 * focal_cam / focal_projector
+                #focal_cam = 1115.0 #approx.
+                #focal_projector = 850 # chosen in dataset etc
+                delta_scaled = delta * 1216.0 * (1.0 + 2.0 * args.pad_proj)
                 for i, th in enumerate(outlier_thresholds):
                     item = (delta_scaled > th).type(torch.float32).mean().item()
                     outlier_acc[i] += item
@@ -449,7 +456,7 @@ def train():
                 # print progress every 99 steps!
                 if i_batch % 100 == 99:
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
-                                      loss_disparity_acc_sub / 100.0 * 1024, step)
+                                      loss_disparity_acc_sub / 100.0 * 1216.0, step)
                     if alpha_sigma > 1e-6: # only plot when the sigma loss has meaningful weight
                         # todo: Rename sigma_loss according to the used training.sigma_mode
                         writer.add_scalar(f'{phase}_subepoch/sigma_loss',
@@ -495,7 +502,7 @@ def train():
 
             #write progress every epoch!
             writer.add_scalar(f"{phase}/disparity",
-                              loss_disparity_acc / dataset_sizes[phase] * args.batch_size * 1024, step)
+                              loss_disparity_acc / dataset_sizes[phase] * args.batch_size * 1216.0, step)
             if alpha_sigma > 1e-6:
                 # todo: Rename sigma_loss according to the used training.sigma_mode
                 writer.add_scalar(f"{phase}/sigma(loss)",
@@ -524,7 +531,7 @@ def train():
                 writer.add_scalar(f"{phase}/class_loss{i}", class_loss / mask_weight_acc, step)
             if phase == 'train':
                 writer.add_scalar(f"{phase}/regression_stage",
-                                  loss_reg_acc / mask_weight_acc * 1024.0, step)
+                                  loss_reg_acc / mask_weight_acc * 1216.0, step)
                 #combo_loss = loss_reg_acc * alpha_reg + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
                 #combo_loss *= 1.0 / dataset_sizes[phase] * args.batch_size
 
@@ -533,7 +540,7 @@ def train():
                 combo_loss += loss_sigma_acc * alpha_sigma / dataset_sizes[phase] * args.batch_size
                 print(f"{phase} loss: {combo_loss}")
             else:  # phase == 'val':
-                disparity = loss_disparity_acc / mask_weight_acc * 1024.0
+                disparity = loss_disparity_acc / mask_weight_acc * 1216.0
 
                 print(f"{phase} disparity error: {disparity}")
 

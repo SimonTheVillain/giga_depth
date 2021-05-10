@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 import os
 import open3d as o3d
-from common.common import LCN
+from common.common import LCN_np
 
 dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity_3")
 tgt_res = (1216, 896)#(1216, 896)
@@ -13,12 +13,13 @@ focal = 1.1154399414062500e+03
 focal_projector = 850
 res_projector = 1024
 baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # left, right
+baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
 
 #we work on half the resolution
 focal *= 0.5
 principal = (principal[0] * 0.5, principal[1] * 0.5)
 
-datasets = GetDataset(dataset_path, False, tgt_res, version=3, debug=True)
+datasets = GetDataset(dataset_path, False, tgt_res, version=4, debug=True)
 dataset = datasets["train"]
 
 def display_pcl(z):
@@ -45,7 +46,7 @@ def display_pcl(z):
 for i, data in enumerate(dataset):
     ir, gt, mask, edges, depth = data
     cv2.imshow("ir", ir[0, :, :])
-    lcn = LCN(ir[0, :, :])
+    lcn = LCN_np(ir[0, :, :])
     cv2.imshow("LCN", lcn)
     cv2.imshow("gt", gt[0, :, :])
     cv2.imshow("mask", mask[0, :, :])
@@ -53,14 +54,19 @@ for i, data in enumerate(dataset):
     cv2.imshow("depth", depth*0.1)
     cv2.imshow("edges", edges[0, :, :])
 
+    side = "left"
+    if i % 2 == 1:
+        side = "right"
 
     #calculating depth from gt! (according to the side of the ir camera)
-    bl = baselines[(i + 0) % 2]
+    bl = baselines[side]
     x = np.arange(0, tgt_res[0]/2).astype(np.float32)
     den = focal_projector * (x[np.newaxis, ...] - principal[0]) - focal * (gt[0, :, :] * res_projector - 511.5)
     cv2.imshow("disparity", den * (1.0 / (focal_projector * focal))) #left camera with lower baseline to projector
     cv2.imshow("neg_disparity", -den * (1.0 / (focal_projector * focal)) * 0.1)#right camera with higher baseline
     d = -np.divide(bl * (focal_projector * focal), den)
+
+    d = (focal * 0.5) * bl / (gt[0, :, :]*tgt_res[0] / 2.0 - np.expand_dims(np.arange(0, gt.shape[2]), 0))
     cv2.imshow("depth_by_gt", d*0.1)
     #cv2.imshow("depth_error", np.abs(d-depth))
     cv2.waitKey()

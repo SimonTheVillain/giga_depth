@@ -765,9 +765,9 @@ __global__ void count_classes(
     }
     int ind_w = inds[ind];
     if(ind_w >= class_count || ind_w < 0){
+    	//TODO: put back in!
         printf("[count_classes]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
-    //TODO: utilize warp aggregated atomics here!!!
     atomicAdd(&counters[ind_w], 1);
 }
 
@@ -785,6 +785,7 @@ __global__ void setup_indices(
     }
     int ind_w = inds[ind];
     if(ind_w > class_count){
+    	//TODO: put back in!!!
         printf("[setup_indices]something is seriously off here ind_w %d, class_count %d \n",ind_w, class_count);
     }
     //TODO: utilize warp aggregated atomics here!!!
@@ -1505,7 +1506,7 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     int threads = 256;
     dim3 blocks((overall_samples + threads - 1) / threads);
 
-
+	//std::cout << "class_count ( count classes) " << weights.size(0) << std::endl;
     count_classes<<<blocks, threads>>>(weights.size(0),//nr of different classes //grad_output.size(0),
                                     inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),
                                     sizes_gpu); //the counts for each class
@@ -1521,7 +1522,7 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
     // 2. repeat at a increasing (x32) strides and set the very first index to 0
     //   The first entry in each group will have the overall count.
     //   The consecutive strides will have the relative offset from there.
-    // 3. with decresing (/32) strides update the relative offsets to absolute ones. Repeat till stride is zero
+    // 3. with decreasing (/32) strides update the relative offsets to absolute ones. Repeat till stride is zero
     int class_count = weights.size(0);
     //int32_t *starting_inds_gpu_2;
     //cudaMalloc(&starting_inds_gpu_2, sizeof(int32_t) * class_count);
@@ -1567,51 +1568,8 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
                                                                 step_size); //stride
 	}
 
-    /*
-    std::vector<int32_t> starting_inds_cpu_2(class_count);
-    cudaMemcpy(&starting_inds_cpu_2[0], starting_inds_gpu_2, sizeof(int32_t) * class_count, cudaMemcpyDeviceToHost);
 
-    //******************************************************************************************
-	//TODO: Is there a sensible way of doing this on the GPU? Not synchronizing here!
-	//cudaDeviceSynchronize(); // the synchronization happens inherently with memcpy since it is on the default stream
-    //download to cpu
-    std::vector<int32_t> sizes_cpu(weights.size(0));
-    cudaMemcpy(&sizes_cpu[0], sizes_gpu, sizeof(int32_t) * weights.size(0), cudaMemcpyDeviceToHost);
-
-
-
-    //cudaDeviceSynchronize(); // the synchronization happens inherently with memcpy since it is on the default stream
-    //accumulate the sizes to get the starting positions (on CPU)
-    std::vector<int32_t> starting_inds_cpu(weights.size(0));
-    int count = 0;
-
-
-    //std::cout << "calculating the starting positions of " << weights.size(0) << "weights" << std::endl;
-    for(int i=0;i<weights.size(0);i++){
-        starting_inds_cpu[i] = count;
-        //TODO: remove debug!
-        if(starting_inds_cpu[i] == starting_inds_cpu_2[i]){
-            std::cout << "starting_ind by cpu " << starting_inds_cpu[i] << " vs gpu: " << starting_inds_cpu_2[i] << std::endl;
-        }else{
-            std::cout << "starting_ind by cpu " << starting_inds_cpu[i] << " vs gpu: " << starting_inds_cpu_2[i] << " at class nr " << i << std::endl;
-
-        }
-
-        assert(starting_inds_cpu[i] == starting_inds_cpu_2[i]);
-        count += sizes_cpu[i];
-    }
-
-    if(count != grad_output.size(0)){
-		//std::cout << "accumulating weight gradients on gpu: " << gpu << " " << prop.name << std::endl;
-        // a serious issue, that needs to be fixed!!!!!
-        std::cout << "counted samples " << count << " vs overall samples " << grad_output.size(0) << std::endl;
-    }
-    assert(count == grad_output.size(0));
-
-    //upload the starting indices for the individual weights
-    cudaMemcpy(starting_inds_gpu, &starting_inds_cpu[0], sizeof(int32_t) * weights.size(0), cudaMemcpyHostToDevice);
-    */
-
+	//std::cout << "class count " << weights.size(0) << std::endl;
     //setup lookup buffer
     setup_indices<<<blocks, threads>>>( weights.size(0),//nr of different classes//grad_output.size(0),
                                     inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),
@@ -1648,19 +1606,6 @@ std::vector<torch::Tensor> cond_mul_cuda_backward(
         //gradient for input: (basically the opposite of the forward path with transposed weights and zeroed bias
         const int m = weights_t.size(1);
         const int n = weights_t.size(2);
-
-        //TODO: remove if the validation from up there is fruitful!!! this with the call of the forward pass
-        /*
-        size_t per_group = 256/std::min(n, 256);//prevent division by zero
-        const dim3 threads3(n, per_group);
-        dim3 blocks((overall_samples + per_group - 1) / per_group);
-        cond_mul_cuda_forward_wide_kernel<scalar_t><<<blocks, threads3>>>(
-                    grad_output.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>(), // input
-                    inds.packed_accessor<int32_t,1,torch::RestrictPtrTraits,size_t>(),//indices are in cheaper datatype
-                    weights_t.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(), // transposed weights
-                    bias_back_zero.packed_accessor<scalar_t,3,torch::RestrictPtrTraits,size_t>(), // no bias (zero bias)
-                    grad_input.packed_accessor<scalar_t,2,torch::RestrictPtrTraits,size_t>()); //output
-        */
 
 
         // gradient for b
