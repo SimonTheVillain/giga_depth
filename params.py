@@ -102,15 +102,21 @@ def parse_args():
                         default=bool(config["backbone"]["local_contrast_norm"]),
                         const=True)
 
-    parser.add_argument("-ew", "--edge_weight", dest="edge_weight", action="store",
+    parser.add_argument("--edge_weight", dest="edge_weight", action="store",
                         help="Giving the depth estimate more weight at the edges.",
                         nargs="+",
                         default=config["training"]["edge_weight"])
 
-    parser.add_argument("-p", "--pad_projector", dest="pad_proj", action="store",
+    parser.add_argument("--pad_projector", dest="pad_proj", action="store",
                         help="Instead of assuming the projector having the same size, "
                              "we extend it a bit to the left and right",
                         default=float(config["dataset"]["pad_proj"]))
+    parser.add_argument("--dataset_type", dest="dataset_type", action="store",
+                        help="Dataset type. Possible options: dataset_rendered_unity_4, shapenet_half_res",
+                        default=config["dataset"]["dataset_type"])
+    parser.add_argument("--downsample_output", dest="downsample_output", action="store",
+                        help="If this flag is set, the depthmap is calculated for half the resolution of input images.",
+                        default=bool(config["dataset"]["downsample_output"]))
 
     args = parser.parse_args(additional_args)
 

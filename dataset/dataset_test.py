@@ -6,29 +6,26 @@ import open3d as o3d
 from common.common import LCN_np
 
 dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity_3")
+dataset_version = "structure_core_unity_4"
+
+dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/shapenet_rendered")
+dataset_version = "shapenet_half_res"
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
 # according to the simulation in unity & the dotpattern extractor (check if this still holds true)
 focal_projector = 850
 res_projector = 1024
-baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # left, right
 baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
 
 #we work on half the resolution
 focal *= 0.5
 principal = (principal[0] * 0.5, principal[1] * 0.5)
 
-datasets = GetDataset(dataset_path, False, tgt_res, version=4, debug=True)
+datasets, baselines, has_lr, focal, principal, tgt_res = GetDataset(dataset_path, False, tgt_res, version=dataset_version, debug=True)
 dataset = datasets["train"]
 
-def display_pcl(z):
-    fx = 1115.44
-    cxr = 604.0
-    cyr = 896.0 * 0.5
-    fx = fx * 0.5
-    cxr = cxr * 0.5
-    cyr = cyr * 0.5
+def display_pcl(z, fx= 1115.44 * 0.5, cxr= 604.0*0.5, cyr=896*0.5*0.5):
     print(z.shape)
     pts = []
     for i in range(0, z.shape[0]):
@@ -46,16 +43,14 @@ def display_pcl(z):
 for i, data in enumerate(dataset):
     ir, gt, mask, edges, depth = data
     cv2.imshow("ir", ir[0, :, :])
-    lcn = LCN_np(ir[0, :, :])
-    cv2.imshow("LCN", lcn)
     cv2.imshow("gt", gt[0, :, :])
     cv2.imshow("mask", mask[0, :, :])
-    #print(f"mask_minmax = {np.min(mask), np.max(mask)}")
     cv2.imshow("depth", depth*0.1)
     cv2.imshow("edges", edges[0, :, :])
+    cv2.waitKey()
 
     side = "left"
-    if i % 2 == 1:
+    if i % 2 == 1 and has_lr:
         side = "right"
 
     #calculating depth from gt! (according to the side of the ir camera)

@@ -3,24 +3,9 @@ import numpy as np
 import cv2
 import os
 import re
-from common.common import LCN
+from common.common import *
+from dataset.dataset_rendered_shapenet import DatasetRenderedShapenet
 
-def downsample(image):
-    image = image.reshape(int(image.shape[0]/2), 2, int(image.shape[1]/2), 2)
-    image = np.mean(image, axis=3)
-    image = np.mean(image, axis=1)
-    return image
-
-def downsampleDepth(d):
-    d = d.reshape(int(d.shape[0]/2), 2, int(d.shape[1]/2), 2)
-    d = np.min(d, axis=3)
-    d = np.min(d, axis=1)
-    return d
-
-def dilatation(src, r):
-    element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (r, r))
-    dilation_dst = cv2.dilate(src, element)
-    return dilation_dst
 
 
 class DatasetRendered2(data.Dataset):
@@ -384,7 +369,7 @@ class DatasetRendered4(data.Dataset):
         x_d = np.expand_dims(x_d, 0)
         mask = np.expand_dims(msk, 0)
 
-        # todo: sobel on depth
+        # Create Edge map by executing sobel on depth
         #  threshold
         grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
         grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
@@ -400,8 +385,21 @@ class DatasetRendered4(data.Dataset):
         return grey, x_d, mask, edges
 
 
-def GetDataset(path, is_npy, tgt_res, version=2, debug=False):
-    if version == 4:
+def GetDataset(path, is_npy, tgt_res, version="unity_4", debug=False):
+    if version == "shapenet_half_res":
+
+        datasets = {"train": DatasetRenderedShapenet(path, "train", debug=debug),
+                    "val": DatasetRenderedShapenet(path, "val", debug=debug),
+                    "test": DatasetRenderedShapenet(path, "test", debug=debug)}
+
+        src_res = (640, 480)
+        principal = (324.7, 250.1)
+        focal = (567.6, 570.2) # same focal length in both directions
+        baselines = {'left': 0.075}
+        has_lr = False
+        return datasets, baselines, has_lr, focal, principal, src_res
+
+    if version == "structure_core_unity_4":
         files = os.listdir(path)
         #print(files)
         keys = []
@@ -419,7 +417,13 @@ def GetDataset(path, is_npy, tgt_res, version=2, debug=False):
             'train': DatasetRendered4(path, keys_train, tgt_res=tgt_res, debug=debug),
             'val': DatasetRendered4(path, keys_val, tgt_res=tgt_res, debug=debug)
         }
-        return datasets
+
+        src_res = (1216, 896)
+        principal = (604, 457)
+        focal = (1.1154399414062500e+03, 1.1154399414062500e+03) # same focal length in both directions
+        has_lr = True
+        baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
+        return datasets, baselines, has_lr, focal, principal, src_res
     if version == 3:
         files = os.listdir(path)
         #print(files)

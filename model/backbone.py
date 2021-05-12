@@ -356,9 +356,9 @@ class BackboneNoSlice3(nn.Module):
 
         self.height = height
         self.features = channels_sub[3]
-        self.conv_start = nn.Conv2d(in_channels, channels[0], 3, padding=(1, 1))
-        self.conv_1 = nn.Conv2d(channels[0], channels[1], 5, padding=(2, 2))
-        self.conv_down = nn.Conv2d(channels[1], channels[2], 5, padding=(2, 2), stride=(2, 2))
+        self.conv_start = nn.Conv2d(in_channels, channels[0], 3, padding=(1, 1)) # 1
+        self.conv_1 = nn.Conv2d(channels[0], channels[1], 5, padding=(2, 2)) # + 2 = 3
+        self.conv_down = nn.Conv2d(channels[1], channels[2], 5, padding=(2, 2), stride=(2, 2)) # + 2 = 5
 
         self.conv_2 = nn.Conv2d(channels_sub[0], channels_sub[1], 5, padding=(2, 2))  # + 2 * 2 = 9
         self.conv_3 = nn.Conv2d(channels_sub[1], channels_sub[2], 5, padding=(2, 2))  # + 2 * 2 = 13

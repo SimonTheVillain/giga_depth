@@ -5,6 +5,24 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+def downsample(image):
+    image = image.reshape(int(image.shape[0]/2), 2, int(image.shape[1]/2), 2)
+    image = np.mean(image, axis=3)
+    image = np.mean(image, axis=1)
+    return image
+
+def downsampleDepth(d):
+    d = d.reshape(int(d.shape[0]/2), 2, int(d.shape[1]/2), 2)
+    d = np.min(d, axis=3)
+    d = np.min(d, axis=1)
+    return d
+
+def dilatation(src, r):
+    element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (r, r))
+    dilation_dst = cv2.dilate(src, element)
+    return dilation_dst
+
 def LCN_np(image, window_size=9):
     eps = 0.001
     width = image.shape[1]

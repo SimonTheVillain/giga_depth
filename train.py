@@ -45,6 +45,7 @@ class CompositeModel(nn.Module):
                 x = x.type(torch.float32)
             else:
                 x, debugs = self.backbone(x, True)
+
             results = self.regressor(x, x_gt)
             # todo: batch norm the whole backbone and merge two dicts:
             # https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python-taking-union-o
@@ -129,7 +130,6 @@ def train():
 
     #TODO: integrate these new parameters:
     apply_mask_reg_loss = True
-    dataset_format = 4
 
     mask_loss = MaskLoss(config["training"]["sigma_mode"])
 
@@ -185,6 +185,17 @@ def train():
                                             channels=config["backbone"]["channels"],
                                             channels_sub=config["backbone"]["channels2"],
                                             use_bn=True, lcn=args.LCN)
+            if config["backbone"]["name"] == "Backbone3Sliced":
+                constructor = lambda pad, channels, downsample: Backbone3Slice(
+                    channels=config["backbone"]["channels"],
+                    channels_sub=config["backbone"]["channels2"],
+                    use_bn=True,
+                    pad=pad, channels_in=channels, downsample=downsample)
+
+                backbone = BackboneSlicer(Backbone3Slice, constructor,
+                                          config["backbone"]["slices"],
+                                          lcn=args.LCN,
+                                          downsample_output=args.downsample_output)
             if config["backbone"]["name"] == "BackboneU1":
                 print("BACKBONEU1")
                 backbone = BackboneU1()
@@ -267,19 +278,11 @@ def train():
 
     if args.half_precision:
         scaler = GradScaler()
-    # print(f"weight_decay (DEBUG): {args.weight_decay}")
-    # optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # the whole unity rendered dataset
-
-    # the filtered dataset
-    # scale = 1 # set to 2 when using numpy
-    # datasets = {
-    #    'train': DatasetRendered2(args.path, 0*scale, 20000*scale, tgt_res=tgt_res, is_npy=args.is_npy),
-    #    'val': DatasetRendered2(args.path, 20000*scale, 20500*scale, tgt_res=tgt_res, is_npy=args.is_npy)
-    # }
-    datasets = GetDataset(args.path, is_npy=args.is_npy, tgt_res=config["dataset"]["tgt_res"],
-                          version=dataset_format)
+    datasets, _, _, _, _, tgt_res = \
+        GetDataset(args.path, is_npy=args.is_npy, tgt_res=config["dataset"]["tgt_res"],
+                   version=args.dataset_type)
+    width = tgt_res[0]
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=args.batch_size,
                                                   shuffle=shuffle, num_workers=args.num_workers)
@@ -447,7 +450,7 @@ def train():
 
                 #focal_cam = 1115.0 #approx.
                 #focal_projector = 850 # chosen in dataset etc
-                delta_scaled = delta * 1216.0 * (1.0 + 2.0 * args.pad_proj)
+                delta_scaled = delta * width * (1.0 + 2.0 * args.pad_proj)
                 for i, th in enumerate(outlier_thresholds):
                     item = (delta_scaled > th).type(torch.float32).mean().item()
                     outlier_acc[i] += item
@@ -456,7 +459,7 @@ def train():
                 # print progress every 99 steps!
                 if i_batch % 100 == 99:
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
-                                      loss_disparity_acc_sub / 100.0 * 1216.0, step)
+                                      loss_disparity_acc_sub / 100.0 * width, step)
                     if alpha_sigma > 1e-6: # only plot when the sigma loss has meaningful weight
                         # todo: Rename sigma_loss according to the used training.sigma_mode
                         writer.add_scalar(f'{phase}_subepoch/sigma_loss',
@@ -502,7 +505,7 @@ def train():
 
             #write progress every epoch!
             writer.add_scalar(f"{phase}/disparity",
-                              loss_disparity_acc / dataset_sizes[phase] * args.batch_size * 1216.0, step)
+                              loss_disparity_acc / dataset_sizes[phase] * args.batch_size * width, step)
             if alpha_sigma > 1e-6:
                 # todo: Rename sigma_loss according to the used training.sigma_mode
                 writer.add_scalar(f"{phase}/sigma(loss)",
@@ -531,7 +534,7 @@ def train():
                 writer.add_scalar(f"{phase}/class_loss{i}", class_loss / mask_weight_acc, step)
             if phase == 'train':
                 writer.add_scalar(f"{phase}/regression_stage",
-                                  loss_reg_acc / mask_weight_acc * 1216.0, step)
+                                  loss_reg_acc / mask_weight_acc * width, step)
                 #combo_loss = loss_reg_acc * alpha_reg + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
                 #combo_loss *= 1.0 / dataset_sizes[phase] * args.batch_size
 
@@ -540,7 +543,7 @@ def train():
                 combo_loss += loss_sigma_acc * alpha_sigma / dataset_sizes[phase] * args.batch_size
                 print(f"{phase} loss: {combo_loss}")
             else:  # phase == 'val':
-                disparity = loss_disparity_acc / mask_weight_acc * 1216.0
+                disparity = loss_disparity_acc / mask_weight_acc * width
 
                 print(f"{phase} disparity error: {disparity}")
 
