@@ -13,9 +13,6 @@ dataset_version = "shapenet_half_res"
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
-# according to the simulation in unity & the dotpattern extractor (check if this still holds true)
-focal_projector = 850
-res_projector = 1024
 baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
 
 #we work on half the resolution
@@ -55,18 +52,11 @@ for i, data in enumerate(dataset):
 
     #calculating depth from gt! (according to the side of the ir camera)
     bl = baselines[side]
-    x = np.arange(0, tgt_res[0]/2).astype(np.float32)
-    den = focal_projector * (x[np.newaxis, ...] - principal[0]) - focal * (gt[0, :, :] * res_projector - 511.5)
-    cv2.imshow("disparity", den * (1.0 / (focal_projector * focal))) #left camera with lower baseline to projector
-    cv2.imshow("neg_disparity", -den * (1.0 / (focal_projector * focal)) * 0.1)#right camera with higher baseline
-    d = -np.divide(bl * (focal_projector * focal), den)
-
-    d = (focal * 0.5) * bl / (gt[0, :, :]*tgt_res[0] / 2.0 - np.expand_dims(np.arange(0, gt.shape[2]), 0))
-    cv2.imshow("depth_by_gt", d*0.1)
-    #cv2.imshow("depth_error", np.abs(d-depth))
+    x = np.arange(0, gt.shape[2]).astype(np.float32)
+    x = np.expand_dims(np.expand_dims(x, 0), 0)
+    disp = gt * gt.shape[2] - x
+    depth = focal[0] * bl / disp
+    cv2.imshow("disparity", disp[0, :, :] * 0.1) #left camera with lower baseline to projector
+    cv2.imshow("neg_disparity", -disp[0, :, :] * 0.1)#right camera with higher baseline
+    cv2.imshow("depth_by_gt", depth[0, :, :]*0.1)
     cv2.waitKey()
-    #display_pcl(depth)
-
-
-    #print(ir)
-

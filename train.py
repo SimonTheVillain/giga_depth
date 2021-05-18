@@ -13,6 +13,7 @@ from model.regressor_1branch import Regressor1Branch
 from model.regressor_branchless import RegressorBranchless
 from model.backbone_6_64 import Backbone6_64
 from experiments.lines.model_lines_CR8_n import *
+from model.composite_model import CompositeModel
 from model.backbone import *
 from model.backboneSliced import *
 from model.regressor import Regressor, Regressor2, Reg_3stage
@@ -24,51 +25,11 @@ from params import parse_args
 
 from torch.utils.tensorboard import SummaryWriter
 
-
-class CompositeModel(nn.Module):
-    def __init__(self, backbone, regressor, half_precision=False):
-        super(CompositeModel, self).__init__()
-        self.half_precision = half_precision
-        self.backbone = backbone
-        self.regressor = regressor
-
-        # TODO: remove this debug(or at least make it so it can run with other than 64 channels
-        # another TODO: set affine parameters to false!
-        # self.bn = nn.BatchNorm2d(64, affine=False)
-
-    def forward(self, x, x_gt=None):
-
-        if x_gt != None:
-            if self.half_precision:
-                with autocast():
-                    x, debugs = self.backbone(x, True)
-                x = x.type(torch.float32)
-            else:
-                x, debugs = self.backbone(x, True)
-
-            results = self.regressor(x, x_gt)
-            # todo: batch norm the whole backbone and merge two dicts:
-            # https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python-taking-union-o
-            # z = {**x, **y}
-            for key, val in debugs.items():
-                results[-1][key] = val
-            return results
-        else:
-
-            if self.half_precision:
-                with autocast():
-                    x = self.backbone(x)
-                x = x.type(torch.float32)
-            else:
-                x = self.backbone(x)
-            return self.regressor(x, x_gt)
-
-
 class MaskLoss(nn.Module):
     def __init__(self, type="mask"):
         super(MaskLoss, self).__init__()
         self.type = type
-        if type=="mask":
+        if type == "mask":
             self.loss = torch.nn.BCEWithLogitsLoss()
         else:
             print("loss not implemented yet")
@@ -83,9 +44,9 @@ def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "varia
         return torch.abs(sigma - mask_gt).mean()
     if mode == "mask":
         # in the mask mode every pixel whose estimate is off by fewer than 0.5 pixel is valid
-        mask_gt_generated = (torch.abs(x-x_gt) < (0.5 / 1024.0)).type(torch.float32)
+        mask_gt_generated = (torch.abs(x - x_gt) < (0.5 / 1024.0)).type(torch.float32)
         mask_gt_generated[mask_gt == 0.0] = 0
-        return torch.abs(sigma - mask_gt).mean()# here we have it! proper mask
+        return torch.abs(sigma - mask_gt).mean()  # here we have it! proper mask
 
     if torch.any(torch.isnan(x)):
         print("x: found nan")
@@ -104,10 +65,10 @@ def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "varia
         print("sigma: found nan")
     if torch.any(torch.isinf(sigma)):
         print("sigma: found inf")
-    #ideally this woudl be 0.001 so we are far away from the preferred precision of 0.1 pixel (0.1*0.1 = 0.01)
+    # ideally this woudl be 0.001 so we are far away from the preferred precision of 0.1 pixel (0.1*0.1 = 0.01)
     eps = 0.001  # sqrt(0.00001) = 0.0003 ... that means we actually have approx 0.3 pixel of basic offset for sigma
-    #print(f"max disparity error {torch.max(torch.abs(x-x_gt))}")
-    term1 = torch.div(torch.square(x - x_gt).clamp(0, 1) * (1024.0*1024.0), sigma * sigma + eps)
+    # print(f"max disparity error {torch.max(torch.abs(x-x_gt))}")
+    term1 = torch.div(torch.square(x - x_gt).clamp(0, 1) * (1024.0 * 1024.0), sigma * sigma + eps)
     term2 = torch.log(sigma * sigma + eps)
     sigma_sq = sigma * sigma
     # term 3 is to stay positive(after all it is sigma^2)
@@ -126,15 +87,14 @@ def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "varia
 
 
 def train():
-    args, config = parse_args() # todo: rename to params
+    args, config = parse_args()  # todo: rename to params
 
-    #TODO: integrate these new parameters:
+    # TODO: integrate these new parameters:
     apply_mask_reg_loss = True
 
     mask_loss = MaskLoss(config["training"]["sigma_mode"])
 
     outlier_thresholds = list(set.union(set(args.outlier_thresholds), set(args.relative_outlier_thresholds)))
-
 
     main_device = f"cuda:{args.gpu_list[0]}"  # torch.cuda.device(args.gpu_list[0])
     # experiment_name = "cr8_2021_256_wide_reg_alpha10"
@@ -174,7 +134,7 @@ def train():
         # for param in backbone.parameters():
         #    param.requires_grad = False
     else:
-        #todo: put that selection into a separate file
+        # todo: put that selection into a separate file
         if args.is_npy:
             backbone = CR8_bb_short(channels=config["backbone"]["channels"],
                                     channels_sub=config["backbone"]["channels2"])
@@ -217,6 +177,12 @@ def train():
             if config["backbone"]["name"] == "BackboneU5Sliced":
                 print("BACKBONEU5Sliced")
                 backbone = BackboneU5Sliced(slices=config["backbone"]["slices"], lcn=args.LCN)
+                assert args.downsample_output, "For the U shaped network it is required to downsample the network"
+                constructor = lambda pad, channels, downsample: BackboneU5Slice(pad=pad, in_channels=channels)
+                backbone = BackboneSlicer(BackboneU5Slice, constructor,
+                                          config["backbone"]["slices"],
+                                          lcn=args.LCN,
+                                          downsample_output=args.downsample_output)
 
     model = CompositeModel(backbone, regressor, args.half_precision)
 
@@ -251,7 +217,7 @@ def train():
         lr_scales = [1.0]
     key_steps.insert(0, -1)
 
-    #assert
+    # assert
     if isinstance(args.alpha_reg, list):
         alpha_regs = args.alpha_reg
     else:
@@ -267,13 +233,15 @@ def train():
     else:
         edge_weights = [args.edge_weight] * len(key_steps)
 
-
     def find_index(epoch, key_steps):
         for i in range(0, len(key_steps)):
             if epoch < key_steps[i]:
                 return i - 1
         return len(key_steps) - 1
-    def lr_lambda(ep): return lr_scales[find_index(ep, key_steps)]
+
+    def lr_lambda(ep):
+        return lr_scales[find_index(ep, key_steps)]
+
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=-1)
 
     if args.half_precision:
@@ -294,15 +262,15 @@ def train():
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
         print(f'Epoch {epoch}/{args.epochs - 1}')
         print('-' * 10)
-        alpha_reg = alpha_regs[find_index(epoch-1, key_steps)]
-        alpha_sigma = float(alpha_sigmas[find_index(epoch-1, key_steps)])
-        edge_weight = float(edge_weights[find_index(epoch-1, key_steps)])
+        alpha_reg = alpha_regs[find_index(epoch - 1, key_steps)]
+        alpha_sigma = float(alpha_sigmas[find_index(epoch - 1, key_steps)])
+        edge_weight = float(edge_weights[find_index(epoch - 1, key_steps)])
 
         def get_lr(optimizer):
             for param_group in optimizer.param_groups:
                 return param_group['lr']
 
-        #todo: Rename alpha_sigma according to the used training.sigma_mode
+        # todo: Rename alpha_sigma according to the used training.sigma_mode
         print(f"alpha_reg {alpha_reg}, alpha_sigma {alpha_sigma}, learning_rate {get_lr(optimizer)}")
 
         for phase in ['train', 'val']:
@@ -325,7 +293,6 @@ def train():
             mask_weight_acc = 0.0
             mask_weight_acc_sub = 0.0
 
-
             outlier_acc = [0.0] * len(outlier_thresholds)
             outlier_acc_sub = [0.0] * len(outlier_thresholds)
 
@@ -337,10 +304,10 @@ def train():
                 mask_gt = mask_gt.to(main_device)
                 x_gt = x_gt.to(main_device)
 
-                #scale the normalized x_pos so it extends a bit to the left and right of the projector
-                x_gt = x_gt * (1.0 / (1.0 + 2.0 * args.pad_proj)) + args.pad_proj
-                #cv2.imshow("x", x_gt[0,0,:,:].detach().cpu().numpy())
-                #cv2.waitKey()
+                # scale the normalized x_pos so it extends a bit to the left and right of the projector
+                x_gt = x_gt * (1.0 - 2.0 * args.pad_proj) + args.pad_proj
+                # cv2.imshow("x", x_gt[0,0,:,:].detach().cpu().numpy())
+                # cv2.waitKey()
                 mask_gt[torch.logical_or(x_gt < 0.0, x_gt > 1.0)] = 0
 
                 edge_mask = (edge_mask * edge_weight + 1).to(main_device)
@@ -358,15 +325,15 @@ def train():
                     torch.autograd.set_detect_anomaly(True)
                     x, sigma, class_losses, x_real, debug = model(ir, x_gt)
                     x_real = x_real.detach()
-                    delta = torch.abs(x - x_gt) * (1.0 + 2.0 * args.pad_proj)
+                    delta = torch.abs(x - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
                     # log weights and activations of different layers
                     if False:
                         for key, value in debug.items():
                             writer.add_scalar(f'debug/{key}', value.item(), step)
 
                     optimizer.zero_grad()
-                    #mask_mean = mask_gt.mean().item() + 0.0001
-                    #masked_reg = torch.mean(torch.abs(x - x_gt) * mask_gt) * (1.0 / mask_mean)
+                    # mask_mean = mask_gt.mean().item() + 0.0001
+                    # masked_reg = torch.mean(torch.abs(x - x_gt) * mask_gt) * (1.0 / mask_mean)
 
                     if apply_mask_reg_loss:
                         loss = torch.mean(delta * mask_gt * edge_mask)
@@ -394,7 +361,6 @@ def train():
                         loss_class_acc = [0] * len(class_losses)
                         loss_class_acc_sub = [0] * len(class_losses)
 
-
                     for i, class_loss in enumerate(class_losses):
                         if apply_mask_reg_loss:
                             loss += torch.mean(class_loss * mask_gt * edge_mask)
@@ -407,7 +373,7 @@ def train():
                             loss_class_acc[i] += mean_class_loss
                             loss_class_acc_sub[i] += mean_class_loss
 
-                    #print(f"loss {loss.item()}")
+                    # print(f"loss {loss.item()}")
                     loss = loss / float(args.accumulation_steps)
                     if args.half_precision:
                         scaler.scale(loss).backward()
@@ -420,7 +386,7 @@ def train():
                         if (i_batch + 1) % args.accumulation_steps == 0:
                             optimizer.step()
                             model.zero_grad()
-                else: # val
+                else:  # val
                     with torch.no_grad():
                         x_real, sigma = model(ir)
                         # loss = torch.mean(torch.abs(x - x_gt)) #mask_gt
@@ -438,7 +404,7 @@ def train():
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
-                delta = torch.abs(x_real - x_gt) * (1.0 + 2.0 * args.pad_proj)
+                delta = torch.abs(x_real - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
                 if apply_mask_reg_loss:
                     delta_disp = torch.mean(delta * mask_gt).item()
                     loss_disparity_acc += delta_disp
@@ -448,9 +414,9 @@ def train():
                     loss_disparity_acc += delta_disp
                     loss_disparity_acc_sub += delta_disp
 
-                #focal_cam = 1115.0 #approx.
-                #focal_projector = 850 # chosen in dataset etc
-                delta_scaled = delta * width * (1.0 + 2.0 * args.pad_proj)
+                # focal_cam = 1115.0 #approx.
+                # focal_projector = 850 # chosen in dataset etc
+                delta_scaled = delta * width * (1.0 / (1.0 - 2.0 * args.pad_proj))
                 for i, th in enumerate(outlier_thresholds):
                     item = (delta_scaled > th).type(torch.float32).mean().item()
                     outlier_acc[i] += item
@@ -460,13 +426,14 @@ def train():
                 if i_batch % 100 == 99:
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
                                       loss_disparity_acc_sub / 100.0 * width, step)
-                    if alpha_sigma > 1e-6: # only plot when the sigma loss has meaningful weight
+                    if alpha_sigma > 1e-6:  # only plot when the sigma loss has meaningful weight
                         # todo: Rename sigma_loss according to the used training.sigma_mode
                         writer.add_scalar(f'{phase}_subepoch/sigma_loss',
                                           loss_sigma_acc_sub / 100.0, step)
 
                     if phase == 'train':
-                        writer.add_scalar(f'{phase}_subepoch/regression_error', loss_reg_acc_sub / mask_weight_acc_sub * 1024, step)
+                        writer.add_scalar(f'{phase}_subepoch/regression_error',
+                                          loss_reg_acc_sub / mask_weight_acc_sub * 1024, step)
 
                         combo_loss = loss_reg_acc_sub * alpha_reg / mask_weight_acc_sub
                         combo_loss += sum(loss_class_acc_sub) / mask_weight_acc_sub
@@ -477,7 +444,7 @@ def train():
                                                                     loss_disparity_acc_sub / mask_weight_acc_sub * 1024))
 
                     for i, class_loss in enumerate(loss_class_acc_sub):
-                        #if i in plotable_class_losses:
+                        # if i in plotable_class_losses:
                         writer.add_scalar(f'{phase}_subepoch/class_loss_{i}', class_loss / mask_weight_acc_sub, step)
                         loss_class_acc_sub[i] = 0
 
@@ -497,13 +464,12 @@ def train():
                     outlier_acc_sub = [0.0] * len(outlier_thresholds)
                     writer.add_scalar(f"{phase}_sub_outlier_ratio/valid", mask_weight_acc_sub / 100, step)
 
-
                     loss_disparity_acc_sub = 0
                     loss_sigma_acc_sub = 0
                     loss_reg_acc_sub = 0
                     mask_weight_acc_sub = 0
 
-            #write progress every epoch!
+            # write progress every epoch!
             writer.add_scalar(f"{phase}/disparity",
                               loss_disparity_acc / dataset_sizes[phase] * args.batch_size * width, step)
             if alpha_sigma > 1e-6:
@@ -535,8 +501,8 @@ def train():
             if phase == 'train':
                 writer.add_scalar(f"{phase}/regression_stage",
                                   loss_reg_acc / mask_weight_acc * width, step)
-                #combo_loss = loss_reg_acc * alpha_reg + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
-                #combo_loss *= 1.0 / dataset_sizes[phase] * args.batch_size
+                # combo_loss = loss_reg_acc * alpha_reg + loss_sigma_acc * alpha_sigma + sum(loss_class_acc_sub)
+                # combo_loss *= 1.0 / dataset_sizes[phase] * args.batch_size
 
                 combo_loss = loss_reg_acc * alpha_reg / mask_weight_acc
                 combo_loss += sum(loss_class_acc) / mask_weight_acc

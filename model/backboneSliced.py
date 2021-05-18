@@ -26,7 +26,7 @@ class BackboneU5Slice(nn.Module):
         self.nsub2 = nn.BatchNorm2d(32)
 
     @staticmethod
-    def get_required_padding():
+    def get_required_padding(downsample=False):
         return 18
 
     def forward(self, x):
@@ -115,13 +115,13 @@ class BackboneU5Sliced(nn.Module):
 class Backbone3Slice(nn.Module):
 
     @staticmethod
-    def get_required_padding():
+    def get_required_padding(downsample=True):
         return 17
 
     def __init__(self, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64],
                  use_bn=False, pad='', channels_in=2, downsample=True):
         super(Backbone3Slice, self).__init__()
-
+        self.downsample=downsample
         p1 = (0, 0, 0, 0)
         p2 = (0, 0, 0, 0)
         p3 = (0, 0, 0, 0)
@@ -155,40 +155,61 @@ class Backbone3Slice(nn.Module):
                                         nn.Conv2d(channels[0], channels[1], 5, padding=(0, 2)),
                                         nn.LeakyReLU())
 
-        if downsample:
 
-            modules = [nn.ConstantPad2d(p2, 0),
-                       nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2), stride=(2, 2)),
-                       nn.BatchNorm2d(channels[2]),
-                       nn.LeakyReLU()]
-            for i in range(0, 3):
-                modules.append(nn.ConstantPad2d(p2, 0))
-                modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2*2
-                if use_bn:
-                    modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
-                modules.append(nn.LeakyReLU())
+        if not downsample:
+            channels_sub = channels_sub.copy()
+            channels_sub[3] *= 4
 
-            self.block2 = nn.Sequential(*modules)
-        else:
-            modules = []
-            for i in range(0, 4):
-                modules.append(nn.ConstantPad2d(p3, 0))
-                modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 7, padding=(0, 3)))  # + 3
-                if use_bn:
-                    modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
-                modules.append(nn.LeakyReLU())
-            i = 4
+        modules = [nn.ConstantPad2d(p2, 0),
+                   nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2), stride=(2, 2)),
+                   nn.BatchNorm2d(channels[2]),
+                   nn.LeakyReLU()]
+        for i in range(0, 3):
             modules.append(nn.ConstantPad2d(p2, 0))
-            modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2
+            modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2*2
             if use_bn:
                 modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
             modules.append(nn.LeakyReLU())
 
-            self.block2 = nn.Sequential(*modules)
+        self.block2 = nn.Sequential(*modules)
+        if downsample:
+            pass
+            #modules = [nn.ConstantPad2d(p2, 0),
+            #           nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2), stride=(2, 2)),
+            #           nn.BatchNorm2d(channels[2]),
+            #           nn.LeakyReLU()]
+            #for i in range(0, 3):
+            #    modules.append(nn.ConstantPad2d(p2, 0))
+            #    modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2*2
+            #    if use_bn:
+            #        modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
+            #    modules.append(nn.LeakyReLU())
+
+            #self.block2 = nn.Sequential(*modules)
+        else:
+            pass
+            #modules = []
+            #for i in range(0, 4):
+            #    modules.append(nn.ConstantPad2d(p3, 0))
+            #    modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 7, padding=(0, 3)))  # + 3
+            #    if use_bn:
+            #        modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
+            #    modules.append(nn.LeakyReLU())
+            #i = 4
+            #modules.append(nn.ConstantPad2d(p2, 0))
+            #modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2
+            #if use_bn:
+            #    modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
+            #modules.append(nn.LeakyReLU())
+
+            #self.block2 = nn.Sequential(*modules)
 
     def forward(self, x):
         x = self.block1(x)
         x = self.block2(x)
+        if not self.downsample:
+            x = x.reshape((x.shape[0], int(x.shape[1] / 4), 2, 2, x.shape[2], x.shape[3]))
+            x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], x.shape[1], x.shape[4] * 2, x.shape[5] * 2))
         return x
 
 
@@ -197,7 +218,7 @@ class BackboneSlicer(nn.Module):
     def __init__(self, BackboneSlice, constructor, slices, lcn=True, downsample_output=True):
         super(BackboneSlicer, self).__init__()
         in_channels = 1
-        self.required_padding = BackboneSlice.get_required_padding()
+        self.required_padding = BackboneSlice.get_required_padding(downsample_output)
         self.LCN = lcn
         if lcn:
             in_channels = 2

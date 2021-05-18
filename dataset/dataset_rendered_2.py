@@ -385,6 +385,7 @@ class DatasetRendered4(data.Dataset):
         return grey, x_d, mask, edges
 
 
+#todo: put this into a separate dataset file
 def GetDataset(path, is_npy, tgt_res, version="unity_4", debug=False):
     if version == "shapenet_half_res":
 
@@ -395,7 +396,7 @@ def GetDataset(path, is_npy, tgt_res, version="unity_4", debug=False):
         src_res = (640, 480)
         principal = (324.7, 250.1)
         focal = (567.6, 570.2) # same focal length in both directions
-        baselines = {'left': 0.075}
+        baselines = {'left': -0.075}
         has_lr = False
         return datasets, baselines, has_lr, focal, principal, src_res
 
