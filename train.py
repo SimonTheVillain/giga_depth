@@ -5,13 +5,7 @@ import torch.nn as nn
 import torch.nn.modules.loss
 import torch.optim as optim
 from torch.cuda.amp.grad_scaler import GradScaler
-from torch.cuda.amp import autocast
-from dataset.dataset_rendered_2 import DatasetRendered2, GetDataset
-from model.regressor_2Stage import Regressor2Stage
-from model.regressor_1Stage import Regressor1Stage
-from model.regressor_1branch import Regressor1Branch
-from model.regressor_branchless import RegressorBranchless
-from model.backbone_6_64 import Backbone6_64
+from dataset.datasets import GetDataset
 from experiments.lines.model_lines_CR8_n import *
 from model.composite_model import CompositeModel
 from model.backbone import *
@@ -19,8 +13,6 @@ from model.backboneSliced import *
 from model.regressor import Regressor, Regressor2, Reg_3stage
 from torch.utils.data import DataLoader
 import math
-import argparse
-import yaml
 from params import parse_args
 
 from torch.utils.tensorboard import SummaryWriter
@@ -29,16 +21,22 @@ class MaskLoss(nn.Module):
     def __init__(self, type="mask"):
         super(MaskLoss, self).__init__()
         self.type = type
-        if type == "mask":
-            self.loss = torch.nn.BCEWithLogitsLoss()
+        if type == "mask" or type == "automask":
+            self.loss = torch.nn.BCEWithLogitsLoss(reduction='none')
         else:
             print("loss not implemented yet")
 
     def forward(self, sigma, x, x_gt, mask_gt):
         if self.type == "mask":
-            return self.loss(sigma, mask_gt)
+            return torch.mean(self.loss(sigma, mask_gt))
+        if self.type == "automask":
+            mask = mask_gt.clone()
+            mask[torch.abs(x - x_gt) < 0.5] = 0.0 # invalidate every pixel we are more than half a pixel away
+            loss = self.loss(sigma, mask)
+            loss[mask == 0.0] *= 10.0
+            return torch.mean(loss)
 
-
+#todo: remove this old code!!!!
 def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "variance"
     if mode == "mask_direct":
         return torch.abs(sigma - mask_gt).mean()
