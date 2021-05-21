@@ -31,7 +31,7 @@ class MaskLoss(nn.Module):
             return torch.mean(self.loss(sigma, mask_gt))
         if self.type == "automask":
             mask = mask_gt.clone()
-            mask[torch.abs(x - x_gt) < 0.5] = 0.0 # invalidate every pixel we are more than half a pixel away
+            mask[torch.abs(x - x_gt) < (0.5 / 1280)] = 0.0 # invalidate every pixel we are more than half a pixel away
             loss = self.loss(sigma, mask)
             loss[mask == 0.0] *= 10.0
             return torch.mean(loss)
