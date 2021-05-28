@@ -40,7 +40,7 @@ def GetDataset(path, is_npy, tgt_res, version="unity_4", debug=False):
         has_lr = True
         baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
         return datasets, baselines, has_lr, focal, principal, src_res
-    if version == 3:
+    if version == 3: #todo: remove deprecated!!!
         files = os.listdir(path)
         #print(files)
         keys = []
@@ -59,7 +59,7 @@ def GetDataset(path, is_npy, tgt_res, version="unity_4", debug=False):
             'val': DatasetRendered3(path, keys_val, tgt_res=tgt_res, debug=debug)
         }
         return datasets
-    if version == 2:
+    if version == 2: # todo: remove deprecated
         max_ind = 0
         files = os.listdir(path)
         for file in files:

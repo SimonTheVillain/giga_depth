@@ -7,9 +7,9 @@ import numpy as np
 #Work in the parent directory
 os.chdir("../")
 
-device = "cuda:0"
-regressor_model_pth = "trained_models/shapenet_small_63_regressor.pt"
-backbone_model_pth = "trained_models/shapenet_small_63_backbone.pt"
+device = "cuda:1"
+regressor_model_pth = "trained_models/shapenet_small_64_regressor.pt"
+backbone_model_pth = "trained_models/shapenet_small_64_backbone.pt"
 path_src = "/media/simon/ext_ssd/datasets/shapenet_rendered_test_compressed"
 path_results = "/media/simon/ext_ssd/datasets/shapenet_rendered_test_results/GigaDepth"
 
@@ -34,15 +34,15 @@ def apply_recursively(model, input_root, output_root, current_sub ):
 
             cv2.imshow("ir", ir)
             cv2.waitKey(1)
-            ir = torch.tensor(ir).cuda()
+            ir = torch.tensor(ir).to(device)
             ir = ir.unsqueeze(0).unsqueeze(0)
             dst = os.path.join(current_tgt, path)
             with torch.no_grad():
                 x, msk = model(ir)
                 x = x[0, 0, :, :]
-                x = (x - pad) / (1.0 - 2.0 * pad)
+                #x = (x - pad) / (1.0 - 2.0 * pad)
                 x = x * x.shape[1]
-                x_0 = torch.arange(0, x.shape[1]).unsqueeze(0).cuda()
+                x_0 = torch.arange(0, x.shape[1]).unsqueeze(0).to(device)
                 x -= x_0
                 x *= -1.0
                 x = x.detach().cpu().numpy()
@@ -58,5 +58,5 @@ regressor.eval()
 
 model = CompositeModel(backbone, regressor)
 
-model.cuda()
+model.to(device)
 apply_recursively(model, path_src, path_results, "")

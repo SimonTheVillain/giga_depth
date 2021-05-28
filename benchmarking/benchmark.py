@@ -10,8 +10,8 @@ os.chdir("../")
 
 path_src = Path("/media/simon/ext_ssd/datasets/shapenet_rendered_test_compressed")
 path_results = Path("/media/simon/ext_ssd/datasets/shapenet_rendered_test_results")
-algorithms = ["HyperDepth", "GigaDepth", "connecting_the_dots"]
-scales = {"HyperDepth": 1.0, "GigaDepth": 1.0, "connecting_the_dots": 1.0}
+algorithms = ["HyperDepth", "GigaDepth", "connecting_the_dots", "connecting_the_dots_direct"]
+scales = {"HyperDepth": 1.0, "GigaDepth": 1.0, "connecting_the_dots": 1.0, "connecting_the_dots_direct": 1.0}
 
 def files_recursively(input_root, output_root, current_sub, algorithms, result):
     current_src = input_root / current_sub

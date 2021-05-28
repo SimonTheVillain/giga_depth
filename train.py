@@ -31,7 +31,7 @@ class MaskLoss(nn.Module):
             return torch.mean(self.loss(sigma, mask_gt))
         if self.type == "automask":
             mask = mask_gt.clone()
-            mask[torch.abs(x - x_gt) < (0.5 / 1280)] = 0.0 # invalidate every pixel we are more than half a pixel away
+            mask[torch.abs(x - x_gt) > (0.5 / 1280)] = 0.0 # invalidate every pixel we are more than half a pixel away
             loss = self.loss(sigma, mask)
             loss[mask == 0.0] *= 10.0
             return torch.mean(loss)
@@ -123,7 +123,8 @@ def train():
                                reg_line_div=config["regressor"]["reg_line_div"],
                                c3_line_div=config["regressor"]["c3_line_div"],
                                close_far_separation=config["regressor"]["close_far_separation"],
-                               sigma_mode=config["regressor"]["sigma_mode"])
+                               sigma_mode=config["regressor"]["sigma_mode"],
+                               pad_proj=args.pad_proj)
 
     if config["backbone"]["load_file"] != "":
         backbone = torch.load(config["backbone"]["load_file"])
@@ -303,7 +304,7 @@ def train():
                 x_gt = x_gt.to(main_device)
 
                 # scale the normalized x_pos so it extends a bit to the left and right of the projector
-                x_gt = x_gt * (1.0 - 2.0 * args.pad_proj) + args.pad_proj
+                #x_gt = x_gt * (1.0 - 2.0 * args.pad_proj) + args.pad_proj
                 # cv2.imshow("x", x_gt[0,0,:,:].detach().cpu().numpy())
                 # cv2.waitKey()
                 mask_gt[torch.logical_or(x_gt < 0.0, x_gt > 1.0)] = 0
@@ -323,7 +324,8 @@ def train():
                     torch.autograd.set_detect_anomaly(True)
                     x, sigma, class_losses, x_real, debug = model(ir, x_gt)
                     x_real = x_real.detach()
-                    delta = torch.abs(x - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
+                    #delta = torch.abs(x - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
+                    delta = torch.abs(x - x_gt)
                     # log weights and activations of different layers
                     if False:
                         for key, value in debug.items():
@@ -402,7 +404,8 @@ def train():
                             loss_sigma_acc += loss_sigma.item()
                             loss_sigma_acc_sub += loss_sigma.item()
 
-                delta = torch.abs(x_real - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
+                #delta = torch.abs(x_real - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
+                delta = torch.abs(x_real - x_gt)
                 if apply_mask_reg_loss:
                     delta_disp = torch.mean(delta * mask_gt).item()
                     loss_disparity_acc += delta_disp
@@ -414,7 +417,8 @@ def train():
 
                 # focal_cam = 1115.0 #approx.
                 # focal_projector = 850 # chosen in dataset etc
-                delta_scaled = delta * width * (1.0 / (1.0 - 2.0 * args.pad_proj))
+                #delta_scaled = delta * width * (1.0 / (1.0 - 2.0 * args.pad_proj))
+                delta_scaled = delta * width
                 for i, th in enumerate(outlier_thresholds):
                     item = (delta_scaled > th).type(torch.float32).mean().item()
                     outlier_acc[i] += item

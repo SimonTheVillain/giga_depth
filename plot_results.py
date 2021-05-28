@@ -3,8 +3,7 @@ import os
 import torch
 import torch.nn as nn
 import matplotlib
-from dataset.dataset_rendered_2 import *
-from dataset.dataset_captured import DatasetCaptured
+from dataset.datasets import GetDataset
 from experiments.lines.model_lines_CR8_n import *
 
 import numpy as np
@@ -47,7 +46,7 @@ class CompositeModel(nn.Module):
         return self.regressor(x, x_gt)
 
 dataset_path = "/media/simon/ssd_data/data/datasets/structure_core"
-dataset_version = 3
+dataset_version = "structure_core_unity_4"
 
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
@@ -58,9 +57,9 @@ principal = (principal[0] * 0.5, principal[1] * 0.5)
 focal_projector = 850
 res_projector = 1024
 
-baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # right, left. the left camera has the higher baseline
-if dataset_version >= 3:
-    baselines = [0.0634, 0.0634 - 0.07501] # TODO: are the baselines really switched in the new dataset? is this right?
+#baselines = [0.0634 - 0.07501, 0.0634 - 0.0] # right, left. the left camera has the higher baseline
+#if dataset_version >= 3:
+baselines = [0.0634, 0.0634 - 0.07501] # TODO: are the baselines really switched in the new dataset? is this right?
     # it really seems like the left camera has a higher baseline
 
 lines_only = True
@@ -117,6 +116,11 @@ regressor = "trained_models/slice256_2stage_class_61_regressor_chk.pt"
 backbone = "trained_models/slice256_2stage_class_61_backbone_chk.pt"
 
 
+regressor = "trained_models/slice256_2stage_class_64_regressor_chk.pt"
+backbone = "trained_models/slice256_2stage_class_64_backbone_chk.pt"
+
+
+
 #sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
 #sigma_estimator = torch.load(sigma_estimator)
 #sigma_estimator.eval()
@@ -140,10 +144,10 @@ if regressor.height == 448:
         if show_full:
             fig, axs = plt.subplots(1, 2)
         else:
-            fig, axs = plt.subplots(5, 1)
+            fig, axs = plt.subplots(6, 1)
 else:
     if not show_pcl:
-        fig, axs = plt.subplots(5, 1)
+        fig, axs = plt.subplots(6, 1)
 device = torch.cuda.current_device()
 
 model = CompositeModel(backbone, regressor)
@@ -152,16 +156,20 @@ model.eval()
 
 if rendered:
     dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity_3"
-    dataset = GetDataset(dataset_path, is_npy=False, tgt_res=(1216, 896), version=dataset_version)["val"]
+    datasets, baselines, has_lr, focal, principal, src_res = GetDataset(dataset_path, is_npy=False, tgt_res=(1216, 896), version=dataset_version)
+    dataset = datasets["val"]
 else:
-    dataset = DatasetCaptured(root_dir=dataset_path, from_ind=0, to_ind=800)
+    assert 0, "shit, this needs to be redone"
+    #datasets, baselines, has_lr, focal, principal, src_res = DatasetCaptured(root_dir=dataset_path, from_ind=0, to_ind=800)
 
 
 for i, ir in enumerate(dataset):
-    bl = baselines[i%2]
-    #bl = -baselines[1]# Did i mix up left and right when creating the dataset?
-    if rendered:
-        bl = baselines[i % 2]
+    side = "left"
+    if has_lr:
+        side = ["left", "right"][i % 2]
+
+    bl = baselines[side]
+
     with torch.no_grad():
         if rendered:
             ir = ir[0] # for the rendered dataset ir is a tuple of ir, mask and gt
@@ -171,6 +179,7 @@ for i, ir in enumerate(dataset):
 
         x, sigma = model(ir.contiguous())
         #mask, sigma_est = sigma_estimator(ir)
+        sigma = torch.sigmoid(sigma)
 
         #print(x)
         ir = ir.cpu().numpy()
@@ -179,9 +188,15 @@ for i, ir in enumerate(dataset):
         #sigma_est = sigma_est.cpu().numpy()
         #mask = mask.cpu().numpy()
 
-        x_range = np.arange(0, tgt_res[0] / 2).astype(np.float32)
-        den = focal_projector * (x_range[np.newaxis, ...] - principal[0]) - focal * (x[0, :, :] * res_projector - 511.5)
-        d = np.divide(bl * (focal_projector * focal), den)
+        pad = 0.1#todo: make this a parameter that is stored within the network!
+        #x = (x - pad) / (1.0 - 2.0 * pad)
+
+        x_range = np.arange(0, x.shape[3]).astype(np.float32)
+        x_range = x_range.reshape((1,) * 3 + (-1,))
+        disp = x * x.shape[3] - x_range
+        disp = disp * src_res[0] / disp.shape[3]
+        d = focal[0] * bl / disp
+
         d = d.clip(-0.1, 5)
         if show_pcl:
             display_pcl(d, clip_from)
@@ -205,7 +220,7 @@ for i, ir in enumerate(dataset):
 
                 axs[2].cla()
                 axs[2].set_title('Depth single line')
-                axs[2].plot(d[0, 32, :].squeeze())
+                axs[2].plot(d[0, 0, 32, :].squeeze())
 
                 axs[3].cla()
                 axs[3].set_title('sigma')
@@ -214,7 +229,11 @@ for i, ir in enumerate(dataset):
                 #todo: the depth estimaion!
                 axs[4].cla()
                 axs[4].set_title('Depth')
-                axs[4].imshow(d[0, :, :])
+                axs[4].imshow(d[0, 0, :, :])
+
+                axs[5].cla()
+                axs[5].set_title('confidence')
+                axs[5].imshow(np.clip(sigma[0, 0, :, :], 0, 1))
 
 
             plt.show(block=False)

@@ -1,0 +1,58 @@
+training:
+  name: shapenet_small_64
+  batch_size: 1
+  learning_rate: 4.0
+  lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
+  momentum: 0.9
+  weight_decay: 1e-5
+  alpha_reg: [500, 1000, 2000, 2000, 2000]
+  alpha_sigma: [1e-2, 1e-2, 1e-2, 1e-1, 1]
+  edge_weight: [0, 1, 2, 4, 20]
+  sigma_mode: automask
+  gpu_list: [0]
+  epochs: 13
+  key_epochs: [ 2, 4, 6, 8 ]
+  half_precision: False
+
+dataset:
+  path: /media/simon/ssd_data/data/datasets/shapenet_rendered
+  is_npy: False
+  workers: 8
+  tgt_res: [ 640, 480 ]
+  downsample_output: False #todo: implement this
+  dataset_type: shapenet_half_res
+  slice_in:
+    start: 0
+    height: 480
+  slice_out:
+    start: 0
+    height: 480
+
+backbone:
+  load_file: ""
+  name: Backbone3Sliced #todo: sliced backbone
+  lines: 480
+  slices: 2
+  channels: [16, 32, 64]
+  channels2: [64, 64, 64, 64] # in case of not downsampling output, we need 8 layers here
+  norm: batch
+  local_contrast_norm: True
+
+regressor:
+  load_file: ""
+  name: Regv3
+  ch_in: 64
+  lines: 480
+  bb: []
+  classes: [16, 12, 8]
+  padding: [0, 2, 4]
+  class_bb: [[32], [32], [32]]
+  superclasses: 384
+  ch_reg: [32]
+  msk: [32, 16]
+  regress_neighbours: 1
+  reg_line_div: 4
+  c3_line_div: 8 #8 might be over the top but lets see how we fare with this!
+  close_far_separation: True
+  sigma_mode: conv
+

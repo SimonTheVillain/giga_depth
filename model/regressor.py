@@ -437,7 +437,8 @@ class Reg_3stage(nn.Module):
                  reg_line_div=1,
                  c3_line_div=1,
                  close_far_separation=False, # split input up in high and low half and feed low->c1&c2 and high->c2/c3/r
-                 sigma_mode="line"): # "conv", "line", "class"
+                 sigma_mode="line",
+                 pad_proj=0.1): # "conv", "line", "class"
         super(Reg_3stage, self).__init__()
         if c3_line_div == 1 and len(ch_latent) != 0:
             print("You can't share weights between lines the classification c3 if there is  a per line backbone( "
@@ -450,6 +451,7 @@ class Reg_3stage(nn.Module):
         self.class_factor = int(classes123 / superclasses)
         self.regress_neighbours = regress_neighbours
         self.reg_line_div = reg_line_div
+        self.pad_proj = pad_proj
 
         # the first latent layer for classification is shared
         self.bb = nn.ModuleList()
@@ -501,6 +503,12 @@ class Reg_3stage(nn.Module):
 
 
     def forward(self, x_in, x_gt=None):
+
+        #scale the groundtruth that -pad_proj to 1.0 + pad_proj
+        #are scaled to between 0.0 and 1.0
+        if x_gt is not None:
+            x_gt = x_gt * (1.0 - 2.0 * self.pad_proj) + self.pad_proj
+
         height = x_in.shape[2]
         width = x_in.shape[3]
         classes123 = self.classes[0] * self.classes[1] * self.classes[2]
@@ -571,7 +579,8 @@ class Reg_3stage(nn.Module):
                 # from (b * h * w, 1) to (b, 1, h, w)
                 mask = x.reshape((bs, 1, height, width))
 
-
+            #undo the scaling that is made at the beginning
+            x_real = (x_real - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
             return x_real, mask
         else:
 
@@ -634,4 +643,7 @@ class Reg_3stage(nn.Module):
                 # from (b * h * w, 1) to (b, 1, h, w)
                 mask = x.reshape((bs, 1, height, width))
 
+            #undo the scaling that is made at the beginning of this function
+            x_real = (x_real - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
+            x_reg_combined = (x_reg_combined - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
             return x_reg_combined, mask, class_losses, x_real, debugs
