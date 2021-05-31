@@ -26,8 +26,8 @@ if test_small:
     #linear = Ref2CondMul(classes, input_features, output_features).cuda(device)
     linear_ref = RefCondMul(classes, input_features, output_features).cuda(device)
     linear_custom = CondMul(classes, input_features, output_features).cuda(device)
-    linear_custom.w.data = linear_ref.w.data.clone()
-    linear_custom.b.data = linear_ref.b.data.clone()
+    linear_custom.w.serialized_data = linear_ref.w.serialized_data.clone()
+    linear_custom.b.serialized_data = linear_ref.b.serialized_data.clone()
 
     print("forward: (custom)")
     y = linear_custom(X, inds)
@@ -242,17 +242,17 @@ def measure_time_two_way_per_line_conv(width, height, m, n):
 def compare_models(model, model_ref, model_conv, batch_size, width, height, classes):
 
     # fill all the models with the same set of weights
-    model.w.data = model_ref.w.data.clone()
-    model.b.data = model_ref.b.data.clone()
+    model.w.serialized_data = model_ref.w.serialized_data.clone()
+    model.b.serialized_data = model_ref.b.serialized_data.clone()
 
     # copy over the weights for a convolutional implementation!
     #print(model.w.data.shape)
-    w = model_ref.w.data.clone()
+    w = model_ref.w.serialized_data.clone()
     w = w.permute(0, 2, 1).reshape(-1, w.shape[1], 1, 1)
-    model_conv.conv.weight.data = w
-    b = model_ref.b.data.clone()
+    model_conv.conv.weight.serialized_data = w
+    b = model_ref.b.serialized_data.clone()
     b = b.permute(0, 2, 1).reshape(-1)
-    model_conv.conv.bias.data = b
+    model_conv.conv.bias.serialized_data = b
 
     #print(model_conv.conv.weight.data.shape)
     #generate test input:

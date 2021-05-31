@@ -22,22 +22,22 @@ class Backbone2(nn.Module):
         if self.shallow != other.shallow:
             return
 
-        self.conv_start.weight.data = other.conv_start.weight.data
-        self.conv_start.bias.data = other.conv_start.bias.data
-        self.conv_ds1.weight.data = other.conv_ds1.weight.data
-        self.conv_ds1.bias.data = other.conv_ds1.bias.data
-        self.conv_1.weight.data = other.conv_1.weight.data
-        self.conv_1.bias.data = other.conv_1.bias.data
-        self.conv_2.weight.data = other.conv_2.weight.data
-        self.conv_2.bias.data = other.conv_2.bias.data
-        self.conv_3.weight.data = other.conv_3.weight.data
-        self.conv_3.bias.data = other.conv_3.bias.data
-        self.conv_4.weight.data = other.conv_4.weight.data
-        self.conv_4.bias.data = other.conv_4.bias.data
-        self.conv_5.weight.data = other.conv_5.weight.data
-        self.conv_5.bias.data = other.conv_5.bias.data
-        self.conv_6.weight.data = other.conv_6.weight.data
-        self.conv_6.bias.data = other.conv_6.bias.data
+        self.conv_start.weight.data = other.conv_start.weight.serialized_data
+        self.conv_start.bias.data = other.conv_start.bias.serialized_data
+        self.conv_ds1.weight.data = other.conv_ds1.weight.serialized_data
+        self.conv_ds1.bias.data = other.conv_ds1.bias.serialized_data
+        self.conv_1.weight.data = other.conv_1.weight.serialized_data
+        self.conv_1.bias.data = other.conv_1.bias.serialized_data
+        self.conv_2.weight.data = other.conv_2.weight.serialized_data
+        self.conv_2.bias.data = other.conv_2.bias.serialized_data
+        self.conv_3.weight.data = other.conv_3.weight.serialized_data
+        self.conv_3.bias.data = other.conv_3.bias.serialized_data
+        self.conv_4.weight.data = other.conv_4.weight.serialized_data
+        self.conv_4.bias.data = other.conv_4.bias.serialized_data
+        self.conv_5.weight.data = other.conv_5.weight.serialized_data
+        self.conv_5.bias.data = other.conv_5.bias.serialized_data
+        self.conv_6.weight.data = other.conv_6.weight.serialized_data
+        self.conv_6.bias.data = other.conv_6.bias.serialized_data
 
     def forward(self, x):
 

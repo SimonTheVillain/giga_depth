@@ -32,7 +32,7 @@ for folder in ["angel", "arch", "fox", "gargoyle", "lion"]:
 
         ir = scipy.io.loadmat(path_mrf / "raw" / folder / f"ir{i:02d}.mat")
         ir = ir["J"] * 64
-        cv2.imwrite(str(path_mrf / "raw_py" / folder / f"rgb{i:02d}.png"), ir)
+        cv2.imwrite(str(path_mrf / "raw_py" / folder / f"ir{i:02d}.png"), ir)
 
 
 
@@ -59,6 +59,6 @@ for folder in ["extra", "1", "2", "3", "4", "5"]:
 
             ir = scipy.io.loadmat(path / f"ir{key}.mat")
             ir = ir["J"] * 64
-            cv2.imwrite(str(path_out / f"rgb{i:03d}.png"), ir)
+            cv2.imwrite(str(path_out / f"ir{i:03d}.png"), ir)
 
             i = i+1

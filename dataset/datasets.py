@@ -14,6 +14,18 @@ def GetDataset(path, is_npy, tgt_res, version="unity_4", debug=False):
         baselines = {'left': -0.075}
         has_lr = False
         return datasets, baselines, has_lr, focal, principal, src_res
+    if version == "shapenet_full_res":
+
+        datasets = {"train": DatasetRenderedShapenet(path, "train", full_res=True, use_npy=False, debug=debug),
+                    "val": DatasetRenderedShapenet(path, "val", full_res=True, use_npy=False, debug=debug),
+                    "test": DatasetRenderedShapenet(path, "test", full_res=True, use_npy=False, debug=debug)}
+
+        src_res = (640 * 2, 480 * 2)
+        principal = (324.7 * 2, 250.1 * 2)
+        focal = (567.6 * 2, 570.2 * 2) # same focal length in both directions
+        baselines = {'left': -0.075}
+        has_lr = False
+        return datasets, baselines, has_lr, focal, principal, src_res
 
     if version == "structure_core_unity_4":
         files = os.listdir(path)
