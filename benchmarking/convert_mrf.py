@@ -8,7 +8,7 @@ baseline = 0.075# is it?
 focal = 578
 # the depth is in millimeter: if we want it in meter.... divide by 1000
 
-path_mrf = Path("/media/simon/LaCie/datasets/mrf")
+path_mrf = Path("/media/simon/ext_ssd/datasets/mrf")
 
 if not os.path.exists(path_mrf / "raw_py"):
     os.mkdir(path_mrf / "raw_py")
