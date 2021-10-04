@@ -8,6 +8,10 @@ in_paths = ["/media/simon/LaCie/structure_core_unity_0",
             "/media/simon/LaCie/structure_core_unity_1",
             "/media/simon/LaCie/structure_core_unity_2"]
 out_path = "/media/simon/LaCie/datasets/structure_core_unity_4"
+
+
+in_paths = ["/media/simon/WD/structure_core_unity_test_raw"]
+out_path = "/media/simon/WD/structure_core_unity_test"
 count = 0
 for path in in_paths:
 
