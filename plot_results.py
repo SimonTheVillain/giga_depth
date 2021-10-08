@@ -9,6 +9,7 @@ from experiments.lines.model_lines_CR8_n import *
 import numpy as np
 import open3d as o3d
 import matplotlib.pyplot as plt
+import cv2
 import matplotlib.image as mpimg
 
 
@@ -66,7 +67,7 @@ lines_only = True
 is_npy = True
 
 show_pcl = False
-show_full = False
+show_full = True
 rendered = True
 
 
@@ -120,20 +121,21 @@ regressor = "trained_models/slice256_2stage_class_64_regressor_chk.pt"
 backbone = "trained_models/slice256_2stage_class_64_backbone_chk.pt"
 
 
+regressor = "trained_models/slice256_2stage_class_64_regressor_chk.pt"
+backbone = "trained_models/slice256_2stage_class_64_backbone_chk.pt"
 
-#sigma_estimator = "trained_models/sigma_mask_scaled_chk.pt"
-#sigma_estimator = torch.load(sigma_estimator)
-#sigma_estimator.eval()
 
-#regressor = "trained_models/cr8_2021_regressor_chk.pt"
-#backbone = "trained_models/cr8_2021_backbone_chk.pt"
+regressor = "trained_models/full_64_nolcn_regressor_chk.pt"
+backbone = "trained_models/full_64_nolcn_backbone_chk.pt"
+
+
+
 
 backbone = torch.load(backbone)
 backbone.eval()
 
 regressor = torch.load(regressor)
 regressor.eval()
-#regressor.sigma_mode = "line" #only needed for 44 - 45
 
 clip_from = 100
 input_height = 128
@@ -155,10 +157,12 @@ model.to(device)
 model.eval()
 
 if rendered:
-    dataset_path = "/media/simon/ssd_data/data/datasets/structure_core_unity_3"
+    dataset_path = "/media/simon/ssd_datasets/datasets/structure_core_unity_3"
     datasets, baselines, has_lr, focal, principal, src_res = GetDataset(dataset_path, is_npy=False, tgt_res=(1216, 896), version=dataset_version)
     dataset = datasets["val"]
 else:
+    dataset_path = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined"
+
     assert 0, "shit, this needs to be redone"
     #datasets, baselines, has_lr, focal, principal, src_res = DatasetCaptured(root_dir=dataset_path, from_ind=0, to_ind=800)
 
@@ -174,6 +178,15 @@ for i, ir in enumerate(dataset):
         if rendered:
             ir = ir[0] # for the rendered dataset ir is a tuple of ir, mask and gt
         ir = torch.tensor(ir, device=device).unsqueeze(0)
+        print(ir.shape)
+
+        #TODO: remove this debug!!!!!
+        print("TODO: remove!!!!!!! Load one specific frame")
+        ir_cv = cv2.imread("/media/simon/ssd_datasets/datasets/structure_core/sequences_ambient/sequences_home_2_ambient/004/ir3.png")
+        ir = torch.tensor(ir_cv.astype(np.float32)).cuda().unsqueeze(0).unsqueeze(0)
+        ir = ir[:, :, :, 1216:, 0] * (1.0 / 255.0)
+        print(ir.shape)
+
         #ir = ir[:, :, 100+1:(100+17*2+1)+1, :]
         ir = ir[:, :, clip_from:(clip_from + input_height), :]
 
@@ -208,7 +221,7 @@ for i, ir in enumerate(dataset):
 
                 axs[1].cla()
                 axs[1].set_title('Depth')
-                axs[1].imshow(d[0, :, :])
+                axs[1].imshow(d[0, 0, :, :])
             else:
                 axs[0].set_title('IR Image')
                 axs[0].imshow(ir[0, 0, :, :])

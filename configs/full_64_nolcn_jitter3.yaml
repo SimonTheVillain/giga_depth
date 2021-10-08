@@ -1,5 +1,5 @@
 training:
-  name: full_64_nolcn
+  name: full_64_nolcn_jitter3
   batch_size: 4
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
@@ -19,7 +19,7 @@ dataset:
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]
-  vertical_jitter: 1
+  vertical_jitter: 3
   downsample_output: True
   dataset_type: structure_core_unity_4
   slice_in:

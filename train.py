@@ -247,7 +247,9 @@ def train():
         scaler = GradScaler()
 
     datasets, _, _, _, _, tgt_res = \
-        GetDataset(args.path, is_npy=args.is_npy, tgt_res=config["dataset"]["tgt_res"],
+        GetDataset(args.path,
+                   vertical_jitter=config["dataset"]["vertical_jitter"],
+                   tgt_res=config["dataset"]["tgt_res"],
                    version=args.dataset_type)
     width = tgt_res[0]
 

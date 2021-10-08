@@ -263,7 +263,7 @@ class DatasetRendered3(data.Dataset):
 class DatasetRendered4(data.Dataset):
 
     def __init__(self, root_dir, filenames,
-                 vertical_jitter=1, depth_threshold=15, noise=0.1,
+                 vertical_jitter=3, depth_threshold=15, noise=0.1,
                  tgt_res=(1216, 896),
                  tgt_cxy=(604, 457),
                  focal=1.1154399414062500e+03,

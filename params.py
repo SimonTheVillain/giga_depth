@@ -80,6 +80,7 @@ def parse_args():
                         type=float,
                         nargs="+",
                         default=config["training"]["alpha_reg"])
+
     parser.add_argument("-as", "--alpha_sigma", dest="alpha_sigma", action="store",
                         help="The factor with which mask error is incorporated into the loss.",
                         type=float,
@@ -90,6 +91,7 @@ def parse_args():
                         type=float,
                         nargs="+",
                         default=[0.5, 1, 2, 5])
+
     parser.add_argument("-otr", "--relative_outlier_thresholds", dest="relative_outlier_thresholds", action="store",
                         help="The thresholds for which the outlier ratios will be logged. "
                              "The first value is the one every other is relative to.",
@@ -111,9 +113,12 @@ def parse_args():
                         help="Instead of assuming the projector having the same size, "
                              "we extend it a bit to the left and right",
                         default=float(config["dataset"]["pad_proj"]))
+
     parser.add_argument("--dataset_type", dest="dataset_type", action="store",
                         help="Dataset type. Possible options: dataset_rendered_unity_4, shapenet_half_res",
-                        default=config["dataset"]["dataset_type"])
+                        default=config["dataset"]["dataset_type"],
+                        choices=['dataset_rendered_unity_4','shapenet_half_res'])
+
     parser.add_argument("--downsample_output", dest="downsample_output", action="store",
                         help="If this flag is set, the depthmap is calculated for half the resolution of input images.",
                         default=bool(config["dataset"]["downsample_output"]))
