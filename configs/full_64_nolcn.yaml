@@ -1,30 +1,33 @@
 training:
-  name: 2stage_class_52
-  batch_size: 8
-  accumulation_steps: 1
+  name: full_64_nolcn
+  batch_size: 4
   learning_rate: 4.0
-  lr_scales: [1.0, 0.5, 0.25]
+  lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
   momentum: 0.9
   weight_decay: 1e-5
-  alpha_reg: [500, 1000, 2000]
-  alpha_sigma: [0, 0, 0]
-  sigma_mode: mask
+  alpha_reg: [500, 1000, 2000, 2000, 2000]
+  alpha_sigma: [1e-2, 1e-2, 1e-2, 1e-1, 1e-1]
+  edge_weight: [0, 1, 2, 4, 20]
+  sigma_mode: automask
   gpu_list: [0]
-  epochs: 19
-  key_epochs: [ 6, 12 ]
+  epochs: 13
+  key_epochs: [ 2, 4, 6, 8 ]
   half_precision: False
 
 dataset:
-  path: ~/datasets/structure_core_unity_3
+  path: /media/simon/ssd_datasets/structure_core_unity_3
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]
+  downsample_output: True
+  dataset_type: structure_core_unity_4
   slice_in:
     start: 0
     height: 896
   slice_out:
     start: 0
     height: 448
+
 
 backbone:
   load_file: ""
