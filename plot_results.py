@@ -129,6 +129,13 @@ regressor = "trained_models/full_64_nolcn_regressor_chk.pt"
 backbone = "trained_models/full_64_nolcn_backbone_chk.pt"
 
 
+regressor = "trained_models/full_64_nolcn_jitter3_regressor_chk.pt"
+backbone = "trained_models/full_64_nolcn_jitter3_backbone_chk.pt"
+
+#regressor = "trained_models/full_64_nolcn_jitter5_regressor_chk.pt"
+#backbone = "trained_models/full_64_nolcn_jitter5_backbone_chk.pt"
+
+
 
 
 backbone = torch.load(backbone)
@@ -158,7 +165,9 @@ model.eval()
 
 if rendered:
     dataset_path = "/media/simon/ssd_datasets/datasets/structure_core_unity_3"
-    datasets, baselines, has_lr, focal, principal, src_res = GetDataset(dataset_path, is_npy=False, tgt_res=(1216, 896), version=dataset_version)
+    datasets, baselines, has_lr, focal, principal, src_res = GetDataset(dataset_path,
+                                                                        tgt_res=(1216, 896),
+                                                                        version=dataset_version)
     dataset = datasets["val"]
 else:
     dataset_path = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined"
@@ -182,7 +191,7 @@ for i, ir in enumerate(dataset):
 
         #TODO: remove this debug!!!!!
         print("TODO: remove!!!!!!! Load one specific frame")
-        ir_cv = cv2.imread("/media/simon/ssd_datasets/datasets/structure_core/sequences_ambient/sequences_home_2_ambient/004/ir3.png")
+        ir_cv = cv2.imread("/media/simon/ssd_datasets/datasets/structure_core/sequences_ambient/sequences_home_2_ambient/020/ir3.png")
         ir = torch.tensor(ir_cv.astype(np.float32)).cuda().unsqueeze(0).unsqueeze(0)
         ir = ir[:, :, :, 1216:, 0] * (1.0 / 255.0)
         print(ir.shape)
