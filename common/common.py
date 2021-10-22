@@ -18,6 +18,12 @@ def downsampleDepth(d):
     d = np.min(d, axis=1)
     return d
 
+def downsampleDisp(d):
+    d = d.reshape(int(d.shape[0]/2), 2, int(d.shape[1]/2), 2)
+    d = np.max(d, axis=3)
+    d = np.max(d, axis=1)
+    return d
+
 def dilatation(src, r):
     element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (r, r))
     dilation_dst = cv2.dilate(src, element)

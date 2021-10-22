@@ -124,6 +124,7 @@ def train():
                                c3_line_div=config["regressor"]["c3_line_div"],
                                close_far_separation=config["regressor"]["close_far_separation"],
                                sigma_mode=config["regressor"]["sigma_mode"],
+                               vertical_slices=config["backbone"]["slices"],
                                pad_proj=args.pad_proj)
 
     if config["backbone"]["load_file"] != "":

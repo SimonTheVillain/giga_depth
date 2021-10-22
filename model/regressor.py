@@ -438,6 +438,7 @@ class Reg_3stage(nn.Module):
                  c3_line_div=1,
                  close_far_separation=False, # split input up in high and low half and feed low->c1&c2 and high->c2/c3/r
                  sigma_mode="line",
+                 vertical_slices=4,
                  pad_proj=0.1): # "conv", "line", "class"
         super(Reg_3stage, self).__init__()
         if c3_line_div == 1 and len(ch_latent) != 0:
@@ -451,6 +452,7 @@ class Reg_3stage(nn.Module):
         self.class_factor = int(classes123 / superclasses)
         self.regress_neighbours = regress_neighbours
         self.reg_line_div = reg_line_div
+        self.vertical_slices = vertical_slices
         self.pad_proj = pad_proj
 
         # the first latent layer for classification is shared
@@ -486,18 +488,27 @@ class Reg_3stage(nn.Module):
         self.r3 = CondMul(height * classes123, ch_latent_r[0], 1)
 
         # kernels for masks:
-        self.msk = nn.ModuleList()
         #todo: is it really the best using the raw input here. maybe we use the per line backbone?
         ch_latent_msk.insert(0, ch_in)
         ch_latent_msk.append(1)
         self.sigma_mode = sigma_mode
         if sigma_mode == "line":
+            self.msk = nn.ModuleList()
             for i in range(0, len(ch_latent_msk) - 1):
                 self.msk.append(nn.Conv2d(height * ch_latent_msk[i], height * ch_latent_msk[i + 1], 1, groups=height))
         if sigma_mode == "conv":
-            for i in range(0, len(ch_latent_msk) - 1):
-                self.msk.append(nn.Conv2d(ch_latent_msk[i], ch_latent_msk[i + 1], 1))
+            if vertical_slices != 1:
+                self.msk = nn.ModuleList()
+                for j in range(vertical_slices):
+                    self.msk.append(nn.ModuleList())
+                    for i in range(0, len(ch_latent_msk) - 1):
+                        self.msk[j].append(nn.Conv2d(ch_latent_msk[i], ch_latent_msk[i + 1], 1))
+            else:
+                self.msk = nn.ModuleList()
+                for i in range(0, len(ch_latent_msk) - 1):
+                    self.msk.append(nn.Conv2d(ch_latent_msk[i], ch_latent_msk[i + 1], 1))
         if sigma_mode == "class":
+            self.msk = nn.ModuleList()
             for i in range(0, len(ch_latent_msk) - 1):
                 self.msk.append(CondMul(height * classes123, ch_latent_msk[i], ch_latent_msk[i + 1]))
 
@@ -541,8 +552,19 @@ class Reg_3stage(nn.Module):
             # todo: clean up the code around this so that we don't need to reshape here
             # convert from (b, h * c, 1, w) to (b, h, c, w) to (b, c, h, w)
             x = x_in.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
-            for node in self.msk:
-                x = F.leaky_relu(node(x))
+            if self.vertical_slices != 1:
+                # todo: clean up the code in here
+                msks = [] # slices of the mask
+                slice_height = x.shape[2] // self.vertical_slices
+                for i in range(self.vertical_slices):
+                    x_slice = x[:, :, i * slice_height: (i + 1) * slice_height, :]
+                    for node in self.msk[i]:
+                        x_slice = F.leaky_relu(node(x_slice))
+                    msks.append(x_slice)
+                x = torch.cat(msks, dim=2)
+            else:
+                for node in self.msk:
+                    x = F.leaky_relu(node(x))
             mask = x
 
         # create vector with index offsets along the vertical dimension (1, 1, h, 0)
