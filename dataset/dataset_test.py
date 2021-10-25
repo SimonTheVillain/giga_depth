@@ -1,15 +1,12 @@
-from dataset_rendered_2 import *
 import numpy as np
 import cv2
 import os
 import open3d as o3d
 from common.common import LCN_np
+from dataset.datasets import GetDataset
 
-dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/structure_core_unity_3")
-dataset_version = "structure_core_unity_4"
-
-dataset_path = os.path.expanduser("/media/simon/ssd_data/data/datasets/shapenet_rendered")
-dataset_version = "shapenet_half_res"
+dataset_path = os.path.expanduser("/media/simon/WD/datasets_raw/structure_core_unity_2")
+dataset_version = "structure_core_unity_sequences"
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
@@ -19,7 +16,7 @@ baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
 focal *= 0.5
 principal = (principal[0] * 0.5, principal[1] * 0.5)
 
-datasets, baselines, has_lr, focal, principal, tgt_res = GetDataset(dataset_path, False, tgt_res, version=dataset_version, debug=True)
+datasets, baselines, has_lr, focal, principal, tgt_res = GetDataset(dataset_path, tgt_res, version=dataset_version, debug=True)
 dataset = datasets["train"]
 
 def display_pcl(z, fx= 1115.44 * 0.5, cxr= 604.0*0.5, cyr=896*0.5*0.5):

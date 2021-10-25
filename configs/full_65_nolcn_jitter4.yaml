@@ -1,12 +1,12 @@
 training:
-  name: full_65_nolcn_jitter4
+  name: full_65_nolcn_jitter4_v2
   batch_size: 4
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
   momentum: 0.9
   weight_decay: 1e-5
   alpha_reg: [500, 1000, 2000, 2000, 2000]
-  alpha_sigma: [1e-2, 1e-2, 1e-1, 1, 10]
+  alpha_sigma: [1e-2, 1e-2, 1e-1, 1e-1, 1]
   edge_weight: [0, 1, 2, 4, 20]
   sigma_mode: automask
   gpu_list: [0]
@@ -15,13 +15,13 @@ training:
   half_precision: False
 
 dataset:
-  path: /media/simon/ssd_datasets/structure_core_unity_3
+  path: /media/simon/WD/datasets_raw
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]
   vertical_jitter: 4
   downsample_output: True
-  dataset_type: structure_core_unity_4
+  dataset_type: structure_core_unity_sequences
   slice_in:
     start: 0
     height: 896
