@@ -63,19 +63,20 @@ def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False)
         paths = [Path(path) / x for x in sequences if os.path.isdir(Path(path) / x)]
         paths.sort()
 
-        dataset_paths = ["/media/simon/WD/datasets_raw/structure_core_unity_1",
-                         "/media/simon/WD/datasets_raw/structure_core_unity_2",
-                         "/media/simon/WD/datasets_raw/structure_core_unity_3",
-                         "/media/simon/LaCie/datasets_raw/structure_core_unity_4",
-                         "/media/simon/LaCie/datasets_raw/structure_core_unity_5",
-                         "/media/simon/LaCie/datasets_raw/structure_core_unity_6",
-                         "/media/simon/WD/datasets_raw/structure_core_unity_7"]
-        paths = []
-        for dataset_path in dataset_paths:
-            folders = os.listdir(dataset_path)
-            folders.sort()
-            folders = [Path(dataset_path) / x for x in folders if os.path.isdir(Path(dataset_path) / x)]
-            paths += folders
+        if False:#TODO: remove!!!
+            dataset_paths = ["/media/simon/WD/datasets_raw/structure_core_unity_1",
+                             "/media/simon/WD/datasets_raw/structure_core_unity_2",
+                             "/media/simon/WD/datasets_raw/structure_core_unity_3",
+                             "/media/simon/LaCie/datasets_raw/structure_core_unity_4",
+                             "/media/simon/LaCie/datasets_raw/structure_core_unity_5",
+                             "/media/simon/LaCie/datasets_raw/structure_core_unity_6",
+                             "/media/simon/WD/datasets_raw/structure_core_unity_7"]
+            paths = []
+            for dataset_path in dataset_paths:
+                folders = os.listdir(dataset_path)
+                folders.sort()
+                folders = [Path(dataset_path) / x for x in folders if os.path.isdir(Path(dataset_path) / x)]
+                paths += folders
 
         paths_train = paths[:len(paths) - 64]
         paths_val = paths[len(paths) - 64:]

@@ -17,7 +17,7 @@ datasets = ["/media/simon/WD/datasets_raw/structure_core_unity_1",
             "/media/simon/ext_ssd/datasets_raw/structure_core_unity_10"]
 count = 0
 
-output_path = "/media/simon/ssd_datasets/datasets/structure_core_unity_sequences"
+output_path = "/home/simon/datasets/structure_core_unity_sequences"
 
 for dataset in datasets:
     dirs = os.listdir(dataset)
@@ -32,6 +32,8 @@ for dataset in datasets:
                 os.system(f"cp -r {sequence}/{i}.json {destination}/{i}.json")
                 for side in ["left", "right"]:
                     os.system(f"cp -r {sequence}/{i}_{side}.png {destination}/{i}_{side}.png")
+                    #ir = cv2.imread(f"{sequence}/{i}_{side}.png", cv2.IMREAD_UNCHANGED)
+                    #cv2.imwrite(f"{destination}/{i}_{side}.png", ir, [cv2.IMWRITE_PNG_COMPRESSION, 9])
                     os.system(f"cp -r {sequence}/{i}_{side}_gt.exr {destination}/{i}_{side}_gt.exr")
                     # create a mask
                     gt = cv2.imread(f"{sequence}/{i}_{side}_gt.exr", cv2.IMREAD_UNCHANGED)
