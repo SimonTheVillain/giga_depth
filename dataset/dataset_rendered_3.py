@@ -55,17 +55,17 @@ class DatasetRenderedSequences(data.Dataset):
             side = "left"
             if idx % 2 == 1:
                 side = "right"
+            idx = idx // 2
+            frm = idx % 4
+            idx = idx // 4
+        else:
+            side = "left"
+            if idx % 2 == 1:
+                side = "right"
             idx = int(idx / 2)
 
             #frame index:
             frm = np.random.randint(0, 3)
-        else:
-            frm = idx % 4
-            idx = idx // 4
-            side = "left"
-            if idx % 2 == 1:
-                side = "right"
-            idx = idx // 2
 
 
         sequence = self.sequence_dirs[idx]
@@ -198,4 +198,5 @@ def add_msk():
 
 
 
-add_msk()
+if __name__ == "__main__":
+    add_msk()
