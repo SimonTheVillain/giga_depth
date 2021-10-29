@@ -53,17 +53,20 @@ def process_results(algorithm):
         d_gt = d_gt[rr[1]:rr[1] + rr[3], rr[0]:rr[0] + rr[2]]
 
         path_dst = path_results + "/" + algorithm + f"/{int(ind):05d}.exr"
+        if not os.path.exists(path_dst):
+            path_dst = path_results + "/" + algorithm + f"/{int(ind)}.exr"
         estimate = cv2.imread(path_dst, cv2.IMREAD_UNCHANGED)
 
         if d_gt.shape[0] // 2 == estimate.shape[0]:
             # downsample by a factor of 2
             d_gt = downsampleDepth(d_gt)
             disp_gt = focal * baseline * 0.5 / d_gt
+            delta = np.abs(disp_gt - estimate) * 2.0 # in case
 
         else:
             disp_gt = focal * baseline / d_gt
+            delta = np.abs(disp_gt - estimate)
 
-        delta = np.abs(disp_gt - estimate)
         msk = d_gt < cutoff_dist
         msk_count = np.sum(msk)
         data["inliers"]["pix_count"] += msk_count
@@ -102,9 +105,9 @@ def process_results(algorithm):
     f.close()
 
 def create_data():
-    algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots"]#"HyperDepth", "GigaDepthLCN"]
-
-    threading = True
+    algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
+    algorithms = ["HyperDepth"]
+    threading = False
 
     if threading:
         with Pool(5) as p:
@@ -116,7 +119,7 @@ def create_data():
 
 def create_plot():
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
-    algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots"]  # "HyperDepth", "GigaDepthLCN"]
+    algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"] # "HyperDepth", "GigaDepthLCN"]
 
     legend_names = {"GigaDepth": "GigaDepth",
                     "ActiveStereoNet": "ActiveStereoNet",

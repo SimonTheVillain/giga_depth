@@ -70,65 +70,6 @@ show_pcl = False
 show_full = True
 rendered = True
 
-
-regressor = "trained_models/cr8_2021_32_scaled_sigma_regressor_chk.pt"
-backbone = "trained_models/cr8_2021_32_scaled_sigma_backbone_chk.pt"
-
-regressor = "trained_models/cr8_2021_128_2_lr02_alpha1_regressor_chk.pt"
-backbone = "trained_models/cr8_2021_128_2_lr02_alpha1_backbone_chk.pt"
-
-regressor = "trained_models/cr8_short_128c_superclasses_regressor_chk.pt"
-backbone = "trained_models/cr8_short_128c_superclasses_backbone_chk.pt"
-input_height = 2*17+1
-
-
-regressor = "trained_models/bb64_256c_16sc_256_8_lr02_regressor_chk.pt"
-backbone = "trained_models/bb64_256c_16sc_256_8_lr02_backbone_chk.pt"
-
-regressor = "trained_models/slice_2stage_class_43_regressor_chk.pt"
-backbone = "trained_models/slice_2stage_class_43_backbone_chk.pt"
-
-regressor = "trained_models/slice_2stage_class_50_regressor_chk.pt"
-backbone = "trained_models/slice_2stage_class_50_backbone_chk.pt"
-
-regressor = "trained_models/2stage_class_43_2_regressor_chk.pt"
-backbone = "trained_models/2stage_class_43_2_backbone_chk.pt"
-
-
-regressor = "trained_models/slice128_2stage_class_43_old_dataset_regressor_chk.pt"
-backbone = "trained_models/slice128_2stage_class_43_old_dataset_backbone_chk.pt"
-
-
-regressor = "trained_models/slice256_2stage_class_56_regressor.pt"
-backbone = "trained_models/slice256_2stage_class_56_backbone.pt"
-
-regressor = "trained_models/2stage_class_52_regressor.pt"
-backbone = "trained_models/2stage_class_52_backbone.pt"
-
-regressor = "trained_models/slice256_2stage_class_58_regressor_chk.pt"
-backbone = "trained_models/slice256_2stage_class_58_backbone_chk.pt"
-
-
-regressor = "trained_models/slice256_2stage_class_59_regressor_chk.pt"
-backbone = "trained_models/slice256_2stage_class_59_backbone_chk.pt"
-
-
-regressor = "trained_models/slice256_2stage_class_61_regressor_chk.pt"
-backbone = "trained_models/slice256_2stage_class_61_backbone_chk.pt"
-
-
-regressor = "trained_models/slice256_2stage_class_64_regressor_chk.pt"
-backbone = "trained_models/slice256_2stage_class_64_backbone_chk.pt"
-
-
-regressor = "trained_models/slice256_2stage_class_64_regressor_chk.pt"
-backbone = "trained_models/slice256_2stage_class_64_backbone_chk.pt"
-
-
-regressor = "trained_models/full_64_nolcn_regressor_chk.pt"
-backbone = "trained_models/full_64_nolcn_backbone_chk.pt"
-
-
 regressor = "trained_models/full_64_nolcn_jitter3_regressor_chk.pt"
 backbone = "trained_models/full_64_nolcn_jitter3_backbone_chk.pt"
 

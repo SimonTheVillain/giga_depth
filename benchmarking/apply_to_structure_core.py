@@ -13,6 +13,7 @@ import os
 import cv2
 import numpy as np
 import re
+from pathlib import Path
 
 path_src = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
 path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDpeth"
@@ -20,6 +21,8 @@ path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_res
 regressor_model_pth = "trained_models/full_64_nolcn_jitter5_regressor.pt"
 backbone_model_pth = "trained_models/full_64_nolcn_jitter5_backbone.pt"
 
+regressor_model_pth = "trained_models/full_65_nolcn_jitter4_regressor.pt"
+backbone_model_pth = "trained_models/full_65_nolcn_jitter4_backbone.pt"
 
 device = "cuda:0"
 backbone = torch.load(backbone_model_pth, map_location=device)
@@ -29,10 +32,9 @@ regressor.eval()
 model = CompositeModel(backbone, regressor)
 
 
-rendered = True
+rendered = False
 half_res = False
-focal = 1
-baseline = 1
+
 if rendered:
     src_res = (1401, 1001)
     src_cxy = (700, 500)
@@ -53,36 +55,49 @@ if rendered:
     inds.sort()
     paths = []
     for ind in inds:
-        paths.append((ind, path + f"/{ind}_left.jpg", path + f"/{ind}_right.jpg"))
+        paths.append((path + f"/{ind}_left.jpg", path_out + f"/{int(ind):05d}.exr"))
 else:
-    pass
+    tgt_res = (1216, 896)
+    tgt_cxy = (604, 457)
+    # the focal length is shared between src and target frame
+    focal = 1.1154399414062500e+03
+
+    rr = (tgt_res[0], 0, tgt_res[0], tgt_res[1])
+    path = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test"
+    path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth"
+    folders = os.listdir(path)
+    scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
+
+    paths = []
+    for scene in scenes:
+        tgt_path = Path(path_out) / scene
+        if not os.path.exists(tgt_path):
+            os.mkdir(tgt_path)
+        for i in range(4):
+            src_pth = Path(path) / scene / f"ir{i}.png"
+            tgt_pth = Path(tgt_path) / f"{i}"
+            paths.append((src_pth, tgt_pth))
 
 with torch.no_grad():
-    for ind, pleft, pright in paths:
-        p = pleft
-        irl = cv2.imread(p, cv2.IMREAD_UNCHANGED)
-        irl = cv2.cvtColor(irl, cv2.COLOR_RGB2GRAY)
+    for p, p_tgt in paths:
+        irl = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
+        if len(irl.shape) == 3:
+            # the rendered images are 3 channel bgr
+            irl = cv2.cvtColor(irl, cv2.COLOR_BGR2GRAY)
+        else:
+            # the rendered images are 16
+            irl = irl / 255.0
         irl = irl[rr[1]:rr[1] + rr[3], rr[0]:rr[0] + rr[2]]
         irl = irl.astype(np.float32) * (1.0 / 255.0)
 
-        p = pright
-        irr = cv2.imread(p, cv2.IMREAD_UNCHANGED)
-        irr = cv2.cvtColor(irr, cv2.COLOR_RGB2GRAY)
-        irr = irr[rr[1]:rr[1] + rr[3], rr[0]:rr[0] + rr[2]]
-        irr = irr.astype(np.float32) * (1.0 / 255.0)
-
         if half_res:
             irl = cv2.resize(irl, (int(irl.shape[1] / 2), int(irl.shape[0] / 2)))
-            irr = cv2.resize(irr, (int(irr.shape[1] / 2), int(irr.shape[0] / 2)))
             irl = irl[:448, :608]
-            irr = irr[:448, :608]
         cv2.imshow("irleft", irl)
-        cv2.imshow("irright", irr)
         irl = torch.tensor(irl).cuda().unsqueeze(0).unsqueeze(0)
-        irr = torch.tensor(irr).cuda().unsqueeze(0).unsqueeze(0)
 
         #run local contrast normalization (LCN)
-
+        # TODO: is this the way the x-positions are encoded?
         x, msk = model(irl)
         x = x[0, 0, :, :]
         x = x * x.shape[1]
@@ -95,12 +110,12 @@ with torch.no_grad():
 
         #result = coresup_pred.cpu()[0, 0, :, :].numpy()
 
-        p = path_out + f"/{int(ind):05d}.exr"
+        p = str(p_tgt) + ".exr" # = path_out + f"/{int(ind):05d}.exr"
         cv2.imshow("result", result * (1.0 / 50.0))
         cv2.imwrite(p, result)
 
 
-        p = path_out + f"/{int(ind):05d}_msk.png"
+        p = str(p_tgt) + "_msk.png"# path_out + f"/{int(ind):05d}_msk.png"
         cv2.imshow("mask", msk)
         cv2.imwrite(p, result)
         cv2.waitKey(1)
