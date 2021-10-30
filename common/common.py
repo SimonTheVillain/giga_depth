@@ -40,13 +40,14 @@ def LCN_np(image, window_size=9):
     mean = scipy.signal.convolve2d(im_padded, kernel, mode="valid")
     kernel = np.ones((1, window_size), dtype=np.float32) * (1.0 / window_size)
     mean = scipy.signal.convolve2d(mean, kernel, mode="valid")
-    #cv2.imshow("mean", mean)
+    cv2.imshow("mean_np", mean)
     sq = np.zeros((image.shape[0], image.shape[1]), dtype=np.float32)
     for i in range(window_size):
         for j in range(window_size):
             sq[:, :] += (im_padded[i:i+height, j:j+width] - mean) ** 2
 
-    sigma = np.sqrt(sq)
+    sigma = np.sqrt(sq/(window_size**2))
+    cv2.imshow("std_np", sigma)
     I = (image - mean) / (sigma + eps)
 
     return I * 0.5 + 0.5
@@ -79,33 +80,16 @@ def LCN_tensors(x, window_size=9):
     dtype = x.dtype
     device = x.device
 
-    w = torch.ones((x.shape[1], x.shape[1], window_size, window_size), device=device, dtype=dtype) / (window_size * window_size)
-    mean_local = F.conv2d(input=img, weight=w, padding=window_size // 2)
+    w = torch.ones((x.shape[1], x.shape[1], window_size, window_size), device=device, dtype=dtype) / \
+        (window_size * window_size)
+    mean_local = F.conv2d(input=x, weight=w, padding=window_size // 2)
 
-    mean_square_local = F.conv2d(input=img ** 2, weight=w, padding=window_size // 2)
+    mean_square_local = F.conv2d(input=x ** 2, weight=w, padding=window_size // 2)
     # std_local = (mean_square_local - mean_local ** 2) * (kSize ** 2) / (kSize ** 2 - 1)
-    std_local = (mean_square_local - mean_local ** 2)  # fix by simon!!!!! (why kSize ** 2 - >1< ???)
+    std_local = torch.sqrt(torch.clamp(mean_square_local - mean_local ** 2, min=eps**2))  # fix by simon!!!!! (why kSize ** 2 - >1< ???)
 
-    epsilon = 1e-6
+    return (x - mean_local) / (std_local + eps), mean_local, std_local
 
-    return (img - mean_local) / (std_local + epsilon), mean_local, std_local
-
-    width = x.shape[3]
-    height = x.shape[2]
-    x_padded = F.pad(x, [int(window_size / 2)]*4, mode="replicate")
-    kernel = torch.ones((1, 1, window_size, 1), dtype=dtype, device=device) * (1.0 / float(window_size))
-    mean = F.conv2d(x_padded, kernel)
-    kernel = torch.ones((1, 1, 1, window_size), dtype=dtype, device=device) * (1.0 / float(window_size))
-    mean = F.conv2d(mean, kernel)
-    sq = torch.zeros((x.shape[0], 1, height, width), dtype=dtype, device=device)
-    for i in range(window_size):
-        for j in range(window_size):
-            sq[:, :] += (x_padded[:, :, i:i+height, j:j+width] - mean) ** 2
-
-    sigma = torch.sqrt(sq * 1.0 / (window_size*window_size))
-    I = (x - mean) / (sigma + eps)
-
-    return I
 
 #TODO: make it a bit more elegant. kernel size instead of radius
 # no divisions in forward pass, but incorporate with weights
@@ -115,7 +99,7 @@ class LCN(torch.nn.Module):
   Local Contract Normalization
   '''
   def __init__(self, radius=4, epsilon=0.001):
-    assert False, "This module is superterrible and actually wrong!"
+    #assert False, "This module is superterrible and actually wrong!"
     super(LCN, self).__init__()
     self.box_conv = torch.nn.Sequential(
         torch.nn.ReflectionPad2d(radius),

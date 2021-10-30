@@ -7,7 +7,7 @@ import torch.optim as optim
 from torch.cuda.amp.grad_scaler import GradScaler
 from dataset.datasets import GetDataset
 from experiments.lines.model_lines_CR8_n import *
-from model.composite_model import CompositeModel
+from model.composite_model import CompositeModel, GetModel
 from model.backbone import *
 from model.backboneSliced import *
 from model.regressor import Regressor, Regressor2, Reg_3stage
@@ -103,88 +103,7 @@ def train():
     shuffle = True
     slice = True
 
-    if config["regressor"]["load_file"] != "":
-        regressor = torch.load(config["regressor"]["load_file"])
-        regressor.eval()
-    else:
-        # https://stackoverflow.com/questions/334655/passing-a-dictionary-to-a-function-as-keyword-parameters
-        regressor = Reg_3stage(ch_in=config["regressor"]["ch_in"],
-                               height=config["regressor"]["lines"],  # 64,#448,
-                               ch_latent=config["regressor"]["bb"],
-                               # [128, 128, 128],#todo: make this of variable length
-                               superclasses=config["regressor"]["superclasses"],
-                               ch_latent_r=config["regressor"]["ch_reg"],
-                               # 64/64 # in the current implementation there is only one stage between input
-                               ch_latent_msk=config["regressor"]["msk"],
-                               classes=config["regressor"]["classes"],
-                               pad=config["regressor"]["padding"],
-                               ch_latent_c=config["regressor"]["class_bb"],  # todo: make these of variable length
-                               regress_neighbours=config["regressor"]["regress_neighbours"],
-                               reg_line_div=config["regressor"]["reg_line_div"],
-                               c3_line_div=config["regressor"]["c3_line_div"],
-                               close_far_separation=config["regressor"]["close_far_separation"],
-                               sigma_mode=config["regressor"]["sigma_mode"],
-                               vertical_slices=config["backbone"]["slices"],
-                               pad_proj=args.pad_proj)
-
-    if config["backbone"]["load_file"] != "":
-        backbone = torch.load(config["backbone"]["load_file"])
-        backbone.eval()
-        # fix parameters in the backbone (or maybe not!)
-        # for param in backbone.parameters():
-        #    param.requires_grad = False
-    else:
-        # todo: put that selection into a separate file
-        if args.is_npy:
-            backbone = CR8_bb_short(channels=config["backbone"]["channels"],
-                                    channels_sub=config["backbone"]["channels2"])
-        else:
-            if config["backbone"]["name"] == "BackboneNoSlice3":
-                print("BackboneNoSlice3")
-                backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
-                                            channels=config["backbone"]["channels"],
-                                            channels_sub=config["backbone"]["channels2"],
-                                            use_bn=True, lcn=args.LCN)
-            if config["backbone"]["name"] == "Backbone3Sliced":
-                constructor = lambda pad, channels, downsample: Backbone3Slice(
-                    channels=config["backbone"]["channels"],
-                    channels_sub=config["backbone"]["channels2"],
-                    use_bn=True,
-                    pad=pad, channels_in=channels, downsample=downsample)
-
-                backbone = BackboneSlicer(Backbone3Slice, constructor,
-                                          config["backbone"]["slices"],
-                                          lcn=args.LCN,
-                                          downsample_output=args.downsample_output)
-            if config["backbone"]["name"] == "BackboneU1":
-                print("BACKBONEU1")
-                backbone = BackboneU1()
-            if config["backbone"]["name"] == "BackboneU2":
-                print("BACKBONEU2")
-                backbone = BackboneU2()
-            if config["backbone"]["name"] == "BackboneU3":
-                print("BACKBONEU3")
-                backbone = BackboneU3()
-
-            if config["backbone"]["name"] == "BackboneU4":
-                print("BACKBONEU4")
-                backbone = BackboneU4()
-
-            if config["backbone"]["name"] == "BackboneU5":
-                print("BACKBONEU5")
-                backbone = BackboneU5(norm=config["backbone"]["norm"], lcn=args.LCN)
-
-            if config["backbone"]["name"] == "BackboneU5Sliced":
-                print("BACKBONEU5Sliced")
-                backbone = BackboneU5Sliced(slices=config["backbone"]["slices"], lcn=args.LCN)
-                assert args.downsample_output, "For the U shaped network it is required to downsample the network"
-                constructor = lambda pad, channels, downsample: BackboneU5Slice(pad=pad, in_channels=channels)
-                backbone = BackboneSlicer(BackboneU5Slice, constructor,
-                                          config["backbone"]["slices"],
-                                          lcn=args.LCN,
-                                          downsample_output=args.downsample_output)
-
-    model = CompositeModel(backbone, regressor, args.half_precision)
+    model = GetModel(args, config)
 
     if len(args.gpu_list) > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -315,7 +234,7 @@ def train():
                 edge_mask = (edge_mask * edge_weight + 1).to(main_device)
 
                 # todo: instead of a query the slice variable should be set accordingly further up!
-                if not args.is_npy and slice:
+                if slice:
                     slice_in = (config["dataset"]["slice_in"]["start"], config["dataset"]["slice_in"]["height"])
                     slice_gt = (config["dataset"]["slice_out"]["start"], config["dataset"]["slice_out"]["height"])
                     ir = ir[:, :, slice_in[0]:slice_in[0] + slice_in[1], :]

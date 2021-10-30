@@ -29,9 +29,6 @@ def parse_args():
     parser.add_argument("-d", "--dataset_path", dest="path", action="store",
                         help="Path to the dataset.",
                         default=os.path.expanduser(config["dataset"]["path"]))
-    parser.add_argument("-npy", "--npy_dataset", dest="is_npy", action="store_const",
-                        help="Loads data directly form numpy files",
-                        default=bool(config["dataset"]["is_npy"]), const=True)
     parser.add_argument("-b", "--batch_size", dest="batch_size", action="store",
                         help="The batch size during training",
                         type=int,

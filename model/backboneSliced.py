@@ -24,24 +24,33 @@ class BackboneU5Slice(nn.Module):
 
         self.nsub1 = nn.BatchNorm2d(64)
         self.nsub2 = nn.BatchNorm2d(32)
+        self.p1 = (0, 0, 0, 0)
+        self.p2 = (0, 0, 0, 0)
+        if self.pad == 'top':
+            self.p1 = (0, 0, 2, 0)
+            self.p2 = (0, 0, 1, 0)
+        if self.pad == 'bottom':
+            self.p1 = (0, 0, 0, 2)
+            self.p2 = (0, 0, 0, 1)
+        if self.pad == "both":
+            self.p1 = (0, 0, 2, 2)
+            self.p2 = (0, 0, 1, 1)
 
     @staticmethod
     def get_required_padding(downsample=False):
         return 18
 
     def forward(self, x):
-        p = (0, 0, 0, 0)
-        if self.pad == 'top':
-            p = (0, 0, 2, 0)
-        if self.pad == 'bottom':
-            p = (0, 0, 0, 2)
-        x = F.pad(x, p)
+
+        x = F.pad(x, self.p1)
         x = F.leaky_relu(self.n_start(self.start(x)))
-        x = F.pad(x, p)
+        x = F.pad(x, self.p1)
         x = F.leaky_relu(self.n1(self.conv1(x)))
-        x = F.pad(x, p)
+        x = F.pad(x, self.p1)
         x = F.leaky_relu(self.n2(self.conv2(x)))
 
+        # for the skip connection we need to cut out any row that we lose during
+        # convolution:
         # if we pad at the top, this means only the bottom pixel get cut off
         # and vice versa
         if self.pad == 'top':
@@ -50,15 +59,13 @@ class BackboneU5Slice(nn.Module):
             x_skip = x[:, :, 4:, :]
         if self.pad == '':
             x_skip = x[:, :, 4:-4, :]
+        if self.pad == 'both':
+            x_skip = x[:, :, :, :]
 
-        x = F.pad(x, p)
+        x = F.pad(x, self.p1)
         x = F.leaky_relu(self.nsub1(self.conv_sub1(x)))
 
-        if self.pad == 'top':
-            p = (0, 0, 1, 0)
-        if self.pad == 'bottom':
-            p = (0, 0, 0, 1)
-        x = F.pad(x, p)
+        x = F.pad(x, self.p2)
         x = self.conv_sub2(x)
 
         x = x.reshape((x.shape[0], 32, 2, 2, x.shape[2], x.shape[3]))
@@ -67,48 +74,6 @@ class BackboneU5Slice(nn.Module):
         x = F.leaky_relu(self.nsub2(x))
 
         x = torch.cat((x, x_skip), dim=1)
-        return x
-
-
-# No final layer at target resolution and only 2 layers at the lowest resolution
-# better utilization of the Tensor-cores than U3
-class BackboneU5Sliced(nn.Module):
-
-    def __init__(self, slices, lcn=False):
-        super(BackboneU5Sliced, self).__init__()
-        in_channels = 1
-        self.LCN = lcn
-        if lcn:
-            in_channels = 2
-        assert slices > 1, "This model requires more than 1 slice to operate correctly"
-        self.slices = nn.ModuleList()
-        for i in range(slices):
-            if i == 0:
-                self.slices.append(BackboneU5Slice('top', in_channels=in_channels))
-            else:
-                if i == (slices - 1):
-                    self.slices.append(BackboneU5Slice('bottom', in_channels=in_channels))
-                else:
-                    self.slices.append(BackboneU5Slice(in_channels=in_channels))
-
-    def forward(self, x, with_debug=False):
-        if self.LCN:
-            x = torch.cat((x, LCN_tensors(x)), 1)
-        outputs = []
-        pad = 18
-        split = int(x.shape[2] / len(self.slices))
-        for i in range(len(self.slices)):
-            line_from = max(0, i * split - pad)
-            line_to = min((i + 1) * split + pad, x.shape[2]) #todo: formerly it was "x.shape[2] - 1)" do we need to put that back?
-            x_sub = x[:, :, line_from:line_to, :]
-            out = self.slices[i](x_sub)
-            outputs.append(out)
-
-        x = torch.cat(outputs, dim=2)
-
-        if with_debug:
-            debugs = {}
-            return x, debugs
         return x
 
 
@@ -121,22 +86,18 @@ class Backbone3Slice(nn.Module):
     def __init__(self, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64],
                  use_bn=False, pad='', channels_in=2, downsample=True):
         super(Backbone3Slice, self).__init__()
-        self.downsample=downsample
+        assert downsample, "It is assumed that the output resolution is half the input."
         p1 = (0, 0, 0, 0)
         p2 = (0, 0, 0, 0)
-        p3 = (0, 0, 0, 0)
         if pad == 'top':
             p1 = (0, 0, 1, 0)
             p2 = (0, 0, 2, 0)
-            p3 = (0, 0, 3, 0)
         if pad == 'bottom':
             p1 = (0, 0, 0, 1)
             p2 = (0, 0, 0, 2)
-            p3 = (0, 0, 0, 3)
         if pad == 'both':
             p1 = (0, 0, 1, 1)
             p2 = (0, 0, 2, 2)
-            p3 = (0, 0, 3, 3)
 
         if use_bn:
             self.block1 = nn.Sequential(nn.ConstantPad2d(p1, 0),
@@ -155,11 +116,6 @@ class Backbone3Slice(nn.Module):
                                         nn.Conv2d(channels[0], channels[1], 5, padding=(0, 2)),
                                         nn.LeakyReLU())
 
-
-        if not downsample:
-            channels_sub = channels_sub.copy()
-            channels_sub[3] *= 4
-
         modules = [nn.ConstantPad2d(p2, 0),
                    nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2), stride=(2, 2)),
                    nn.BatchNorm2d(channels[2]),
@@ -172,44 +128,10 @@ class Backbone3Slice(nn.Module):
             modules.append(nn.LeakyReLU())
 
         self.block2 = nn.Sequential(*modules)
-        if downsample:
-            pass
-            #modules = [nn.ConstantPad2d(p2, 0),
-            #           nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2), stride=(2, 2)),
-            #           nn.BatchNorm2d(channels[2]),
-            #           nn.LeakyReLU()]
-            #for i in range(0, 3):
-            #    modules.append(nn.ConstantPad2d(p2, 0))
-            #    modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2*2
-            #    if use_bn:
-            #        modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
-            #    modules.append(nn.LeakyReLU())
-
-            #self.block2 = nn.Sequential(*modules)
-        else:
-            pass
-            #modules = []
-            #for i in range(0, 4):
-            #    modules.append(nn.ConstantPad2d(p3, 0))
-            #    modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 7, padding=(0, 3)))  # + 3
-            #    if use_bn:
-            #        modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
-            #    modules.append(nn.LeakyReLU())
-            #i = 4
-            #modules.append(nn.ConstantPad2d(p2, 0))
-            #modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2
-            #if use_bn:
-            #    modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
-            #modules.append(nn.LeakyReLU())
-
-            #self.block2 = nn.Sequential(*modules)
 
     def forward(self, x):
         x = self.block1(x)
         x = self.block2(x)
-        if not self.downsample:
-            x = x.reshape((x.shape[0], int(x.shape[1] / 4), 2, 2, x.shape[2], x.shape[3]))
-            x = x.permute((0, 1, 4, 2, 5, 3)).reshape((x.shape[0], x.shape[1], x.shape[4] * 2, x.shape[5] * 2))
         return x
 
 
@@ -238,7 +160,8 @@ class BackboneSlicer(nn.Module):
 
     def forward(self, x, with_debug=False):
         if self.LCN:
-            x = torch.cat((x, LCN_tensors(x)), 1)
+            lcn, _, _ = LCN_tensors(x)
+            x = torch.cat((x, lcn), 1)
         outputs = []
         pad = self.required_padding
         split = int(x.shape[2] / len(self.slices))

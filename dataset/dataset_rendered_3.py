@@ -162,16 +162,7 @@ class DatasetRenderedSequences(data.Dataset):
 
 
 def add_msk():
-    dataset_paths = ["/media/simon/WD/datasets_raw/structure_core_unity_1",
-                     "/media/simon/WD/datasets_raw/structure_core_unity_2",
-                     "/media/simon/WD/datasets_raw/structure_core_unity_3",
-                     "/media/simon/LaCie/datasets_raw/structure_core_unity_4",
-                     "/media/simon/LaCie/datasets_raw/structure_core_unity_5",
-                     "/media/simon/LaCie/datasets_raw/structure_core_unity_6",
-                     "/media/simon/WD/datasets_raw/structure_core_unity_4",
-                     "/media/simon/WD/datasets_raw/structure_core_unity_5",
-                     "/media/simon/WD/datasets_raw/structure_core_unity_6",
-                     "/media/simon/WD/datasets_raw/structure_core_unity_7"]
+    dataset_paths = ["/media/simon/ssd_datasets/datasets/structure_core_unity_sequences"]
     paths = []
     for dataset_path in dataset_paths:
         print(dataset_path)
@@ -180,21 +171,28 @@ def add_msk():
         folders = [Path(dataset_path) / x for x in folders if os.path.isdir(Path(dataset_path) / x)]
         paths += folders
 
+    lcn_module = LCN()
     for idx, sequence in enumerate(paths):
         print(f"{idx/len(paths)}")
         for side in ["left", "right"]:
             for i in range(4):
                 # create a mask
                 gt = cv2.imread(f"{sequence}/{i}_{side}_gt.exr", cv2.IMREAD_UNCHANGED)
-                ir_no = cv2.imread(f"{sequence}/{i}_{side}_noproj.exr", cv2.IMREAD_UNCHANGED)
-                ir_msk = cv2.imread(f"{sequence}/{i}_{side}_msk.exr", cv2.IMREAD_UNCHANGED)
-                msk = np.zeros((ir_no.shape[0], ir_no.shape[1]), dtype=np.ubyte)
-                th = 0.0001
-                delta = np.abs(ir_no - ir_msk)
-                msk[(delta[:, :, 0] + delta[:, :, 1] + delta[:, :, 2]) > th] = 255
-                msk[gt[:, :, 1] > 0] = 0
-
-                cv2.imwrite(f"{sequence}/{i}_{side}_msk.png", msk)
+                ir = cv2.imread(f"{sequence}/{i}_{side}.png", cv2.IMREAD_UNCHANGED)
+                ir = cv2.cvtColor(ir, cv2.COLOR_BGR2GRAY).astype(np.float32) * 1.0/255.0
+                lcnp = LCN_np(ir)
+                ir = torch.tensor(ir).unsqueeze(0).unsqueeze(0)
+                lcn, mean, std = LCN_tensors(ir)
+                lcn2 = lcn_module(ir)
+                lcn = lcn * 0.5 + 0.5
+                cv2.imshow("ir", ir[0,0,:,:].cpu().numpy())
+                cv2.imshow("lcn", lcn[0,0,:,:].cpu().numpy())
+                cv2.imshow("mean", mean[0,0,:,:].cpu().numpy())
+                cv2.imshow("std", std[0,0,:,:].cpu().numpy())
+                cv2.imshow("lcn2", lcn2[0,0,:,:].cpu().numpy())
+                cv2.imshow("lcnp", lcnp)
+                cv2.imshow("gt",gt)
+                cv2.waitKey()
 
 
 
