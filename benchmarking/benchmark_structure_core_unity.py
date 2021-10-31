@@ -4,6 +4,8 @@ import os
 import re
 from common.common import downsampleDepth
 import pickle
+import matplotlib
+matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 
@@ -11,6 +13,8 @@ from multiprocessing import Pool
 def process_results(algorithm):
     path_src = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
+    path_src = "/home/simon/datasets/structure_core_unity_test"
+    path_results = "/home/simon/datasets/structure_core_unity_test_results"
 
     inds = os.listdir(path_src)
     inds = [re.search(r'\d+', s).group() for s in inds]
@@ -106,8 +110,8 @@ def process_results(algorithm):
 
 def create_data():
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
-    algorithms = ["HyperDepth"]
-    threading = False
+    #algorithms = ["HyperDepth"]
+    threading = True
 
     if threading:
         with Pool(5) as p:
@@ -119,6 +123,7 @@ def create_data():
 
 def create_plot():
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
+    path_results = "/home/simon/datasets/structure_core_unity_test_results"
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"] # "HyperDepth", "GigaDepthLCN"]
 
     legend_names = {"GigaDepth": "GigaDepth",
@@ -138,10 +143,10 @@ def create_plot():
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
-        plt.plot(data[f"inliers_{th}"]["distances"],
-                 np.array(data[f"inliers_{th}"]["data"]) / np.array(data[f"inliers_{th}"]["pix_count"]))
+        plt.plot(data[f"inliers_{th}"]["distances"][2:],
+                 np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:]))
     plt.legend(algorithms)
     plt.show()
 
-create_data()
+#create_data()
 create_plot()
