@@ -35,9 +35,9 @@ class CompositeModel(nn.Module):
             for key, val in debugs.items():
                 results[-1][key] = val
 
-            if self.regressor_conv:
+            if self.regressor_conv != None:
                 result = self.regressor_conv(x)
-                results.append(result)
+                results = results + result
             return results
         else:
 
@@ -51,8 +51,8 @@ class CompositeModel(nn.Module):
             results = self.regressor(x, x_gt)
             if self.regressor_conv:
                 result = self.regressor_conv(x)
-                results.append(result)
-            return self.regressor(x, x_gt)
+                results = results + result
+            return results
 
 
 
@@ -170,9 +170,9 @@ def GetModel(args, config):
         else:
             regressor_conv = RegressorConv(
                 ch_in=config["regressor"]["ch_in"],
-                ch_latent=config["regressor_conv"],
+                ch_latent=config["regressor_conv"]["layers"],
                 ch_latent_msk=config["regressor_conv"]["layers_msk"],
                 slices=config["regressor_conv"]["slices"],
-                vertical_fourier_encoding=config["regressor_conv"]["vertical_fourier_encodings"])
+                vertical_fourier_encoding=config["regressor_conv"]["vertical_fourier_encoding"])
     model = CompositeModel(backbone, regressor, regressor_conv, args.half_precision)
     return model

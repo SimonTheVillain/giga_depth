@@ -24,6 +24,8 @@ class DatasetCombined(data.Dataset):
         split = len(paths) - 16
         if type == "train":
             paths = paths[:split]
+            #paths = paths[:100]# TODO: remove debug
+            paths=[] #TODO: remove! DEBUG: remove the captured part of the dataset
         if type == "val":
             paths = paths[split:]
         self.sequences_captured = paths
@@ -34,6 +36,7 @@ class DatasetCombined(data.Dataset):
         split = len(paths) - 64
         if type == "train":
             paths = paths[:split]
+            #paths = paths[:100]#TODO: remove debug
         if type == "val":
             paths = paths[split:]
         self.sequences_unity = paths
@@ -95,9 +98,9 @@ class DatasetCombined(data.Dataset):
             gt_edges = dilatation(edges, 10)
 
             disp = self.baseline_proj * (self.focal / 2) / depth
-            x_d = disp + np.expand_dims(np.arange(0, tgt_res[0] // 2), 0).astype(np.float32)
+            x_d = -disp + np.expand_dims(np.arange(0, tgt_res[0] // 2), 0).astype(np.float32)
             x_d = x_d.astype(np.float32)
-            x_d = x_d * (2.0 / float(tgt_res[0]))  # normalize between 0 and 1 (above and below are not impossible
+            x_d = x_d * (2.0 / float(tgt_res[0]))  # normalize between 0 and 1 (above and below are possbile too)
             gt_x_pos = x_d
 
             # downsample the mask. (prioritize invalid pixel!!!)
@@ -126,6 +129,7 @@ class DatasetCombined(data.Dataset):
         gt_x_pos = np.expand_dims(gt_x_pos, 0)
         gt_msk = np.expand_dims(gt_msk, 0)
         gt_edges = np.expand_dims(gt_edges, 0)
+        has_gt = np.array([[[float(has_gt)]]], dtype=np.float32)
         return ir, irr, gt_x_pos, gt_msk, gt_edges, has_gt
 
 

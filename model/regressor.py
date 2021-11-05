@@ -2,14 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.cuda_cond_mul.cond_mul import CondMul
+import numpy as np
 
 
 class RegressorConv(nn.Module):
     def __init__(self, ch_in=64,
                  ch_latent=[64, 64, 128, 1024, 1024, 128],
-                 ch_latent_msk=[64, 64, ],
+                 ch_latent_msk=[64, 64],
                  slices=4,
                  vertical_fourier_encoding=8):
+        super(RegressorConv, self).__init__()
         self.slices = nn.ModuleList()
 
         self.slices_msk = nn.ModuleList()
@@ -22,43 +24,43 @@ class RegressorConv(nn.Module):
         for i in range(slices):
             slice = nn.Sequential()
             for j in range(len(ch_latent)-1):
-                slice.append(nn.Conv2d(ch_latent[j], ch_latent[j+1], 1))
-                slice.append(nn.BatchNorm2d(ch_latent[j+1]))
-                slice.append(nn.LeakyReLU())
+                slice.add_module(f"conv{j}", nn.Conv2d(ch_latent[j], ch_latent[j+1], 1))
+                slice.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent[j+1]))
+                slice.add_module(f"ReLU{j}", nn.LeakyReLU())
             #the output is a simple regression:
-            slice.append(nn.Conv2d(ch_latent[-1], 1, 1))
+            slice.add_module("conv_out", nn.Conv2d(ch_latent[-1], 1, 1))
             self.slices.append(slice)
 
             slice = nn.Sequential()
             for j in range(len(ch_latent_msk) - 1):
-                slice.append(nn.Conv2d(ch_latent_msk[j], ch_latent_msk[j+1], 1))
-                slice.append(nn.BatchNorm2d(ch_latent_msk[j+1]))
-                slice.append(nn.LeakyReLU())
-            slice.append(nn.Conv2d(ch_latent_msk[-1], 1, 1))
-            self.slices_msk.append(slice)
+                slice.add_module(f"conv{j}", nn.Conv2d(ch_latent_msk[j], ch_latent_msk[j+1], 1))
+                slice.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent_msk[j+1]))
+                slice.add_module(f"ReLU{j}", nn.LeakyReLU())
+            slice.add_module("conv_out", nn.Conv2d(ch_latent_msk[-1], 1, 1))
+            self.slices_msk.append(slice)                                 
 
     def append_vertical_fourier_encoding(self, x):
         device = x.device
         features = torch.zeros(x.shape[0], self.fourier_encoding * 2, x.shape[2], x.shape[3], device=device)
-        y = torch.range(0, x.shape[2]).unsqueeze(1).unsqueeze(0).unsqueeze(0)
+        y = torch.arange(0, x.shape[2]).unsqueeze(1).unsqueeze(0).unsqueeze(0)
         for i in range(self.fourier_encoding):
-            features[:, i * 2, :, :] = torch.sin(y * ((i + 1) * torch.pi / x.shape[2]))
-            features[:, i * 2 + 1, :, :] = torch.cos( y * ((i + 1) * torch.pi / x.shape[2]))
+            features[:, i * 2, :, :] = torch.sin(y * ((i + 1) * np.pi / x.shape[2]))
+            features[:, i * 2 + 1, :, :] = torch.cos( y * ((i + 1) * np.pi / x.shape[2]))
         x = torch.cat((x, features), dim=1)
         return x
 
     def forward(self, x):
-        sh = x.shape[2]
+        sh = x.shape[2] // len(self.slices)
         regression = []
         mask = []
         for i in range(len(self.slices)):
-            x_slice = x[:, sh * i:sh * (i + 1), :, :]
+            x_slice = x[:, :, sh * i:sh * (i + 1), :]
             x_fourier = self.append_vertical_fourier_encoding(x_slice)
             regression.append(self.slices[i](x_fourier))
             mask.append(self.slices_msk[i](x_slice))
 
         regression = torch.cat(regression, dim=2)
-        mask = torch.cat(mask)
+        mask = torch.cat(mask, dim=2)
 
         return regression, mask
 

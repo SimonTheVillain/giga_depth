@@ -34,7 +34,7 @@ class MaskLoss(nn.Module):
             mask[torch.abs(x - x_gt) > (0.5 / 1280)] = 0.0 # invalidate every pixel we are more than half a pixel away
             loss = self.loss(sigma, mask)
             loss[mask == 0.0] *= 10.0
-            return torch.mean(loss)
+            return torch.mean(loss, dim=(1, 2, 3))
 
 #todo: remove this old code!!!!
 def sigma_loss(sigma, x, x_gt, mask_gt, mode):  # sigma_sq is also called "variance"

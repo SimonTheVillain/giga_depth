@@ -31,6 +31,10 @@ backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 regressor_model_pth = "trained_models/full_66_j4_regressor_chk.pt"
 backbone_model_pth = "trained_models/full_66_j4_backbone_chk.pt"
 
+
+regressor_model_pth = "trained_models/full_67_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_67_backbone_chk.pt"
+
 device = "cuda:0"
 backbone = torch.load(backbone_model_pth, map_location=device)
 backbone.eval()
@@ -54,7 +58,7 @@ if rendered:
     path = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
 
     path = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
-    path_out = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDepth66"
+    path_out = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDepth67"
     inds = os.listdir(path)
     inds  = [re.search(r'\d+', s).group() for s in inds]
     inds = set(inds)

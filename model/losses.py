@@ -4,6 +4,24 @@ import torch.nn.functional as F
 import cv2
 import numpy as np
 
+class MaskLoss(nn.Module):
+    def __init__(self, type="mask"):
+        super(MaskLoss, self).__init__()
+        self.type = type
+        if type == "mask" or type == "automask":
+            self.loss = torch.nn.BCEWithLogitsLoss(reduction='none')
+        else:
+            print("loss not implemented yet")
+
+    def forward(self, sigma, x, x_gt, mask_gt):
+        if self.type == "mask":
+            return torch.mean(self.loss(sigma, mask_gt))
+        if self.type == "automask":
+            mask = mask_gt.clone()
+            mask[torch.abs(x - x_gt) > (1 / 1216)] = 0.0 # invalidate every pixel we are more than one pixel away
+            loss = self.loss(sigma, mask)
+            loss[mask == 0.0] *= 10.0
+            return torch.mean(loss)
 
 class StereoLoss(nn.Module):
 
@@ -18,12 +36,14 @@ class StereoLoss(nn.Module):
     Takes left and right images + normalized x_position on the sensor
     '''
     def forward(self, left_img, right_img, x_pos, show_debug=False):
-        left_img = torch.nn.functional.interpolate(left_img, 0.5)
-        right_img = torch.nn.functional.interpolate(right_img, 0.5)
+        left_img = torch.nn.functional.interpolate(left_img, (left_img.shape[2] // 2, left_img.shape[3] // 2), mode="bilinear")
+        right_img = torch.nn.functional.interpolate(right_img, (left_img.shape[2], left_img.shape[3]), mode="bilinear")
         device = left_img.device
         x_pos = x_pos * x_pos.shape[3]
-        x0 = torch.arange(0, x_pos.shape[3], device=device).unflatten(0).unflatten(0).unflatten(0)
+        x0 = torch.arange(0, x_pos.shape[3], device=device).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+
         disp = x_pos - x0
+        disp *= -1.0 # pattern positions seems to be shifted left with increasing disparity
 
         return self.xtl(left_img, right_img, disp, show_debug)
 
@@ -91,7 +111,28 @@ class XTLoss(nn.Module):
             cv2.waitKey(10)
             cv2.waitKey()
         # pdb.set_trace()
+
+        #TODO: remove the next few lines of debug!!!
+        if torch.any(torch.isnan(left_img)):
+            print("left image has nan")
+
+        if torch.any(torch.isnan(right_img)):
+            print("left image has nan")
+
+        if torch.any(torch.isnan(dispmap_norm)):
+            print("dispmap has nan")
+
+        if torch.any(torch.isnan(recon_img)):
+            cv2.imshow("nanimage", recon_img[0,0,:,:].detach().cpu().numpy())
+            cv2.imshow("nanimage2", recon_img[1,0,:,:].detach().cpu().numpy())
+            cv2.waitKey()
+            print("shit, there is a nan")
+
         recon_img_LCN, _, _ = self.LCN(recon_img, 9)
+
+
+        if torch.any(torch.isnan(recon_img_LCN)):
+            print("shit, there is a nan")
 
         left_img_LCN, _, left_std_local = self.LCN(left_img, 9)
 
@@ -99,9 +140,9 @@ class XTLoss(nn.Module):
         losses = torch.abs(((left_img_LCN - recon_img_LCN) * left_std_local))
 
         # pdb.set_trace()
+        #print(f"before{losses.shape}")
         losses = self.ASW(left_img, losses, 12, 2)  # adaptive support window
-        # print(losses)
-
+        #print(f"after{losses.shape}")
         if True:
             outlier_loss = torch.zeros_like(dispmap)
             outlier_loss[dispmap < 0] = -dispmap[dispmap < 0]
@@ -116,14 +157,22 @@ class XTLoss(nn.Module):
                 img : N * C * H * W
                 kSize : 9 * 9
         '''
-
+        eps = 0.001
         w = torch.ones((self.outplanes, self.inplanes, kSize, kSize)).cuda() / (kSize * kSize)
         mean_local = F.conv2d(input=img, weight=w, padding=kSize // 2)
 
         mean_square_local = F.conv2d(input=img ** 2, weight=w, padding=kSize // 2)
         # std_local = (mean_square_local - mean_local ** 2) * (kSize ** 2) / (kSize ** 2 - 1)
-        std_local = (mean_square_local - mean_local ** 2)  # fix by simon!!!!! (why kSize ** 2 - >1< ???)
+        std_local = torch.sqrt(torch.clamp(mean_square_local - mean_local ** 2, min=eps**2))  # fix by simon!!!!! (why kSize ** 2 - >1< ???)
 
+        #print(torch.min(mean_square_local - mean_local ** 2))
+        #print(torch.min(torch.clamp(mean_square_local - mean_local ** 2, min=eps**2)))
+        if torch.any(torch.isnan(mean_square_local)):
+            print("shit")
+        if torch.any(torch.isnan(mean_local)):
+            print("shit")
+        if torch.any(torch.isnan(std_local)):
+            print("shit")
         epsilon = 1e-6
 
         return (img - mean_local) / (std_local + epsilon), mean_local, std_local
@@ -151,4 +200,4 @@ class XTLoss(nn.Module):
 
         CostASW = CostASW / weightGraph
 
-        return CostASW.mean()
+        return CostASW.mean((1, 2, 3))# mean so that we have one value for each sample

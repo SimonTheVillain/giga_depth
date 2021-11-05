@@ -1,6 +1,6 @@
 training:
   name: full_66_lcn_j4
-  batch_size: 3 # todo: change to 4
+  batch_size: 4
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
   momentum: 0.9

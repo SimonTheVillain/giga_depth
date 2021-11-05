@@ -124,4 +124,8 @@ def parse_args():
 
     args = parser.parse_args(additional_args)
 
+    if "alpha_reg_conv" in config["training"]:
+        args.alpha_regs_conv = config["training"]["alpha_reg_conv"]
+        args.alpha_reg_photometric = config["training"]["alpha_reg_photometric"]
+
     return args, config
