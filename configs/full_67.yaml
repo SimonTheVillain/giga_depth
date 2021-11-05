@@ -2,20 +2,20 @@ training:
   name: full_67
   batch_size: 2
   learning_rate: 4.0
-  lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
+  lr_scales: [1.0, 0.5, 0.12, 0.01]
   momentum: 0.9
   weight_decay: 1e-5
-  alpha_reg: [500, 1000, 2000, 2000, 2000]
-  alpha_reg_photometric: [1e-2, 1e-2, 1e-1, 1e-1, 1]
-  alpha_reg_conv: [1, 1, 1, 1, 1]
-  alpha_sigma: [1e-2, 1e-2, 1e-1, 1e-1, 1]
-  edge_weight: [0, 1, 2, 4, 20]
+  alpha_reg: [1000, 2000, 2000, 2000]
+  alpha_reg_photometric: [0, 0, 0, 0] # no photometric loss at the beginning
+  alpha_reg_conv: [1, 2, 4, 8]
+  alpha_sigma: [1e-2, 1e-1, 1e-1, 1]
+  edge_weight: [0, 2, 4, 20]
   sigma_mode: automask
   gpu_list: [0]
   overall_steps: 70000 # todo: maybe don't use this
   key_steps: [ 20000, 30000, 40000, 50000 ] # todo: maybe don't use this
-  epochs: 13
-  key_epochs: [ 2, 4, 6, 8 ]
+  epochs: 5
+  key_epochs: [ 1, 2, 3]
   key_step_scale: 2
   half_precision: False
 
