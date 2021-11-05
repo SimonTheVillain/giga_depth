@@ -24,6 +24,13 @@ backbone_model_pth = "trained_models/full_64_nolcn_jitter5_backbone.pt"
 regressor_model_pth = "trained_models/full_65_nolcn_jitter4_regressor.pt"
 backbone_model_pth = "trained_models/full_65_nolcn_jitter4_backbone.pt"
 
+
+regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
+
+regressor_model_pth = "trained_models/full_66_j4_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_66_j4_backbone_chk.pt"
+
 device = "cuda:0"
 backbone = torch.load(backbone_model_pth, map_location=device)
 backbone.eval()
@@ -32,7 +39,7 @@ regressor.eval()
 model = CompositeModel(backbone, regressor)
 
 
-rendered = False
+rendered = True
 half_res = False
 
 if rendered:
@@ -46,8 +53,8 @@ if rendered:
     rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
     path = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
 
-    path = "/media/simon/LaCie/datasets/structure_core_unity_test"
-    path_out = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDepth"
+    path = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
+    path_out = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDepth66"
     inds = os.listdir(path)
     inds  = [re.search(r'\d+', s).group() for s in inds]
     inds = set(inds)
@@ -55,7 +62,7 @@ if rendered:
     inds.sort()
     paths = []
     for ind in inds:
-        paths.append((path + f"/{ind}_left.jpg", path_out + f"/{int(ind):05d}.exr"))
+        paths.append((path + f"/{ind}_left.jpg", path_out + f"/{int(ind):05d}"))
 else:
     tgt_res = (1216, 896)
     tgt_cxy = (604, 457)
@@ -64,7 +71,7 @@ else:
 
     rr = (tgt_res[0], 0, tgt_res[0], tgt_res[1])
     path = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test"
-    path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth"
+    path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth66"
     folders = os.listdir(path)
     scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
 
