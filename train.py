@@ -10,7 +10,7 @@ from experiments.lines.model_lines_CR8_n import *
 from model.composite_model import CompositeModel, GetModel
 from model.backbone import *
 from model.backboneSliced import *
-from model.regressor import Regressor, Regressor2, Reg_3stage
+from model.regressor import Reg_3stage
 from torch.utils.data import DataLoader
 import math
 from params import parse_args

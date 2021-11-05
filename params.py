@@ -7,6 +7,8 @@ import torch
 def merge_configs(default, additional):
     merged = default.copy()
     for key1 in additional:
+        if key1 not in merged:
+            merged[key1] = dict()
         for key2 in additional[key1]:
             merged[key1][key2] = additional[key1][key2]
     return merged

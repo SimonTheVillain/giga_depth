@@ -1,6 +1,7 @@
 from dataset.dataset_rendered_2 import *
 from dataset.dataset_rendered_shapenet import *
 from dataset.dataset_rendered_3 import DatasetRenderedSequences
+from dataset.combined_dataset import DatasetCombined
 from pathlib import Path
 
 def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False):
@@ -63,21 +64,6 @@ def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False)
         paths = [Path(path) / x for x in sequences if os.path.isdir(Path(path) / x)]
         paths.sort()
 
-        if False:#TODO: remove!!!
-            dataset_paths = ["/media/simon/WD/datasets_raw/structure_core_unity_1",
-                             "/media/simon/WD/datasets_raw/structure_core_unity_2",
-                             "/media/simon/WD/datasets_raw/structure_core_unity_3",
-                             "/media/simon/LaCie/datasets_raw/structure_core_unity_4",
-                             "/media/simon/LaCie/datasets_raw/structure_core_unity_5",
-                             "/media/simon/LaCie/datasets_raw/structure_core_unity_6",
-                             "/media/simon/WD/datasets_raw/structure_core_unity_7"]
-            paths = []
-            for dataset_path in dataset_paths:
-                folders = os.listdir(dataset_path)
-                folders.sort()
-                folders = [Path(dataset_path) / x for x in folders if os.path.isdir(Path(dataset_path) / x)]
-                paths += folders
-
         paths_train = paths[:len(paths) - 64]
         paths_val = paths[len(paths) - 64:]
 
@@ -93,6 +79,19 @@ def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False)
         focal = (1.1154399414062500e+03, 1.1154399414062500e+03) # same focal length in both directions
         has_lr = True
         baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
+        return datasets, baselines, has_lr, focal, principal, src_res
+
+    if version == "structure_core_combo":
+        datasets = {
+            'train': DatasetCombined(path, vertical_jitter=vertical_jitter, type='train'),
+            'val': DatasetCombined(path, vertical_jitter=vertical_jitter, type='val')
+        }
+
+        src_res = (1216, 896)
+        principal = (604, 457)
+        focal = (1.1154399414062500e+03, 1.1154399414062500e+03)  # same focal length in both directions
+        has_lr = True
+        baselines = {"right": 0.0634, "left": 0.0634}
         return datasets, baselines, has_lr, focal, principal, src_res
 
 

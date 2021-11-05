@@ -3,15 +3,16 @@ import torch.nn as nn
 from torch.cuda.amp import autocast
 from model.backbone import *
 from model.backboneSliced import *
-from model.regressor import Regressor, Regressor2, Reg_3stage
+from model.regressor import Reg_3stage, RegressorConv
 
 
 class CompositeModel(nn.Module):
-    def __init__(self, backbone, regressor, half_precision=False):
+    def __init__(self, backbone, regressor, regressor_conv=None, half_precision=False):
         super(CompositeModel, self).__init__()
         self.half_precision = half_precision
         self.backbone = backbone
         self.regressor = regressor
+        self.regressor_conv = regressor_conv
 
         # TODO: remove this debug(or at least make it so it can run with other than 64 channels
         # another TODO: set affine parameters to false!
@@ -33,6 +34,10 @@ class CompositeModel(nn.Module):
             # z = {**x, **y}
             for key, val in debugs.items():
                 results[-1][key] = val
+
+            if self.regressor_conv:
+                result = self.regressor_conv(x)
+                results.append(result)
             return results
         else:
 
@@ -42,6 +47,11 @@ class CompositeModel(nn.Module):
                 x = x.type(torch.float32)
             else:
                 x = self.backbone(x)
+
+            results = self.regressor(x, x_gt)
+            if self.regressor_conv:
+                result = self.regressor_conv(x)
+                results.append(result)
             return self.regressor(x, x_gt)
 
 
@@ -151,5 +161,18 @@ def GetModel(args, config):
                                           config["backbone"]["slices"],
                                           lcn=args.LCN,
                                           downsample_output=args.downsample_output)
-    model = CompositeModel(backbone, regressor, args.half_precision)
+
+    regressor_conv = None
+    if "regressor_conv" in config:
+        if config["regressor_conv"]["load_file"] != "":
+            regressor_conv = torch.load(config["regressor_conv"]["load_file"])
+            regressor_conv.eval()
+        else:
+            regressor_conv = RegressorConv(
+                ch_in=config["regressor"]["ch_in"],
+                ch_latent=config["regressor_conv"],
+                ch_latent_msk=config["regressor_conv"]["layers_msk"],
+                slices=config["regressor_conv"]["slices"],
+                vertical_fourier_encoding=config["regressor_conv"]["vertical_fourier_encodings"])
+    model = CompositeModel(backbone, regressor, regressor_conv, args.half_precision)
     return model

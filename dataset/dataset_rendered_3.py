@@ -195,6 +195,5 @@ def add_msk():
                 cv2.waitKey()
 
 
-
 if __name__ == "__main__":
     add_msk()
