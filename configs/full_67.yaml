@@ -14,11 +14,22 @@ training:
   gpu_list: [0]
   overall_steps: 70000 # todo: maybe don't use this
   key_steps: [ 20000, 30000, 40000, 50000 ] # todo: maybe don't use this
-  epochs: 5
-  key_epochs: [ 1, 2, 3]
+  epochs: 9
+  key_epochs: [ 3, 5, 7]
   key_step_scale: 2
   half_precision: False
-
+  #todo: actually we want to train only the convolutional regressor
+  #1) create the option to add only the regressor_conv weights.
+  #2) create the option to only run on rendered data.
+  #3) another optimizer could speedup the whole process
+  # TODO: maybe apply training in a few steps:
+  #1) train old version (load)
+  #2) train the convolutional regressor while fixing everything else+
+  #  --dataset loader with selectable domains
+  #  --option to enable/disable & losses/regressors
+  #  --option to
+  #3) train real-world + rendered data -> domain transfer
+  #4) train the real regressor on rendered fixing the backbone -> victory!!
 dataset:
   path: /media/simon/WD/datasets_raw
   is_npy: False
@@ -64,9 +75,9 @@ regressor:
   sigma_mode: conv
 
 regressor_conv:
-  load_file: ""
+  load_file: "trained_models/full_67_regressor_conv_chk.pt"
   name: conv_reg
-  layers: [64, 128, 128, 512, 128] #[64, 128, 128, 512, 128]
+  layers: [128, 128, 128, 512, 512, 128] #[64, 128, 128, 512, 128]
   layers_msk: [64, 32, 16] #[64, 128, 64, 64]
-  slices: 4
+  slices: 16
   vertical_fourier_encoding: 8

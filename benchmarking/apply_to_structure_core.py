@@ -33,6 +33,7 @@ backbone_model_pth = "trained_models/full_66_j4_backbone_chk.pt"
 
 
 regressor_model_pth = "trained_models/full_67_regressor_chk.pt"
+regressor_conv_model_pth = "trained_models/full_67_regressor_conv_chk.pt"
 backbone_model_pth = "trained_models/full_67_backbone_chk.pt"
 
 device = "cuda:0"
@@ -40,11 +41,17 @@ backbone = torch.load(backbone_model_pth, map_location=device)
 backbone.eval()
 regressor = torch.load(regressor_model_pth, map_location=device)
 regressor.eval()
+
+regressor_conv = torch.load(regressor_conv_model_pth, map_location=device)
+regressor_conv.eval()
 model = CompositeModel(backbone, regressor)
 
-
+use_conv = True
 rendered = True
 half_res = False
+if use_conv:
+    model = CompositeModel(backbone, regressor, regressor_conv)
+
 
 if rendered:
     src_res = (1401, 1001)
@@ -109,7 +116,10 @@ with torch.no_grad():
 
         #run local contrast normalization (LCN)
         # TODO: is this the way the x-positions are encoded?
-        x, msk = model(irl)
+        if regressor_conv:
+            _, _, x, msk = model(irl)
+        else:
+            x, msk = model(irl)
         x = x[0, 0, :, :]
         x = x * x.shape[1]
         x_0 = torch.arange(0, x.shape[1]).unsqueeze(0).to(device)

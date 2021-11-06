@@ -33,7 +33,7 @@ def train():
     mask_loss.cuda()
 
     assert args.optimizer == "sgd", "No other optimizers than sgd are tested/allowed!"
-    optimizer = optim.SGD(model.parameters(),
+    optimizer = optim.SGD(model.regressor_conv.parameters(),
                           lr=args.learning_rate,
                           momentum=args.momentum,
                           weight_decay=args.weight_decay)
