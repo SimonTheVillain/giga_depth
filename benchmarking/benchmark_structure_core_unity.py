@@ -111,7 +111,11 @@ def process_results(algorithm):
 def create_data():
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
     #algorithms = ["HyperDepth"]
-    threading = True
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+                  "ActiveStereoNet", "ActiveStereoNetFull",
+                  "connecting_the_dots_full", "connecting_the_dots_stereo"]  #
+    algorithms = ["GigaDepth"]
+    threading = False
 
     if threading:
         with Pool(5) as p:
@@ -125,7 +129,10 @@ def create_plot():
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
     path_results = "/home/simon/datasets/structure_core_unity_test_results"
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"] # "HyperDepth", "GigaDepthLCN"]
-
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+                  "ActiveStereoNet", "ActiveStereoNetFull",
+                  "connecting_the_dots_full", "connecting_the_dots_stereo",
+                  "HyperDepth"]
     legend_names = {"GigaDepth": "GigaDepth",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "connecting_the_dots": "Connecting The Dots",
@@ -135,7 +142,11 @@ def create_plot():
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
-        plt.plot(data["inliers"]["ths"], data["inliers"]["data"] / data["inliers"]["pix_count"])
+        x = data["inliers"]["ths"]
+        y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        x = x[x < 5]
+        y = y[:len(x)]
+        plt.plot(x, y)
     plt.legend(algorithms)
 
     th = 5

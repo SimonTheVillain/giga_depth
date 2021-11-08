@@ -41,7 +41,7 @@ for scene in scenes:
         disparity[disparity == 0] = -16
         disparity = disparity.astype(np.float32) * (1.0 / 16.0)
         #TODO: convert to float
-        disparity = disparity * baseline_from / baseline_to
+        disparity = disparity * baseline_to / baseline_from
         impath = out_path / scene / f"disp{i}.exr"
         cv2.imwrite(str(impath), disparity)
 
