@@ -7,7 +7,9 @@ import pickle
 import matplotlib
 matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
+import matplotlib.axes as axes
 from multiprocessing import Pool
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 
 def process_results(algorithm):
@@ -133,30 +135,50 @@ def create_plot():
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]
-    legend_names = {"GigaDepth": "GigaDepth",
+    legend_names = {"GigaDepth": "GigaDepth light",
+                    "GigaDepth66": "GigaDepth",
+                    "GigaDepth66LCN": "GigaDepth (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
-                    "connecting_the_dots": "Connecting The Dots",
+                    "ActiveStereoNetFull": "ActiveStereoNet (full)",
+                    "connecting_the_dots_stereo": "ConnectingTheDots",
+                    "connecting_the_dots_full": "ConnectingTheDots (full)",
                     "HyperDepth": "HyperDepth"}
+    font = {'family': 'normal',
+            #'weight': 'bold',
+            'size': 22}
 
-    plt.figure(1)
+    legends = [legend_names[x] for x in algorithms]
+
+    fig, ax = plt.subplots()
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         x = data["inliers"]["ths"]
         y = data["inliers"]["data"] / data["inliers"]["pix_count"]
-        x = x[x < 5]
-        y = y[:len(x)]
-        plt.plot(x, y)
-    plt.legend(algorithms)
+        #x = x[x < 5]
+        #y = y[:len(x)]
+        ax.plot(x, y)
+
+    ax.set(xlim=[0.0, 2])
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(MultipleLocator(0.1))
+    ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
+    ax.set_ylabel(ylabel="inlier ratios", fontdict=font)
+    #ax.axes([0, 5, 0, 1])
+
+    ax.legend(legends)
 
     th = 5
-    plt.figure(2)
+    fig, ax = plt.subplots()
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
-        plt.plot(data[f"inliers_{th}"]["distances"][2:],
+        ax.plot(data[f"inliers_{th}"]["distances"][2:],
                  np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:]))
-    plt.legend(algorithms)
+    ax.legend(legends)
+    #ax.axes([0, 10, 0, 1])
+    ax.set_xlabel(xlabel="distance [m]", fontdict=font)
+    ax.set_ylabel(ylabel=f"inlier ratios ({th} pixel threshold)", fontdict=font)
     plt.show()
 
 #create_data()

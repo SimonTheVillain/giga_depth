@@ -12,6 +12,9 @@ out_path = Path("/home/simon/datasets/structure_core/sequences_combined_SGBM")
 
 in_path = Path("/home/simon/datasets/structure_core/sequences_combined_all")
 out_path = Path("/home/simon/datasets/structure_core/sequences_combined_all_SGBM")
+
+in_path = Path("/home/simon/datasets/structure_core_photoneo_test")
+out_path = Path("/home/simon/datasets/structure_core_photoneo_test_results/SGBM")
 baseline_from = 0.07501
 baseline_to = 0.0634
 
@@ -43,6 +46,9 @@ for scene in scenes:
         #TODO: convert to float
         disparity = disparity * baseline_to / baseline_from
         impath = out_path / scene / f"disp{i}.exr"
+        cv2.imwrite(str(impath), disparity)
+
+        impath = out_path / scene / f"{i}.exr"
         cv2.imwrite(str(impath), disparity)
 
         cv2.imshow("ir", irl)

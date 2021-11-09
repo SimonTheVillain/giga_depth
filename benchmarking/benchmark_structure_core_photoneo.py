@@ -15,24 +15,29 @@ from multiprocessing import Pool
 base_path = "/media/simon/ssd_datasets/datasets"
 base_path = "/home/simon/datasets"
 
-def prepare_gt():
+def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
+    print(dst)
     gt_path = f"{base_path}/structure_core_photoneo_test"
-    eval_path = f"{base_path}/structure_core_photoneo_test_results/GigaDepth66LCN"
-    output_path = f"{base_path}/structure_core_photoneo_test_results/Photoneo"
+    eval_path = f"{base_path}/structure_core_photoneo_test_results/{src}"#GigaDepth66LCN"
+    eval_path_pre = f"{base_path}/structure_core_photoneo_test_results/{src_pre}"#GigaDepth66LCN"
+    output_path = f"{base_path}/structure_core_photoneo_test_results/{dst}"
     focal = 1.1154399414062500e+03
     baseline = 0.0634
     cxy = (604, 457)
 
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
     for i in range(11):
         if not os.path.exists(f"{output_path}/{i:03}"):
             os.mkdir(f"{output_path}/{i:03}")
         for j in range(4):
+            pth_src_pre = f"{eval_path_pre}/{i:03}/{j}.exr"
             pth_src = f"{eval_path}/{i:03}/{j}.exr"
             pth_gt = f"{gt_path}/{i:03}/gt.ply"
             pth_out = f"{output_path}/{i:03}/{j}.exr"
 
-            print(pth_src)
-            disp = cv2.imread(pth_src, cv2.IMREAD_UNCHANGED)
+            print(pth_src_pre)
+            disp = cv2.imread(pth_src_pre, cv2.IMREAD_UNCHANGED)
             pcd = generate_pcl(disp)
 
             # TODO: RENAME TO PCD_REF
@@ -42,27 +47,33 @@ def prepare_gt():
             pcd_ref = pcd_ref.scale(1.0 / 1000.0, np.zeros((3, 1)))
 
             print("Apply point-to-point ICP")
-            threshold = 0.2
+            threshold = 0.2#20cm
             trans_init = np.identity(4)
             reg_p2p = o3d.pipelines.registration.registration_icp(
                 pcd_ref, pcd, threshold, trans_init,
                 o3d.pipelines.registration.TransformationEstimationPointToPoint())
-            print(reg_p2p)
-            print("Transformation is:")
-            print(reg_p2p.transformation)
+            #print(reg_p2p)
+            #print("Transformation is:")
+            #print(reg_p2p.transformation)
             pcd_ref.transform(reg_p2p.transformation)  # apply first transformation
 
+
+
+            print(pth_src)
+            disp = cv2.imread(pth_src, cv2.IMREAD_UNCHANGED)
+            pcd = generate_pcl(disp)
+
             print("Apply FINE point-to-point ICP")
-            threshold = 0.02
+            threshold = 0.02#2cm
             trans_init = np.identity(4)
             reg_p2p = o3d.pipelines.registration.registration_icp(
                 pcd_ref, pcd, threshold, trans_init,
                 o3d.pipelines.registration.TransformationEstimationPointToPoint())
-            print(reg_p2p)
-            pcd_ref.transform(reg_p2p.transformation)  # apply second transformation
+            #print(reg_p2p)
+            #pcd_ref.transform(reg_p2p.transformation)  # apply second transformation
 
-            print("Transformation is:")
-            print(reg_p2p.transformation)
+            #print("Transformation is:")
+            #print(reg_p2p.transformation)
 
             print("Initial alignment")
             evaluation = o3d.pipelines.registration.evaluate_registration(
@@ -176,7 +187,7 @@ def process_results(algorithm):
         delta2 = delta
         delta2[disp_gt == 0.0] = 0.0
         cv2.imshow("delta", np.abs(delta2) / 100)
-        cv2.waitKey()
+        cv2.waitKey(1)
         msk = disp_gt > 0
         msk_count = np.sum(msk)
         data["inliers"]["pix_count"] += msk_count
@@ -218,7 +229,11 @@ def process_results(algorithm):
 
 def create_plot():
     path_results = f"{base_path}/structure_core_photoneo_test_results"
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]
+
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+                  "ActiveStereoNet", "connecting_the_dots",
+                  "HyperDepth", "HyperDepthXDomain",
+                  "SGBM"]
 
     legend_names = {"GigaDepth": "GigaDepth",
                     "ActiveStereoNet": "ActiveStereoNet",
@@ -243,10 +258,14 @@ def create_plot():
     plt.legend(algorithms)
     plt.show()
 
-#prepare_gt()
 def create_data():
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
-    algorithms = ["HyperDepth"] #TODO: find bug in the hyperdepth implementation!!!!
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+                  "ActiveStereoNet",
+                  "connecting_the_dots",
+                  "HyperDepth", "HyperDepthXDomain",
+                  "SGBM"]
+    #algorithms = ["HyperDepth"] #TODO: find bug in the hyperdepth implementation!!!!
+    #algorithms = ["HyperDepthXDomain"]
     threading = False
 
     if threading:
@@ -255,5 +274,17 @@ def create_data():
     else:
         for algorithm in algorithms:
             process_results(algorithm)
-#create_data()
+def prepare_gts():
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+                  "ActiveStereoNet",
+                  "connecting_the_dots",
+                  "HyperDepth", "HyperDepthXDomain",
+                  "SGBM"]
+    algorithms = ["HyperDepthXDomain",
+                  "SGBM"]
+    for alg in algorithms:
+        prepare_gt(src_pre="GigaDepth66LCN", src=alg, dst=f"GT/{alg}")
+prepare_gts()
+prepare_gt()
+create_data()
 create_plot()
