@@ -31,25 +31,28 @@ backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 regressor_model_pth = "trained_models/full_66_j4_regressor_chk.pt"
 backbone_model_pth = "trained_models/full_66_j4_backbone_chk.pt"
 
-
 regressor_model_pth = "trained_models/full_67_regressor_chk.pt"
 regressor_conv_model_pth = "trained_models/full_67_regressor_conv_chk.pt"
 backbone_model_pth = "trained_models/full_67_backbone_chk.pt"
+
+regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 
 device = "cuda:0"
 backbone = torch.load(backbone_model_pth, map_location=device)
 backbone.eval()
 regressor = torch.load(regressor_model_pth, map_location=device)
 regressor.eval()
-
-regressor_conv = torch.load(regressor_conv_model_pth, map_location=device)
-regressor_conv.eval()
 model = CompositeModel(backbone, regressor)
+regressor_conv = False
 
-use_conv = True
-rendered = True
+use_conv = False
+rendered = False
 half_res = False
 if use_conv:
+    regressor_conv = torch.load(regressor_conv_model_pth, map_location=device)
+    regressor_conv.eval()
+
     model = CompositeModel(backbone, regressor, regressor_conv)
 
 
@@ -83,9 +86,14 @@ else:
     rr = (tgt_res[0], 0, tgt_res[0], tgt_res[1])
     path = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test"
     path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth66"
+
+    path = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined_all"
+    path_out = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined_all_GigaDepth66LCN"
+
     folders = os.listdir(path)
     scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
 
+    scenes.sort()
     paths = []
     for scene in scenes:
         tgt_path = Path(path_out) / scene

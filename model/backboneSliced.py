@@ -81,12 +81,16 @@ class Backbone3Slice(nn.Module):
 
     @staticmethod
     def get_required_padding(downsample=True):
+        if downsample:
+            return 17
         return 17
 
-    def __init__(self, channels=[16, 32, 64], channels_sub=[64, 64, 64, 64],
+    def __init__(self, channels=[16, 32], channels_sub=[64, 64, 64, 64],
                  use_bn=False, pad='', channels_in=2, downsample=True):
         super(Backbone3Slice, self).__init__()
-        assert downsample, "It is assumed that the output resolution is half the input."
+        self.downsample = downsample
+        assert len(channels) == 2, "Only 2 stages are supported before the downsampling"
+        #assert downsample, "It is assumed that the output resolution is half the input."
         p1 = (0, 0, 0, 0)
         p2 = (0, 0, 0, 0)
         if pad == 'top':
@@ -105,7 +109,7 @@ class Backbone3Slice(nn.Module):
                                         nn.BatchNorm2d(channels[0]),
                                         nn.LeakyReLU(),
                                         nn.ConstantPad2d(p2, 0),
-                                        nn.Conv2d(channels[0], channels[1], 5, padding=(0, 2)),  # + 2 = 5
+                                        nn.Conv2d(channels[0], channels[1], 5, padding=(0, 2)),  # + 2 = 3
                                         nn.BatchNorm2d(channels[1]),
                                         nn.LeakyReLU())
         else:
@@ -116,16 +120,31 @@ class Backbone3Slice(nn.Module):
                                         nn.Conv2d(channels[0], channels[1], 5, padding=(0, 2)),
                                         nn.LeakyReLU())
 
-        modules = [nn.ConstantPad2d(p2, 0),
-                   nn.Conv2d(channels[1], channels[2], 5, padding=(0, 2), stride=(2, 2)),
-                   nn.BatchNorm2d(channels[2]),
-                   nn.LeakyReLU()]
-        for i in range(0, 3):
-            modules.append(nn.ConstantPad2d(p2, 0))
-            modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2*2
-            if use_bn:
-                modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
-            modules.append(nn.LeakyReLU())
+
+        if downsample:
+            assert len(channels_sub) == 4, "The downsampled CNN needs to have 4 stages"
+            modules = [nn.ConstantPad2d(p2, 0),
+                       nn.Conv2d(channels[1], channels_sub[0], 5, padding=(0, 2), stride=(2, 2)),  # + 2 = 5
+                       nn.BatchNorm2d(channels_sub[0]),
+                       nn.LeakyReLU()]
+            for i in range(0, 3):
+                modules.append(nn.ConstantPad2d(p2, 0))
+                modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2*2
+                if use_bn:
+                    modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
+                modules.append(nn.LeakyReLU())
+        else:
+            modules = [nn.ConstantPad2d(p2, 0),
+                       nn.Conv2d(channels[1], channels_sub[0], 3, padding=(0, 1), stride=(1, 1)),  # + 1 = 3
+                       nn.BatchNorm2d(channels_sub[0]),
+                       nn.LeakyReLU()]
+            assert len(channels_sub) == 8, "The non-downsampled CNN needs to have 8 stages"
+            for i in range(0, 7):
+                modules.append(nn.ConstantPad2d(p2, 0))
+                modules.append(nn.Conv2d(channels_sub[i], channels_sub[i + 1], 5, padding=(0, 2)))  # + 2
+                if use_bn:
+                    modules.append(nn.BatchNorm2d(channels_sub[i + 1]))
+                modules.append(nn.LeakyReLU())
 
         self.block2 = nn.Sequential(*modules)
 

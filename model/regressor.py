@@ -6,12 +6,39 @@ import numpy as np
 
 
 class RegressorConv(nn.Module):
-    def __init__(self, ch_in=64,
+    def __init__(self,
+                 lines=448,
+                 ch_in=64,
                  ch_latent=[64, 64, 128, 1024, 1024, 128],
                  ch_latent_msk=[64, 64],
                  slices=4,
-                 vertical_fourier_encoding=8):
+                 vertical_fourier_encoding=8,
+                 batch_norm=False):
         super(RegressorConv, self).__init__()
+
+        self.linewise = False
+        if lines == slices:
+            ch_latent.insert(0, ch_in)
+            ch_latent_msk.insert(0, ch_in)
+            self.linewise = True
+            self.reg = nn.Sequential()
+            for j in range(len(ch_latent) - 1):
+                self.reg.add_module(f"conv{j}", nn.Conv2d(ch_latent[j]*lines, ch_latent[j + 1]*lines, 1, groups=lines))
+                if batch_norm:
+                    self.reg.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent[j + 1] * lines))
+                self.reg.add_module(f"ReLU{j}", nn.LeakyReLU())
+            # the output is a simple regression:
+            self.reg.add_module("conv_out", nn.Conv2d(ch_latent[-1]*lines, 1*lines, 1, groups=lines))
+
+            self.msk = nn.Sequential()
+            for j in range(len(ch_latent_msk) - 1):
+                self.msk.add_module(f"conv{j}", nn.Conv2d(ch_latent_msk[j] * lines, ch_latent_msk[j + 1] * lines, 1, groups=lines))
+                if batch_norm:
+                    self.msk.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent_msk[j + 1] * lines))
+                self.msk.add_module(f"ReLU{j}", nn.LeakyReLU())
+            self.msk.add_module("conv_out", nn.Conv2d(ch_latent_msk[-1] * lines, 1 * lines, 1, groups=lines))
+            return
+
         self.slices = nn.ModuleList()
 
         self.slices_msk = nn.ModuleList()
@@ -25,7 +52,8 @@ class RegressorConv(nn.Module):
             slice = nn.Sequential()
             for j in range(len(ch_latent)-1):
                 slice.add_module(f"conv{j}", nn.Conv2d(ch_latent[j], ch_latent[j+1], 1))
-                slice.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent[j+1]))
+                if batch_norm:
+                    slice.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent[j+1]))
                 slice.add_module(f"ReLU{j}", nn.LeakyReLU())
             #the output is a simple regression:
             slice.add_module("conv_out", nn.Conv2d(ch_latent[-1], 1, 1))
@@ -34,7 +62,8 @@ class RegressorConv(nn.Module):
             slice = nn.Sequential()
             for j in range(len(ch_latent_msk) - 1):
                 slice.add_module(f"conv{j}", nn.Conv2d(ch_latent_msk[j], ch_latent_msk[j+1], 1))
-                slice.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent_msk[j+1]))
+                if batch_norm:
+                    slice.add_module(f"bn{j}", nn.BatchNorm2d(ch_latent_msk[j+1]))
                 slice.add_module(f"ReLU{j}", nn.LeakyReLU())
             slice.add_module("conv_out", nn.Conv2d(ch_latent_msk[-1], 1, 1))
             self.slices_msk.append(slice)                                 
@@ -50,6 +79,23 @@ class RegressorConv(nn.Module):
         return x
 
     def forward(self, x):
+
+        if self.linewise:
+            bs = x.shape[0]
+            height = x.shape[2]
+            width = x.shape[3]
+
+            # convert from (b, c, h, w) to (b, h, c, w) to (b, h*c, 1, w)
+            x = x.permute((0, 2, 1, 3)).reshape((x.shape[0], -1, 1, x.shape[3]))
+            reg = self.reg(x)
+            # convert from (b, h*c, 1, w) to (b, h, c, w) to (b, c, h, w)
+            reg = reg.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
+
+            msk = self.msk(x)
+            # convert from (b, h*c, 1, w) to (b, h, c, w) to (b, c, h, w)
+            msk = msk.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
+            return reg, msk
+
         sh = x.shape[2] // len(self.slices)
         regression = []
         mask = []

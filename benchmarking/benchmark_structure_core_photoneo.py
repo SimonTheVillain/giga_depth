@@ -97,7 +97,7 @@ def generate_disp(pcd):
         if d==0.0:
             continue
         xy = [pt[0] * focal / d + cxy[0], pt[1] * focal / d + cxy[1]]
-        xy = [int(xy[0]), int(xy[1])]
+        xy = [int(xy[0] + 0.5), int(xy[1] + 0.5)]
         if xy[0] >=0 and xy[0] < depth.shape[1] and xy[1] >= 0 and xy[1] < depth.shape[0]:
             depth[xy[1], xy[0]] = min(d, depth[xy[1], xy[0]])
 

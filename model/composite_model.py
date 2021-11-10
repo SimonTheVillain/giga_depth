@@ -169,10 +169,12 @@ def GetModel(args, config):
             regressor_conv.eval()
         else:
             regressor_conv = RegressorConv(
+                lines=config["regressor"]["lines"],
                 ch_in=config["regressor"]["ch_in"],
                 ch_latent=config["regressor_conv"]["layers"],
                 ch_latent_msk=config["regressor_conv"]["layers_msk"],
                 slices=config["regressor_conv"]["slices"],
-                vertical_fourier_encoding=config["regressor_conv"]["vertical_fourier_encoding"])
+                vertical_fourier_encoding=config["regressor_conv"]["vertical_fourier_encoding"],
+                batch_norm=config["regressor_conv"]["batch_norm"])
     model = CompositeModel(backbone, regressor, regressor_conv, args.half_precision)
     return model

@@ -10,7 +10,7 @@ from common.common import *
 class DatasetRenderedShapenet(data.Dataset):
 
 
-    def __init__(self, root_dir, type="train", noise=0.1, full_res=False, use_npy=True, debug=False):
+    def __init__(self, root_dir, type="train", noise=0.1, full_res=False, use_npy=False, debug=False):
         self.root_dir = root_dir
         self.use_npy = use_npy
         self.noise = noise
@@ -23,9 +23,9 @@ class DatasetRenderedShapenet(data.Dataset):
             self.to_idx = 1024*9
         if type == "val":
             self.from_idx = 0
-            self.to_idx = 1024
+            self.to_idx = 256
         if type == "test":
-            self.from_idx = 0
+            self.from_idx = 256
             self.to_idx = 1024
 
     def __len__(self):
@@ -42,6 +42,7 @@ class DatasetRenderedShapenet(data.Dataset):
             mask = np.load(f"{self.root_dir}/syn/{scene_idx:08d}/mask0_{frame_idx}.npy")
         else:
             ir = cv2.imread(f"{self.root_dir}/syn/{scene_idx:08d}/im0_{frame_idx}.png", cv2.IMREAD_UNCHANGED)
+
             if self.full_res:
                 disp = cv2.imread(f"{self.root_dir}/syn/{scene_idx:08d}/disp1_{frame_idx}.exr", cv2.IMREAD_UNCHANGED)
                 assert ir is not None, f"File {self.root_dir}/syn/{scene_idx:08d}/im0_{frame_idx}.exr exists?"
@@ -50,10 +51,12 @@ class DatasetRenderedShapenet(data.Dataset):
                 disp = np.expand_dims(disp[:480, :], 0)
                 mask = np.ones_like(disp)
             else:
+                ir = np.expand_dims(ir, 0).astype(np.float32) * (1.0/65536.0)
                 disp = cv2.imread(f"{self.root_dir}/syn/{scene_idx:08d}/disp0_{frame_idx}.exr", cv2.IMREAD_UNCHANGED)
-
+                disp = np.expand_dims(disp, 0)
+                mask = np.ones_like(disp)
         grey = ir
-        grey += np.random.rand(grey.shape[0], grey.shape[1], grey.shape[2]) * np.random.rand() * self.noise
+        grey += np.random.rand(grey.shape[0], grey.shape[1], grey.shape[0]) * np.random.rand() * self.noise
         grey *= np.random.uniform(0.5, 1.0)
 
         x_d = disp * math.copysign(1.0, self.baseline) + np.expand_dims(np.arange(0, disp.shape[2]), axis=(0, 1))

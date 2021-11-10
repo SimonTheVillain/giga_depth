@@ -7,7 +7,7 @@ training:
   weight_decay: 1e-5
   alpha_reg: [1000, 2000, 2000, 2000]
   alpha_reg_photometric: [0, 0, 0, 0] # no photometric loss at the beginning
-  alpha_reg_conv: [1, 2, 4, 8]
+  alpha_reg_conv: [2, 4, 8, 16]
   alpha_sigma: [1e-2, 1e-1, 1e-1, 1]
   edge_weight: [0, 2, 4, 20]
   sigma_mode: automask
@@ -75,9 +75,10 @@ regressor:
   sigma_mode: conv
 
 regressor_conv:
-  load_file: "trained_models/full_67_regressor_conv_chk.pt"
+  load_file: "" # "trained_models/full_67_regressor_conv_chk.pt"
   name: conv_reg
-  layers: [128, 128, 128, 512, 512, 128] #[64, 128, 128, 512, 128]
+  layers: [128, 128, 128, 256, 512, 128] #[64, 128, 128, 512, 128]
   layers_msk: [64, 32, 16] #[64, 128, 64, 64]
-  slices: 16
+  slices: 448
   vertical_fourier_encoding: 8
+  batch_norm: False

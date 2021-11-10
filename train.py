@@ -275,9 +275,9 @@ def train():
 
                     if alpha_sigma != 0.0:
                         loss_sigma = mask_loss(sigma, x_real, x_gt, mask_gt)
-                        loss_sigma_acc += loss_sigma.item()
-                        loss_sigma_acc_sub += loss_sigma.item()
-                        loss += loss_sigma * alpha_sigma
+                        loss_sigma_acc += loss_sigma.mean().item()
+                        loss_sigma_acc_sub += loss_sigma.mean().item()
+                        loss += loss_sigma.mean() * alpha_sigma
 
                     if len(loss_class_acc) == 0:
                         loss_class_acc = [0] * len(class_losses)
@@ -323,8 +323,8 @@ def train():
 
                         if alpha_sigma != 0.0:
                             loss_sigma = mask_loss(sigma, x_real, x_gt, mask_gt)
-                            loss_sigma_acc += loss_sigma.item()
-                            loss_sigma_acc_sub += loss_sigma.item()
+                            loss_sigma_acc += loss_sigma.mean().item()
+                            loss_sigma_acc_sub += loss_sigma.mean().item()
 
                 #delta = torch.abs(x_real - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
                 delta = torch.abs(x_real - x_gt)
