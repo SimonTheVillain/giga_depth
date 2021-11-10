@@ -145,7 +145,7 @@ def create_plot():
                     "HyperDepth": "HyperDepth"}
     font = {'family': 'normal',
             #'weight': 'bold',
-            'size': 22}
+            'size': 16}
 
     legends = [legend_names[x] for x in algorithms]
 

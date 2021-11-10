@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 base_path = "/media/simon/ssd_datasets/datasets"
 base_path = "/home/simon/datasets"
@@ -131,7 +132,7 @@ def generate_pcl(disp):
 
 
 def process_results(algorithm):
-    path_src = f"{base_path}/structure_core_photoneo_test_results/Photoneo"
+    path_src = f"{base_path}/structure_core_photoneo_test_results/GT/{algorithm}"
     path_results = f"{base_path}/structure_core_photoneo_test_results"
 
     paths = []
@@ -235,18 +236,44 @@ def create_plot():
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
 
-    legend_names = {"GigaDepth": "GigaDepth",
+    legend_names = {"GigaDepth": "GigaDepth light",
+                    "GigaDepth66": "GigaDepth",
+                    "GigaDepth66LCN": "GigaDepth (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
-                    "connecting_the_dots": "Connecting The Dots",
-                    "HyperDepth": "HyperDepth"}
-
-    plt.figure(1)
+                    "ActiveStereoNetFull": "ActiveStereoNet (full)",
+                    "connecting_the_dots": "ConnectingTheDots",
+                    "connecting_the_dots_stereo": "ConnectingTheDots",
+                    "connecting_the_dots_full": "ConnectingTheDots (full)",
+                    "HyperDepth": "HyperDepth",
+                    "HyperDepthXDomain": "HyperDepthXDomain",
+                    "SGBM": "Semi-global Block-matching"}
+    legends = [legend_names[x] for x in algorithms]
+    font = {'family': 'normal',
+            #'weight': 'bold',
+            'size': 16}
+    #plt.figure(1)
+    #for algorithm in algorithms:
+    #    with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+    #        data = pickle.load(f)
+    #    plt.plot(data["inliers"]["ths"], data["inliers"]["data"] / data["inliers"]["pix_count"])
+    #plt.legend(algorithms)
+    fig, ax = plt.subplots()
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
-        plt.plot(data["inliers"]["ths"], data["inliers"]["data"] / data["inliers"]["pix_count"])
-    plt.legend(algorithms)
+        x = data["inliers"]["ths"]
+        y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        #x = x[x < 5]
+        #y = y[:len(x)]
+        ax.plot(x, y)
 
+    ax.set(xlim=[0.0, 5])
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(MultipleLocator(0.1))
+    ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
+    ax.set_ylabel(ylabel="inlier ratios", fontdict=font)
+
+    ax.legend(legends, loc='lower right')
     # todo: maybe reinstert the plots by threshold
     #th = 5
     #plt.figure(2)
@@ -255,7 +282,7 @@ def create_plot():
     #        data = pickle.load(f)
     #    plt.plot(data[f"inliers_{th}"]["distances"][2:],
     #             np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:]))
-    plt.legend(algorithms)
+    #plt.legend(algorithms)
     plt.show()
 
 def create_data():
@@ -284,7 +311,7 @@ def prepare_gts():
                   "SGBM"]
     for alg in algorithms:
         prepare_gt(src_pre="GigaDepth66LCN", src=alg, dst=f"GT/{alg}")
-prepare_gts()
-prepare_gt()
-create_data()
+#prepare_gts()
+#prepare_gt()
+#create_data()
 create_plot()
