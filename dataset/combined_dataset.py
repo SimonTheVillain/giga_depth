@@ -10,22 +10,24 @@ from common.common import *
 
 class DatasetCombined(data.Dataset):
 
-    def __init__(self, path, type, vertical_jitter=3, depth_threshold=15, noise=0.3):
+    def __init__(self, path, type, vertical_jitter=3, depth_threshold=15, noise=0.3, backward_compability=True):
         path = Path(path)
         path_captured = path / "structure_core/sequences_combined_all"
+        path_captured_gt = path / "structure_core/sequences_combined_all_GigaDepth66LCN_filled"
         path_unity = path / "structure_core_unity_sequences"
 
+        self.backward_compability = backward_compability
         self.depth_th = depth_threshold
         self.noise = noise
         self.vertical_jitter = vertical_jitter
-        sequences = os.listdir(path_captured)
-        paths = [path_captured / x for x in sequences if os.path.isdir(path_captured / x)]
-        paths.sort()
+        sequences = os.listdir(path_captured_gt)
+        sequences.sort()
+        paths = [(path_captured / x, path_captured_gt / x)  for x in sequences if os.path.isdir(path_captured / x)]
         split = len(paths) - 16
         if type == "train":
             paths = paths[:split]
             #paths = paths[:100]# TODO: remove debug
-            paths=[] #TODO: remove! DEBUG: remove the captured part of the dataset
+            #paths=[] #TODO: remove! DEBUG: remove the captured part of the dataset
         if type == "val":
             paths = paths[split:]
         self.sequences_captured = paths
@@ -114,14 +116,20 @@ class DatasetCombined(data.Dataset):
             idx = idx - len(self.sequences_unity)
             frm = idx % 4
             idx = idx // 4
-            path_seq = self.sequences_captured[idx]
+            path_seq, path_gt_seq = self.sequences_captured[idx]
 
             ir = cv2.imread(f"{path_seq}/ir{frm}.png", cv2.IMREAD_UNCHANGED)
             irr = ir[:, : ir.shape[1] // 2].astype(np.float32) * (1.0 / 2.0**16)
             ir = ir[:, ir.shape[1] // 2:].astype(np.float32) * (1.0 / 2.0**16)
 
-            gt_x_pos = np.zeros((ir.shape[0] // 2, ir.shape[1] // 2), dtype=np.float32)
+            disp = cv2.imread(f"{path_gt_seq}/{frm}.exr", cv2.IMREAD_UNCHANGED)
+            disp = disp.astype(np.float32)
+            gt_x_pos = -disp + np.expand_dims(np.arange(0, tgt_res[0] // 2), 0).astype(np.float32)
+
+            gt_x_pos = gt_x_pos * (2.0 / float(tgt_res[0]))
+            #gt_x_pos = np.zeros((ir.shape[0] // 2, ir.shape[1] // 2), dtype=np.float32)
             gt_msk = np.zeros_like(gt_x_pos)
+            gt_msk[disp != 0] = 1.0
             gt_edges = np.zeros_like(gt_x_pos)
 
         ir = np.expand_dims(ir, 0)
@@ -130,22 +138,27 @@ class DatasetCombined(data.Dataset):
         gt_msk = np.expand_dims(gt_msk, 0)
         gt_edges = np.expand_dims(gt_edges, 0)
         has_gt = np.array([[[float(has_gt)]]], dtype=np.float32)
+
+        if self.backward_compability:
+            return ir, gt_x_pos, gt_msk, gt_edges
         return ir, irr, gt_x_pos, gt_msk, gt_edges, has_gt
 
 
 def test_dataset():
     path = "/home/simon/datasets"
+    path = "/media/simon/ssd_datasets/datasets"
 
-    dataset = DatasetCombined(path, "val", vertical_jitter=4, depth_threshold=15, noise=0.1)
 
-    for ir, irr, gt_x_pos, gt_msk, gt_edges, has_gt in dataset:
+    dataset = DatasetCombined(path, "val", vertical_jitter=4, depth_threshold=15, noise=0.1, backward_compability=False)
 
+    for i in range(64, len(dataset)):
+        ir, irr, gt_x_pos, gt_msk, gt_edges, has_gt = dataset[i]
         cv2.imshow("ir", ir[0, :, :])
         cv2.imshow("irr", irr[0, :, :])
         cv2.imshow("gt_x_pos", gt_x_pos[0, :, :])
         cv2.imshow("gt_msk", gt_msk[0, :, :])
         cv2.imshow("gt_edges", gt_edges[0, :, :])
-        cv2.waitKey(1)
+        cv2.waitKey()
 
 
 

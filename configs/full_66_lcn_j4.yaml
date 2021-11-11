@@ -36,7 +36,7 @@ backbone:
   input_channels: 2
   lines: 896
   slices: 4
-  channels: [16, 32, 64]
+  channels: [16, 32]
   channels2: [64, 64, 64, 64]
   norm: batch
   local_contrast_norm: True

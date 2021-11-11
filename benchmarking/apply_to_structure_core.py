@@ -47,7 +47,7 @@ model = CompositeModel(backbone, regressor)
 regressor_conv = False
 
 use_conv = False
-rendered = False
+mode = "rendered_shapenet"#"rendered" rendered_shapenet or captured
 half_res = False
 if use_conv:
     regressor_conv = torch.load(regressor_conv_model_pth, map_location=device)
@@ -56,7 +56,7 @@ if use_conv:
     model = CompositeModel(backbone, regressor, regressor_conv)
 
 
-if rendered:
+if mode == "rendered":
     src_res = (1401, 1001)
     src_cxy = (700, 500)
     tgt_res = (1216, 896)
@@ -77,7 +77,38 @@ if rendered:
     paths = []
     for ind in inds:
         paths.append((path + f"/{ind}_left.jpg", path_out + f"/{int(ind):05d}"))
-else:
+
+if mode == "rendered_shapenet":
+
+    tgt_res = (640, 480)
+    rr = (0, 0, tgt_res[0], tgt_res[1])
+    regressor_model_pth = "trained_models/full_66_shapenet_regressor_chk.pt"
+    backbone_model_pth = "trained_models/full_66_shapenet_backbone_chk.pt"
+    device = "cuda:0"
+    backbone = torch.load(backbone_model_pth, map_location=device)
+    backbone.eval()
+    regressor = torch.load(regressor_model_pth, map_location=device)
+    regressor.eval()
+    model = CompositeModel(backbone, regressor)
+
+    path = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test/syn"
+    path_out = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test_results/GigaDepth"
+
+    folders = os.listdir(path)
+    scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
+
+    scenes.sort()
+    paths = []
+    for scene in scenes:
+        tgt_path = Path(path_out) / scene
+        if not os.path.exists(tgt_path):
+            os.mkdir(tgt_path)
+        for i in range(4):
+            src_pth = Path(path) / scene / f"im0_{i}.png"
+            tgt_pth = Path(tgt_path) / f"{i}"
+            paths.append((src_pth, tgt_pth))
+
+if mode == "captured":
     tgt_res = (1216, 896)
     tgt_cxy = (604, 457)
     # the focal length is shared between src and target frame
