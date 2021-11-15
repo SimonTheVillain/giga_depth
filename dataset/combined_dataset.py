@@ -140,7 +140,8 @@ class DatasetCombined(data.Dataset):
         has_gt = np.array([[[float(has_gt)]]], dtype=np.float32)
 
         if self.backward_compability:
-            return ir, gt_x_pos, gt_msk, gt_edges
+            rendered = has_gt
+            return ir, gt_x_pos, gt_msk, gt_edges, rendered
         return ir, irr, gt_x_pos, gt_msk, gt_edges, has_gt
 
 

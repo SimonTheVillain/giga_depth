@@ -220,10 +220,16 @@ def train():
             model.zero_grad()
             for i_batch, sampled_batch in enumerate(dataloaders[phase]):
                 step = step + 1
-                ir, x_gt, mask_gt, edge_mask = sampled_batch
+                if len(sampled_batch) == 4:
+                    ir, x_gt, mask_gt, edge_mask = sampled_batch
+                    rendered_msk = torch.ones((ir.shape[0], 1, 1), dtype=torch.float32)
+                else:
+                    ir, x_gt, mask_gt, edge_mask, rendered_msk = sampled_batch
+
                 ir = ir.to(main_device)
                 mask_gt = mask_gt.to(main_device)
                 x_gt = x_gt.to(main_device)
+                rendered_msk = rendered_msk.to(main_device)
 
                 # scale the normalized x_pos so it extends a bit to the left and right of the projector
                 #x_gt = x_gt * (1.0 - 2.0 * args.pad_proj) + args.pad_proj
@@ -258,7 +264,7 @@ def train():
                     # masked_reg = torch.mean(torch.abs(x - x_gt) * mask_gt) * (1.0 / mask_mean)
 
                     if apply_mask_reg_loss:
-                        loss = torch.mean(delta * mask_gt * edge_mask)
+                        loss = torch.mean(delta * mask_gt * rendered_msk * edge_mask)
                         loss_reg = torch.mean(delta * mask_gt)
                         mask_gt_weight = mask_gt.mean().item()
                         mask_weight_acc_sub += mask_gt_weight
@@ -277,20 +283,24 @@ def train():
                         loss_sigma = mask_loss(sigma, x_real, x_gt, mask_gt)
                         loss_sigma_acc += loss_sigma.mean().item()
                         loss_sigma_acc_sub += loss_sigma.mean().item()
-                        loss += loss_sigma.mean() * alpha_sigma
+                        loss += (loss_sigma * rendered_msk).mean() * alpha_sigma
 
                     if len(loss_class_acc) == 0:
                         loss_class_acc = [0] * len(class_losses)
                         loss_class_acc_sub = [0] * len(class_losses)
 
+                    reg_loss_msk = [torch.ones_like(rendered_msk),
+                                    torch.ones_like(rendered_msk),
+                                    #torch.ones_like(rendered_msk)]#
+                                    rendered_msk]
                     for i, class_loss in enumerate(class_losses):
                         if apply_mask_reg_loss:
-                            loss += torch.mean(class_loss * mask_gt * edge_mask)
+                            loss += torch.mean(class_loss * reg_loss_msk[i] * mask_gt * edge_mask)
                             mean_class_loss = torch.mean(class_loss * mask_gt * edge_mask).item()
                             loss_class_acc[i] += mean_class_loss
                             loss_class_acc_sub[i] += mean_class_loss
                         else:
-                            loss += torch.mean(class_loss * edge_mask)
+                            loss += torch.mean(class_loss * reg_loss_msk[i] * edge_mask)
                             mean_class_loss = torch.mean(class_loss * edge_mask).item()
                             loss_class_acc[i] += mean_class_loss
                             loss_class_acc_sub[i] += mean_class_loss
