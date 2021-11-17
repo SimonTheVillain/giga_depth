@@ -246,7 +246,7 @@ def create_plot():
                     "connecting_the_dots_full": "ConnectingTheDots (full)",
                     "HyperDepth": "HyperDepth",
                     "HyperDepthXDomain": "HyperDepthXDomain",
-                    "SGBM": "Semi-global Block-matching"}
+                    "SGBM": "SGBM"}
     legends = [legend_names[x] for x in algorithms]
     font = {'family': 'normal',
             #'weight': 'bold',
@@ -271,7 +271,7 @@ def create_plot():
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
-    ax.set_ylabel(ylabel="inlier ratios", fontdict=font)
+    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
 
     ax.legend(legends, loc='lower right')
     # todo: maybe reinstert the plots by threshold

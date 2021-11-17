@@ -1,105 +1,221 @@
-import torch
-from model.composite_model import CompositeModel
-import cv2
-import os
+import os.path
+
+import open3d as o3d
 import numpy as np
-from pathlib import Path
+import cv2
+
+import re
+from common.common import downsampleDepth, downsampleDisp
 import pickle
+import matplotlib
+matplotlib.use('tkAgg')
+import matplotlib.pyplot as plt
+from multiprocessing import Pool
+from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
-#Work in the parent directory
-os.chdir("../")
+base_path = "/home/simon/datasets"
 
-path_src = Path("/media/simon/ext_ssd/datasets/shapenet_rendered_test_compressed")
-path_results = Path("/media/simon/ext_ssd/datasets/shapenet_rendered_test_results")
-algorithms = ["HyperDepth", "GigaDepth", "GigaDepthNoLCN", "connecting_the_dots", "connecting_the_dots_direct"]
-scales = {"HyperDepth": 1.0, "GigaDepth": 1.0, "GigaDepthNoLCN": 1.0, "connecting_the_dots": 1.0, "connecting_the_dots_direct": 1.0}
-
-def files_recursively(input_root, output_root, current_sub, algorithms, result):
-    current_src = input_root / current_sub
-
-    for path in os.listdir(current_src):
-        current = current_src / path
-        if os.path.isdir(current):
-
-            files_recursively(input_root, output_root, current_sub / path, algorithms, result)
+def generate_disp(pcd):
+    focal = 1.1154399414062500e+03
+    baseline = 0.0634
+    cxy = (604, 457)
+    depth = np.ones((896, 1216), dtype=np.float32) * 100.0
+    for pt in pcd.points:
+        d = pt[2]
+        if d==0.0:
             continue
-        if path[-3:] == 'png' and path[:3] == "im0":
-            for alg in algorithms:
-                result[alg]["im"].append(current)
-                result[alg]["disp_gt"].append(current_src / f"disp0{path[3:-4]}.exr")
+        xy = [pt[0] * focal / d + cxy[0], pt[1] * focal / d + cxy[1]]
+        xy = [int(xy[0] + 0.5), int(xy[1] + 0.5)]
+        if xy[0] >=0 and xy[0] < depth.shape[1] and xy[1] >= 0 and xy[1] < depth.shape[0]:
+            depth[xy[1], xy[0]] = min(d, depth[xy[1], xy[0]])
 
-                current_dst = output_root / alg / current_sub
-                result[alg]["disp"].append(current_dst / f"disp0{path[3:-4]}.exr")
-                msk_pth = current_dst / f"mask0{path[3:-4]}.png"
-                if os.path.exists(msk_pth):
-                    result[alg]["msk"].append(msk_pth)
+    depth[depth == 100.0] = 0
 
 
-serialized_data = {"results": {}, "sources": {}}
-files = {}
-for alg in algorithms:
-    files[alg] = {"im": [], "disp_gt": [], "disp": [], "msk": []}
-files_recursively(path_src, path_results, Path(""), algorithms, files)
+    disp = baseline * focal / depth
+    disp[depth == 0] = 0
+    cv2.imshow("depth", depth * 0.1)
+    cv2.imshow("disp", disp * 0.01)
+    cv2.waitKey(100)
+    return disp
+def generate_pcl(disp):
+    focal = 1.1154399414062500e+03
+    baseline = 0.0634
+    cxy = (604, 457)
+    pts = []
+    for i in range(disp.shape[0]):
+        for j in range(disp.shape[1]):
+            d = disp[i, j]
+            if d > 10 and d < 100:
+                d = baseline * focal * 0.5 / d
+                x = (j - cxy[0] * 0.5) * d / (focal * 0.5)
+                y = (i - cxy[1] * 0.5) * d / (focal * 0.5)
+                pts.append([x, y, d])
 
-for key, value in files.items():
-    serialized_data["sources"][key] = value
-    scale = scales[key]
-    absolute_outlier_ths = [0.5, 1, 2, 5]
-    absolute_outlier_ths_to_print = [0.5, 1, 2, 5]
-    absolute_outlier_ths = list(np.arange(0.05, 5, 0.05))
-    relative_th = 2
-    relative_outlier_ths = list(np.arange(0.05, 0.5, 0.05))
-
-    serialized_data["absolute_outlier_ths"] = absolute_outlier_ths
-    serialized_data["relative_outlier_ths"] = relative_outlier_ths
-    serialized_data["relative_th"] = relative_th
-
-    absolute_count = 0
-    absolute_outlier_counts = [0] * len(absolute_outlier_ths)
-
-    relative_count = 0
-    relative_outlier_counts = [0] * len(relative_outlier_ths)
+    pts = np.array(pts)
+    # TODO: RENAME TO PCD
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts)
+    return pcd
 
 
-    for i in range(len(value["im"])):
-        path = value["im"][i]
-        im = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+def process_results(algorithm):
+    path_src = f"{base_path}/shapenet_rendered_compressed_test/syn"
+    path_results = f"{base_path}/shapenet_rendered_compressed_test_results"
 
-        path = value["disp_gt"][i]
-        disp_gt = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+    paths = []
+    for i in range(1024):
+        for j in range(4):
+            ref = f"{path_src}/{i:08}/disp0_{j}.exr"
+            res = f"{path_results}/{algorithm}/{i:08}/{j}.exr"
+            if not os.path.exists(res):
+                res = f"{path_results}/{algorithm}/{i:08}/im0_{j}.exr"
 
-        path = value["disp"][i]
-        disp = cv2.imread(str(path), cv2.IMREAD_UNCHANGED) * scale
+            if not os.path.exists(res):
+                res = f"{path_results}/{algorithm}/{i:08}/disp0_{j}.exr"
+            if not os.path.exists(res):
+                print("shit! no file!?")
 
-        delta = np.abs(disp - disp_gt)
+            paths.append((ref, res))
 
-        absolute_count += disp.shape[0] * disp.shape[1]
-        for j, th in enumerate(absolute_outlier_ths):
-            count = np.sum(delta > th)
-            absolute_outlier_counts[j] += count
+    src_res = (1401, 1001)
+    src_cxy = (700, 500)
+    tgt_res = (1216, 896)
+    tgt_cxy = (604, 457)
+    # the focal length is shared between src and target frame
+    focal = 1.1154399414062500e+03
+    baseline = 0.0634
+    rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
 
-        relative_count += np.sum(delta < relative_th)
-        for j, th in enumerate(relative_outlier_ths):
-            count = np.sum(np.logical_and(delta > th, delta < relative_th))
-            relative_outlier_counts[j] += count
+    cutoff_dist = 20.0
 
-    print(key)
-    absolute_outliers = []
-    outlier_ratios = []
-    for j, th in enumerate(absolute_outlier_ths):
-        ratio = absolute_outlier_counts[j] / absolute_count
-        outlier_ratios.append(ratio)
-        if th in absolute_outlier_ths_to_print:
-            print(f"outliers for th {th:.2f} o({th:.2f}) = {ratio}")
-    serialized_data["results"][key] = {"outlier_ratios": outlier_ratios}
 
-    outlier_ratios = []
-    for j, th in enumerate(relative_outlier_ths):
-        ratio = relative_outlier_counts[j] / relative_count
-        outlier_ratios.append(ratio)
-        print(f"relative outliers for th {th:.2f} o({th:.2f}|{relative_th}) = {ratio}")
-    serialized_data["results"][key]["relative_outlier_ratios"] = outlier_ratios
+    thresholds = np.arange(0.05, 20, 0.05)
 
-f = open("benchmarking/shapenet_results.pkl", "wb")
-pickle.dump(serialized_data, f)
-f.close()
+    relative_th_base = 0.5
+    relative_ths = np.arange(0.05, relative_th_base, 0.05)
+
+    distances = np.arange(0.05, 10 - 0.05, 0.1)
+    distances_ths = [0.1, 1, 5]
+
+    data = {"inliers": {"ths": thresholds,
+                        "data": [0] * thresholds.shape[0],
+                        "pix_count": 0},
+            "conditional_inliers": {"th": relative_th_base,
+                                    "ths": relative_ths,
+                                    "data": [0] * relative_ths.shape[0],
+                                    "pix_count": 0}
+            }
+    for path_gt, path_src in paths:
+        disp_gt = cv2.imread(path_gt, cv2.IMREAD_UNCHANGED)
+
+        estimate = cv2.imread(path_src, cv2.IMREAD_UNCHANGED)
+
+        if disp_gt.shape[0] // 2 == estimate.shape[0]:
+            # downsample by a factor of 2
+            disp_gt = downsampleDisp(disp_gt) * 0.5
+            delta = np.abs(disp_gt - estimate) * 2.0 # double the dispari
+
+        else:
+            delta = np.abs(disp_gt - estimate)
+
+        cv2.imshow("gt", disp_gt / 100)
+        cv2.imshow("estimate", estimate/100)
+        delta2 = delta
+        delta2[disp_gt == 0.0] = 0.0
+        cv2.imshow("delta", np.abs(delta2) / 100)
+        cv2.waitKey(1)
+        msk = disp_gt > 0
+        msk_count = np.sum(msk)
+        data["inliers"]["pix_count"] += msk_count
+        for i, threshold in enumerate(thresholds):
+
+            valid_count = np.sum(np.logical_and(delta < threshold, msk))
+            data["inliers"]["data"][i] += valid_count
+
+        # todo: simon! do you really need this? I THINK IT IS NOT NECESSARY
+        msk = np.logical_and(disp_gt > 0, delta < relative_th_base)
+        msk_count = np.sum(msk)
+        data["conditional_inliers"]["pix_count"] += msk_count
+        for i, threshold in enumerate(relative_ths):
+            valid_count = np.sum(np.logical_and(delta < threshold, msk))
+            data["conditional_inliers"]["data"][i] += valid_count
+
+
+    f = open(path_results + f"/{algorithm}.pkl", "wb")
+    pickle.dump(data, f)
+    f.close()
+
+def create_plot():
+    path_results = f"{base_path}/shapenet_rendered_compressed_test_results"
+
+    algorithms = ["GigaDepth",
+                  "connecting_the_dots",
+                  "HyperDepth"]
+
+    legend_names = {"GigaDepth": "GigaDepth",
+                    "GigaDepth66": "GigaDepth",
+                    "GigaDepth66LCN": "GigaDepth (LCN)",
+                    "ActiveStereoNet": "ActiveStereoNet",
+                    "ActiveStereoNetFull": "ActiveStereoNet (full)",
+                    "connecting_the_dots": "ConnectingTheDots",
+                    "connecting_the_dots_stereo": "ConnectingTheDots",
+                    "connecting_the_dots_full": "ConnectingTheDots (full)",
+                    "HyperDepth": "HyperDepth",
+                    "HyperDepth2": "HyperDepth2",
+                    "HyperDepthXDomain": "HyperDepthXDomain",
+                    "SGBM": "Semi-global Block-matching"}
+    legends = [legend_names[x] for x in algorithms]
+    font = {'family': 'normal',
+            #'weight': 'bold',
+            'size': 16}
+    #plt.figure(1)
+    #for algorithm in algorithms:
+    #    with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+    #        data = pickle.load(f)
+    #    plt.plot(data["inliers"]["ths"], data["inliers"]["data"] / data["inliers"]["pix_count"])
+    #plt.legend(algorithms)
+    fig, ax = plt.subplots()
+    for algorithm in algorithms:
+        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+            data = pickle.load(f)
+        x = data["inliers"]["ths"]
+        y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        #x = x[x < 5]
+        #y = y[:len(x)]
+        ax.plot(x, y)
+
+    ax.set(xlim=[0.0, 1])
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(MultipleLocator(0.1))
+    ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
+    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+
+    ax.legend(legends, loc='lower right')
+    # todo: maybe reinstert the plots by threshold
+    #th = 5
+    #plt.figure(2)
+    #for algorithm in algorithms:
+    #    with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+    #        data = pickle.load(f)
+    #    plt.plot(data[f"inliers_{th}"]["distances"][2:],
+    #             np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:]))
+    #plt.legend(algorithms)
+    plt.show()
+
+def create_data():
+    algorithms = ["GigaDepth",
+                  "connecting_the_dots",
+                  "HyperDepth"]
+    algorithms = ["HyperDepth2"] #TODO: find bug in the hyperdepth implementation!!!!
+    #algorithms = ["HyperDepthXDomain"]
+    threading = False
+
+    if threading:
+        with Pool(5) as p:
+            p.map(process_results, algorithms)
+    else:
+        for algorithm in algorithms:
+            process_results(algorithm)
+#create_data()
+create_plot()

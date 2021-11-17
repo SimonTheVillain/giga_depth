@@ -163,12 +163,12 @@ def create_plot():
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
-    ax.set_ylabel(ylabel="inlier ratios", fontdict=font)
+    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
     #ax.axes([0, 5, 0, 1])
 
     ax.legend(legends)
 
-    th = 5
+    th = 1
     fig, ax = plt.subplots()
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
@@ -178,7 +178,7 @@ def create_plot():
     ax.legend(legends)
     #ax.axes([0, 10, 0, 1])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
-    ax.set_ylabel(ylabel=f"inlier ratios ({th} pixel threshold)", fontdict=font)
+    ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
     plt.show()
 
 #create_data()
