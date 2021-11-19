@@ -49,6 +49,21 @@ if False:
                               downsample_output=True)
     backbone.cuda()
     model = backbone
+
+if True:
+    backboneType = Backbone3Slice
+    constructor = lambda pad, channels, downsample: Backbone3Slice(
+        channels=[8, 16],
+        channels_sub=[32, 32, 64, 64],
+        use_bn=True,
+        pad=pad, channels_in=channels, downsample=downsample)
+    backbone = constructor('both', 2, True)
+    backbone = BackboneSlicer(backboneType, constructor,
+                              1,
+                              lcn=True,
+                              downsample_output=True)
+    backbone.cuda()
+    model = backbone
 path = "/home/simon/datasets/structure_core_unity_test"
 inds = os.listdir(path)
 inds = [re.search(r'\d+', s).group() for s in inds]
@@ -80,9 +95,10 @@ for half_precision in [False]:#, True]:
     model.eval()
 
     with torch.no_grad():
-        half_precision = True
-        model.half_precision = True
+        #half_precision = True
         if half_precision:
+            model.half()
+            model.half_precision = True
             test = test.half()
         else:
             test = test.float()
@@ -93,14 +109,14 @@ for half_precision in [False]:#, True]:
         torch.cuda.synchronize()
         tsince = int(round(time.time() * 1000))
         for i in range(0, runs):
-            #model(test)
-            output, _ = model(test)
+            model(test)
+            #output, _ = model(test)
             torch.cuda.synchronize()
         ttime_elapsed = int(round(time.time() * 1000)) - tsince
         print(f"test time elapsed {ttime_elapsed / runs} ms")
-        output = output[0,0,:,:].cpu().detach().numpy()
 
-        cv2.imshow("input", irl.cpu().numpy())
-        cv2.imshow("output", output)
-        cv2.waitKey()
+        #output = output[0,0,:,:].cpu().detach().numpy()
+        #cv2.imshow("input", irl.cpu().numpy())
+        #cv2.imshow("output", output)
+        #cv2.waitKey()
     model.train()

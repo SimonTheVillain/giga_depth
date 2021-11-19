@@ -166,7 +166,7 @@ class BackboneSlicer(nn.Module):
         # assert slices > 1, "This model requires more than 1 slice to operate correctly"
         self.slices = nn.ModuleList()
         if slices == 1:
-            nn.ModuleList(constructor('both', in_channels, downsample_output))
+            self.slices = nn.ModuleList([constructor('both', in_channels, downsample_output)])
             return
         for i in range(slices):
             if i == 0:
