@@ -41,8 +41,9 @@ backbone_model_pth = "trained_models/full_66_lcn_j4_domain_shift_backbone_chk.pt
 regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
 backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 
-gressor_model_pth = "trained_models/full_66_lcn_j4_domain_shift_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_domain_shift_backbone_chk.pt"
+gressor_model_pth = "trained_models/full_66_lcn_j4_domain_shift_v2_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_66_lcn_j4_domain_shift_v2_backbone_chk.pt"
+
 
 device = "cuda:0"
 backbone = torch.load(backbone_model_pth, map_location=device)
