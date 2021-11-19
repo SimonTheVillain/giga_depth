@@ -222,7 +222,7 @@ def train():
                 step = step + 1
                 if len(sampled_batch) == 4:
                     ir, x_gt, mask_gt, edge_mask = sampled_batch
-                    rendered_msk = torch.ones((ir.shape[0], 1, 1), dtype=torch.float32)
+                    rendered_msk = torch.ones((ir.shape[0], 1, 1, 1), dtype=torch.float32)
                 else:
                     ir, x_gt, mask_gt, edge_mask, rendered_msk = sampled_batch
 
