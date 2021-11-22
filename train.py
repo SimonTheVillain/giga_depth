@@ -162,6 +162,9 @@ def train():
         return lr_scales[find_index(ep, key_steps)]
 
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=-1)
+    scheduler.step(epoch=args.start_epoch)
+    #for i in range(args.start_epoch):
+    #    scheduler.step()
 
     if args.half_precision:
         scaler = GradScaler()
@@ -179,7 +182,7 @@ def train():
     dataset_sizes = {x: len(datasets[x]) for x in ['train', 'val']}
     min_test_disparity = 100000.0
     step = -1
-    for epoch in range(1, args.epochs):
+    for epoch in range(args.start_epoch, args.epochs):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
         print(f'Epoch {epoch}/{args.epochs - 1}')
         print('-' * 10)

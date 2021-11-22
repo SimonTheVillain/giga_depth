@@ -122,6 +122,11 @@ def parse_args():
                         help="If this flag is set, the depthmap is calculated for half the resolution of input images.",
                         default=bool(config["dataset"]["downsample_output"]))
 
+    parser.add_argument("--start_epoch", dest="start_epoch", action="store",
+                        help="Starting epoch to continue training.",
+                        type=int,
+                        default=1)
+
     args = parser.parse_args(additional_args)
 
     if "alpha_reg_conv" in config["training"]:

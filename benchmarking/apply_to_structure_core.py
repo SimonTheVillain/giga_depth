@@ -45,6 +45,13 @@ gressor_model_pth = "trained_models/full_66_lcn_j4_domain_shift_v2_regressor_chk
 backbone_model_pth = "trained_models/full_66_lcn_j4_domain_shift_v2_backbone_chk.pt"
 
 
+gressor_model_pth = "trained_models/full_66_lcn_j4_light_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_66_lcn_j4_light_backbone_chk.pt"
+
+regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
+
+
 device = "cuda:0"
 backbone = torch.load(backbone_model_pth, map_location=device)
 backbone.eval()
@@ -125,6 +132,10 @@ if mode == "captured":
     path = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test"
     path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth66"
     path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth66_domain_transfer"
+
+
+    path = "/home/simon/datasets/structure_core_photoneo_test"
+    path_out = "/home/simon/datasets/structure_core_photoneo_test_results/GigaDepth66_domain_transfer"
 
     #path = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined_all"
     #path_out = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined_all_GigaDepth66LCN"
