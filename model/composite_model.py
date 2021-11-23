@@ -100,6 +100,14 @@ def GetModel(args, config):
                 use_bn=True,
                 pad=pad, channels_in=channels, downsample=downsample)
 
+        if name == "Backbone":
+            backboneType = BackboneSlice
+            constructor = lambda pad, channels, downsample: BackboneSlice(
+                channels=config["backbone"]["channels"],
+                channels_sub=config["backbone"]["channels2"],
+                use_bn=True,
+                pad=pad, channels_in=channels)
+
         if name == "BackboneU5":
             assert args.downsample_output, "For the U shaped network it is required to downsample the network"
             constructor = lambda pad, channels, downsample: BackboneU5Slice(pad=pad, in_channels=channels)

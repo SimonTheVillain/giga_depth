@@ -51,12 +51,12 @@ if False:
     model = backbone
 
 if True:
-    backboneType = Backbone3Slice
-    constructor = lambda pad, channels, downsample: Backbone3Slice(
-        channels=[8, 16],
-        channels_sub=[32, 32, 64, 64],
+    backboneType = BackboneSlice
+    constructor = lambda pad, channels, downsample: BackboneSlice(
+        channels=[],#[8, 16],
+        channels_sub=[32, 32, 32, 64, 64],#[32, 32, 64, 64],
         use_bn=True,
-        pad=pad, channels_in=channels, downsample=downsample)
+        pad=pad, channels_in=channels)#,downsample=True)
     backbone = constructor('both', 2, True)
     backbone = BackboneSlicer(backboneType, constructor,
                               1,
@@ -74,7 +74,7 @@ paths = []
 for ind in inds:
     paths.append((path + f"/{ind}_left.jpg"))
 
-for half_precision in [False]:#, True]:
+for half_precision in [False, True]:#, True]:
 
     p = paths[0]
     irl = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
