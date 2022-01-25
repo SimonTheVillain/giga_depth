@@ -15,7 +15,7 @@ training:
   half_precision: True
 
 dataset:
-  path: /media/simon/WD/datasets_raw
+  path: /media/simon/ssd_datasets/datasets/structure_core_unity_sequences
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]
@@ -47,8 +47,8 @@ regressor:
   ch_in: 64
   lines: 448
   bb: []
-  classes: [16, 10, 8]
-  padding: [0, 3, 4]
+  classes: [8, 6, 6]
+  padding: [0, 1, 1]
   class_bb: [[32], [32], [32]]
   superclasses: 288
   ch_reg: [32]
