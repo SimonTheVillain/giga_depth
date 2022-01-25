@@ -12,26 +12,27 @@ matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+import time
 
 base_path = "/media/simon/ssd_datasets/datasets"
 base_path = "/home/simon/datasets"
 
-def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
+def prepare_gt(vis, src_pre="SGBM", src="SGBM", dst="Photoneo"):
     print(dst)
     gt_path = f"{base_path}/structure_core_photoneo_test"
     eval_path = f"{base_path}/structure_core_photoneo_test_results/{src}"#GigaDepth66LCN"
     eval_path_pre = f"{base_path}/structure_core_photoneo_test_results/{src_pre}"#GigaDepth66LCN"
-    output_path = f"{base_path}/structure_core_photoneo_test_results/{dst}"
+    output_path = f"/home/simon/Pictures/images_paper/supplemental/pointclouds"
     focal = 1.1154399414062500e+03
     baseline = 0.0634
     cxy = (604, 457)
 
     if not os.path.exists(output_path):
         os.mkdir(output_path)
-    for i in range(11):
+    for i in [3]:
         if not os.path.exists(f"{output_path}/{i:03}"):
             os.mkdir(f"{output_path}/{i:03}")
-        for j in range(4):
+        for j in [1]:#range(4):
             pth_src_pre = f"{eval_path_pre}/{i:03}/{j}.exr"
             pth_src = f"{eval_path}/{i:03}/{j}.exr"
             pth_gt = f"{gt_path}/{i:03}/gt.ply"
@@ -39,6 +40,8 @@ def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
 
             print(pth_src_pre)
             disp = cv2.imread(pth_src_pre, cv2.IMREAD_UNCHANGED)
+            cv2.imshow("disp_pre", disp/100)
+            cv2.waitKey(1)
             pcd = generate_pcl(disp)
 
             # TODO: RENAME TO PCD_REF
@@ -58,11 +61,25 @@ def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
             #print(reg_p2p.transformation)
             pcd_ref.transform(reg_p2p.transformation)  # apply first transformation
 
-
+            #o3d.visualization.draw_geometries([pcd, pcd_ref])
 
             print(pth_src)
             disp = cv2.imread(pth_src, cv2.IMREAD_UNCHANGED)
             pcd = generate_pcl(disp)
+
+            cv2.imshow("disp", disp/100)
+            cv2.waitKey(1)
+
+            pcd_noproj = generate_pcd(disp, True)
+            pcd = generate_pcd(disp, False)
+
+            #o3d.visualization.draw_geometries([pcd_noproj])
+            #cl, inds = pcd_noproj.remove_radius_outlier(nb_points=50, radius=0.05)
+            cl, inds = pcd_noproj.remove_radius_outlier(nb_points=50, radius=0.05)
+
+            #o3d.visualization.draw_geometries([cl])
+            pcd = pcd.select_by_index(inds)
+            #o3d.visualization.draw_geometries([pcd])
 
             print("Apply FINE point-to-point ICP")
             threshold = 0.02#2cm
@@ -71,7 +88,6 @@ def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
                 pcd_ref, pcd, threshold, trans_init,
                 o3d.pipelines.registration.TransformationEstimationPointToPoint())
             #print(reg_p2p)
-            #pcd_ref.transform(reg_p2p.transformation)  # apply second transformation
 
             #print("Transformation is:")
             #print(reg_p2p.transformation)
@@ -81,8 +97,45 @@ def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
                 pcd, pcd_ref, threshold, trans_init)
             print(evaluation)
 
-            disp = generate_disp(pcd_ref)
-            cv2.imwrite(pth_out, disp)
+            pcd_ref.transform(reg_p2p.transformation)  # apply second transformation
+            #o3d.visualization.draw_geometries([pcd, pcd_ref])
+
+
+            #capture screenshot
+            vis.clear_geometries()
+            vis.add_geometry(pcd)
+            vis.add_geometry(pcd_ref)
+            # Read camera params
+            param = o3d.io.read_pinhole_camera_parameters('ScreenCamera_pose.json')
+            ctr = vis.get_view_control()
+            ctr.convert_from_pinhole_camera_parameters(param)
+
+            # Updates
+            #vis.update_geometry()
+            vis.poll_events()
+            vis.update_renderer()
+
+            # Capture image
+            time.sleep(1)
+            vis.capture_screen_image(f"{output_path}//{i:03}/{src}.png")
+            # image = vis.capture_screen_float_buffer()
+
+            # Close
+            #vis.destroy_window()
+            if False:
+                mat = o3d.visualization.rendering.Material()
+                mat.shader = 'defaultUnlit'
+                parameters = o3d.io.read_pinhole_camera_parameters("ScreenCamera_pose.json")
+                renderer = o3d.visualization.rendering.OffscreenRenderer(640*2, 480*2, headless=True)
+                renderer.add_geometry(pcd_ref)
+                #renderer.scene.add_geometry("ref", pcd_ref, mat)
+                #renderer.scene.add_geometry("pcd", pcd, mat)
+                renderer.scene.set_background([0.8, 0.8, 0.8, 1])
+                renderer.scene.camera.look_at([0, 0, 3], [1, 1, 0], [0, 0, 1])
+                img = np.array(renderer.render_to_image())
+                cv2.imwrite(f"{output_path}/{src}.png", img)
+                #disp = generate_disp(pcd_ref)
+                #cv2.imwrite(pth_out, disp)
 
 
 
@@ -111,7 +164,6 @@ def generate_disp(pcd):
     cv2.waitKey(100)
     return disp
 
-
 def generate_pcl(disp):
     focal = 1.1154399414062500e+03
     baseline = 0.0634
@@ -136,12 +188,41 @@ def generate_pcl(disp):
     pcd.points = o3d.utility.Vector3dVector(pts)
     return pcd
 
+def generate_pcd(disp, noproj=False):
+    focal = 1.1154399414062500e+03
+    baseline = 0.0634
+    cxy = (604, 457)
+    if disp.shape[0] == 448:
+        scale = 0.5
+    else:
+        scale = 1.0
+    pts = []
+    for i in range(disp.shape[0]):
+        for j in range(disp.shape[1]):
+            d = disp[i, j]
+            if d > 3 and d < 150:
+                d = baseline * focal * scale / d
+                z = d
+                if noproj:
+                    d = 3.0 # this might be helpful to remove outliers
+                x = (j - cxy[0] * scale) * d / (focal * scale)
+                y = (i - cxy[1] * scale) * d / (focal * scale)
+                pts.append([x, y, z])
+
+    pts = np.array(pts)
+    # TODO: RENAME TO PCD
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pts)
+    return pcd
+
+
+
 def process_results(algorithm):
     path_src = f"{base_path}/structure_core_photoneo_test_results/GT/{algorithm}"
-    path_results = f"{base_path}/structure_core_photoneo_test_results"
+    path_results = f"/home/simon/Pictures/images_paper/supplemental/pointclouds"
 
     paths = []
-    for i in range(11):
+    for i in [3]:
         for j in range(4):
             ref = f"{path_src}/{i:03}/{j}.exr"
             res = f"{path_results}/{algorithm}/{i:03}/{j}.exr"
@@ -193,7 +274,7 @@ def process_results(algorithm):
         delta2 = delta
         delta2[disp_gt == 0.0] = 0.0
         cv2.imshow("delta", np.abs(delta2) / 100)
-        cv2.waitKey(1)
+        cv2.waitKey()
         msk = disp_gt > 0
         msk_count = np.sum(msk)
         data["inliers"]["pix_count"] += msk_count
@@ -312,9 +393,12 @@ def prepare_gts():
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
+
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
     for alg in algorithms:
-        prepare_gt(src_pre="GigaDepth66LCN", src=alg, dst=f"GT/{alg}")
+        prepare_gt(vis, src_pre="GigaDepth66LCN", src=alg, dst=f"GT/{alg}")
 prepare_gts()
 #prepare_gt()
-create_data()
-create_plot()
+#create_data()
+#create_plot()

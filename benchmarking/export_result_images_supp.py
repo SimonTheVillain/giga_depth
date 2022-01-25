@@ -91,6 +91,7 @@ def comparison_structure_ours():
         break
 
 def comparison_rendered():
+    pth_out = "/home/simon/Pictures/images_paper/supplemental/results_unity"
     c_res = (1401, 1001)
     src_cxy = (700, 500)
     tgt_res = (1216, 896)
@@ -100,7 +101,7 @@ def comparison_rendered():
     baseline = 0.0634
     rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
 
-    frame_inds = [13,21,22,24,26]
+    frame_inds = [83, 82, 77, 99]
     algorithms = ["HyperDepth",
                   "ActiveStereoNetFull",
                   "ActiveStereoNet",
@@ -109,8 +110,9 @@ def comparison_rendered():
                   "GigaDepth66LCN", "GigaDepth"]
 
     diff_limit = 5
+    ind = 0
     for frame_ind in frame_inds:
-        frame_ind = 22
+        ind += 1
         print(frame_ind)
         path = f"{base}/structure_core_unity_test/{frame_ind}_left.jpg"
         ir = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
@@ -125,9 +127,11 @@ def comparison_rendered():
         disp_gt_color = color_code(disp_gt_raw, to_disp(upper_limit), to_disp(lower_limit))
         cv2.imshow("disp_gt", disp_gt_color)
 
-        pth = f"{pth_out}/rendered/ir.png"
+
+        os.mkdir(f"{pth_out}/{ind}")
+        pth = f"{pth_out}/{ind}/ir.png"
         cv2.imwrite(pth, ir)
-        pth = f"{pth_out}/rendered/gt.png"
+        pth = f"{pth_out}/{ind}/gt.png"
         cv2.imwrite(pth, disp_gt_color)
 
         cv2.imshow("ir", ir)
@@ -152,9 +156,9 @@ def comparison_rendered():
             delta_color = color_code(delta, 0, diff_limit)
             cv2.imshow("delta", delta_color)
 
-            pth = f"{pth_out}/rendered/disp_{algorithm}.png"
+            pth = f"{pth_out}/{ind}/disp_{algorithm}.png"
             cv2.imwrite(pth, disp_color)
-            pth = f"{pth_out}/rendered/delta_{algorithm}.png"
+            pth = f"{pth_out}/{ind}/delta_{algorithm}.png"
             cv2.imwrite(pth, delta_color)
 
             #depth = to_depth(disp)
@@ -163,9 +167,9 @@ def comparison_rendered():
 
             cv2.waitKey(1)
 
-        return
 
 def comparison_captured():
+    pth_out = "/home/simon/Pictures/images_paper/supplemental/results_structure"
     c_res = (1401, 1001)
     src_cxy = (700, 500)
     tgt_res = (1216, 896)
@@ -195,15 +199,15 @@ def comparison_captured():
         disp_gt_color = color_code(disp_gt, lower_limit, upper_limit)
         cv2.imshow("disp_gt", disp_gt_color)
 
-        pth = f"{pth_out}/photoneo/ir.png"
+        os.mkdir(f"{pth_out}/{frame_ind}")
+        pth = f"{pth_out}/{frame_ind}/ir.png"
         cv2.imwrite(pth, ir)
-        pth = f"{pth_out}/photoneo/gt.png"
+        pth = f"{pth_out}/{frame_ind}/gt.png"
         cv2.imwrite(pth, disp_gt_color)
 
         cv2.imshow("ir", ir)
         #cv2.imshow("depth_gt", depth_gt/5.0)
         cv2.waitKey(1)
-
         for algorithm in algorithms:
             print(algorithm)
 
@@ -230,9 +234,9 @@ def comparison_captured():
             delta_color[disp_gt == 0] = 0
             cv2.imshow("delta", delta_color)
 
-            pth = f"{pth_out}/photoneo/disp_{algorithm}.png"
+            pth = f"{pth_out}/{frame_ind}/disp_{algorithm}.png"
             cv2.imwrite(pth, disp_color)
-            pth = f"{pth_out}/photoneo/delta_{algorithm}.png"
+            pth = f"{pth_out}/{frame_ind}/delta_{algorithm}.png"
             cv2.imwrite(pth, delta_color)
 
             #depth = to_depth(disp)
@@ -371,7 +375,9 @@ def store_lcn():
 
 
 #comparison_structure_ours()
-#comparison_rendered()
-comparison_captured()
+pth = 
+
+comparison_rendered()
+#comparison_captured()
 #comparison_shapenet()
 #store_lcn()

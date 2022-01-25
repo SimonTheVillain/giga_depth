@@ -11,6 +11,7 @@ os.chdir("../")
 device = "cuda:0"
 regressor_model_pth = "trained_models/shapenet_small_64_regressor.pt"
 backbone_model_pth = "trained_models/shapenet_small_64_backbone.pt"
+
 path_src = "/media/simon/ext_ssd/datasets/shapenet_rendered_test_compressed"
 path_results = "/media/simon/ext_ssd/datasets/shapenet_rendered_test_results/GigaDepth" #GigaDepthNoLCN"
 

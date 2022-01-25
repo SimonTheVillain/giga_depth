@@ -5,12 +5,40 @@ import open3d as o3d
 from common.common import LCN_np
 from dataset.datasets import GetDataset
 
-dataset_path = os.path.expanduser("/media/simon/WD/datasets_raw/structure_core_unity_2")
+#todo: remove
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+
+dataset_path = os.path.expanduser("~/datasets/structure_core_unity_sequences")
 dataset_version = "structure_core_unity_sequences"
 tgt_res = (1216, 896)#(1216, 896)
 principal = (604, 457)
 focal = 1.1154399414062500e+03
 baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
+
+
+def get_mpl_colormap(cmap_name):
+    cmap = plt.get_cmap(cmap_name)
+
+    # Initialize the matplotlib color map
+    sm = plt.cm.ScalarMappable(cmap=cmap)
+
+    # Obtain linear color range
+    color_range = sm.to_rgba(np.linspace(0, 1, 256), bytes=True)[:,2::-1]
+
+    return color_range.reshape(256, 1, 3)
+
+def color_code(im, start, stop):
+    msk = np.zeros_like(im)
+    msk[np.logical_and(start < im, im < stop)] = 1.0
+    im = np.clip(im, start, stop)
+    im = (im-start) / float(stop-start)
+    im = im * 255.0
+    im = im.astype(np.uint8)
+    im = cv2.applyColorMap(im, get_mpl_colormap("viridis"))
+    im[msk != 1.0] = 0
+    return im
 
 #we work on half the resolution
 focal *= 0.5
@@ -57,3 +85,15 @@ for i, data in enumerate(dataset):
     cv2.imshow("neg_disparity", -disp[0, :, :] * 0.1)#right camera with higher baseline
     cv2.imshow("depth_by_gt", depth[0, :, :]*0.1)
     cv2.waitKey()
+
+
+    #TODO: delete
+    continue
+    pth_out = "/home/simon/Pictures/images_paper/supplemental/edge"
+
+    cv2.imwrite(f"{pth_out}/ir.png", (ir[0, :, :]*255).astype(np.uint8))
+    depth = color_code(depth[0,:,:], np.min(depth), np.max(depth))
+    cv2.imwrite(f"{pth_out}/depth.png", depth)
+    cv2.imwrite(f"{pth_out}/edge.png", (edges[0, :, :]*255).astype(np.uint8))
+
+
