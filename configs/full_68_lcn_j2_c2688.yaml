@@ -12,7 +12,7 @@ training:
   gpu_list: [0]
   epochs: 10
   key_epochs: [ 2, 1, 6, 8 ]
-  half_precision: True
+  half_precision: False
 
 dataset:
   path: /media/simon/ssd_datasets/datasets/structure_core_unity_sequences

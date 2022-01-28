@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.cuda.amp import autocast
 from model.backbone import *
 from model.backboneSliced import *
-from model.regressor import Reg_3stage, RegressorConv
+from model.regressor import Reg_3stage, RegressorConv, Regressor
 
 
 class CompositeModel(nn.Module):
@@ -63,24 +63,44 @@ def GetModel(args, config):
         regressor.eval()
     else:
         # https://stackoverflow.com/questions/334655/passing-a-dictionary-to-a-function-as-keyword-parameters
-        regressor = Reg_3stage(ch_in=config["regressor"]["ch_in"],
-                               height=config["regressor"]["lines"],  # 64,#448,
-                               ch_latent=config["regressor"]["bb"],
-                               # [128, 128, 128],#todo: make this of variable length
-                               superclasses=config["regressor"]["superclasses"],
-                               ch_latent_r=config["regressor"]["ch_reg"],
-                               # 64/64 # in the current implementation there is only one stage between input
-                               ch_latent_msk=config["regressor"]["msk"],
-                               classes=config["regressor"]["classes"],
-                               pad=config["regressor"]["padding"],
-                               ch_latent_c=config["regressor"]["class_bb"],  # todo: make these of variable length
-                               regress_neighbours=config["regressor"]["regress_neighbours"],
-                               reg_line_div=config["regressor"]["reg_line_div"],
-                               c3_line_div=config["regressor"]["c3_line_div"],
-                               close_far_separation=config["regressor"]["close_far_separation"],
-                               sigma_mode=config["regressor"]["sigma_mode"],
-                               vertical_slices=config["backbone"]["slices"],
-                               pad_proj=args.pad_proj)
+        if config["regressor"]["name"] == "Regressor":
+            regressor = Regressor(ch_in=config["regressor"]["ch_in"],
+                                   height=config["regressor"]["lines"],  # 64,#448,
+                                   ch_latent=config["regressor"]["bb"],
+                                   # [128, 128, 128],#todo: make this of variable length
+                                   superclasses=config["regressor"]["superclasses"],
+                                   ch_latent_r=config["regressor"]["ch_reg"],
+                                   # 64/64 # in the current implementation there is only one stage between input
+                                   ch_latent_msk=config["regressor"]["msk"],
+                                   classes=config["regressor"]["classes"],
+                                   pad=config["regressor"]["padding"],
+                                   ch_latent_c=config["regressor"]["class_bb"],  # todo: make these of variable length
+                                   regress_neighbours=config["regressor"]["regress_neighbours"],
+                                   reg_line_div=config["regressor"]["reg_line_div"],
+                                   c3_line_div=config["regressor"]["c3_line_div"],
+                                   close_far_separation=config["regressor"]["close_far_separation"],
+                                   sigma_mode=config["regressor"]["sigma_mode"],
+                                   vertical_slices=config["backbone"]["slices"],
+                                   pad_proj=args.pad_proj)
+        else:
+            regressor = Reg_3stage(ch_in=config["regressor"]["ch_in"],
+                                   height=config["regressor"]["lines"],  # 64,#448,
+                                   ch_latent=config["regressor"]["bb"],
+                                   # [128, 128, 128],#todo: make this of variable length
+                                   superclasses=config["regressor"]["superclasses"],
+                                   ch_latent_r=config["regressor"]["ch_reg"],
+                                   # 64/64 # in the current implementation there is only one stage between input
+                                   ch_latent_msk=config["regressor"]["msk"],
+                                   classes=config["regressor"]["classes"],
+                                   pad=config["regressor"]["padding"],
+                                   ch_latent_c=config["regressor"]["class_bb"],  # todo: make these of variable length
+                                   regress_neighbours=config["regressor"]["regress_neighbours"],
+                                   reg_line_div=config["regressor"]["reg_line_div"],
+                                   c3_line_div=config["regressor"]["c3_line_div"],
+                                   close_far_separation=config["regressor"]["close_far_separation"],
+                                   sigma_mode=config["regressor"]["sigma_mode"],
+                                   vertical_slices=config["backbone"]["slices"],
+                                   pad_proj=args.pad_proj)
 
     if config["backbone"]["load_file"] != "":
         backbone = torch.load(config["backbone"]["load_file"])
