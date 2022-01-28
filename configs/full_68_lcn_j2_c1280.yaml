@@ -50,7 +50,7 @@ regressor:
   classes: [16, 10, 8]
   padding: [0, 3, 4]
   class_bb: [[32], [32], [32]]
-  superclasses: 1280
+  superclasses: 640
   ch_reg: [32]
   msk: [16, 8]
   regress_neighbours: 1
