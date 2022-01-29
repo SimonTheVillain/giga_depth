@@ -11,7 +11,7 @@ training:
   sigma_mode: automask
   gpu_list: [0]
   epochs: 10
-  key_epochs: [ 2, 1, 6, 8 ]
+  key_epochs: [ 2, 4, 6, 8 ]
   half_precision: True
 
 dataset:
