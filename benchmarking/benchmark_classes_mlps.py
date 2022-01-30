@@ -13,10 +13,8 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 
 def process_results(algorithm):
-    path_src = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
-    path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
     path_src = "/home/simon/datasets/structure_core_unity_test"
-    path_results = "/home/simon/datasets/structure_core_unity_test_results"
+    path_results = "/home/simon/datasets/structure_core_unity_test_results/class_mlp_experiments"
 
     inds = os.listdir(path_src)
     inds = [re.search(r'\d+', s).group() for s in inds]
@@ -35,7 +33,6 @@ def process_results(algorithm):
     rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
 
     cutoff_dist = 20.0
-
 
     thresholds = np.arange(0.05, 20, 0.05)
 
@@ -111,12 +108,15 @@ def process_results(algorithm):
     f.close()
 
 def create_data():
-    algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
-    #algorithms = ["HyperDepth"]
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
-                  "ActiveStereoNet", "ActiveStereoNetFull",
-                  "connecting_the_dots_full", "connecting_the_dots_stereo"]  #
-    algorithms = ["GigaDepth"]
+    algorithms = ["class_288_r2", "class_384_r2"]
+    algorithms = ["class_288_r2",
+                  "class_384_r2",
+                  "class_1280_r2",
+                  "class_1920_r2",
+                  "class_2688_r2",
+                  "class_640_r1",
+                  "class_640_r2",
+                  "class_640_r3"]
     threading = False
 
     if threading:
@@ -128,21 +128,24 @@ def create_data():
 
 
 def create_plot():
-    path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
-    path_results = "/home/simon/datasets/structure_core_unity_test_results"
-    algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"] # "HyperDepth", "GigaDepthLCN"]
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
-                  "ActiveStereoNet", "ActiveStereoNetFull",
-                  "connecting_the_dots_full", "connecting_the_dots_stereo",
-                  "HyperDepth"]
-    legend_names = {"GigaDepth": "GigaDepth light",
-                    "GigaDepth66": "GigaDepth",
-                    "GigaDepth66LCN": "GigaDepth (LCN)",
-                    "ActiveStereoNet": "ActiveStereoNet",
-                    "ActiveStereoNetFull": "ActiveStereoNet (full)",
-                    "connecting_the_dots_stereo": "ConnectingTheDots",
-                    "connecting_the_dots_full": "ConnectingTheDots (full)",
-                    "HyperDepth": "HyperDepth"}
+    path_results = "/home/simon/datasets/structure_core_unity_test_results/class_mlp_experiments"
+    algorithms = ["class_288_r2",
+                  "class_384_r2",
+                  "class_1280_r2",
+                  "class_1920_r2",
+                  "class_2688_r2",
+                  "class_640_r1",
+                  "class_640_r2",
+                  "class_640_r3"]
+    legend_names = {"class_288_r2": "288 cl. 2 l. MLPs",
+                    "class_384_r2": "384 cl. 2 l. MLPs",
+                    "class_1280_r2": "1280 cl. 2 l. MLPs",
+                    "class_1920_r2": "1920 cl. 2 l. MLPs",
+                    "class_2688_r2": "2688 cl. 2 l. MLPs",
+                    "class_640_r1": "640 cl. 1 l. MLPs",
+                    "class_640_r2": "640 cl. 2 l. MLPs",
+                    "class_640_r3": "640 cl. 3 l. MLPs",
+                    }
     font = {'family': 'normal',
             #'weight': 'bold',
             'size': 16}
@@ -159,7 +162,7 @@ def create_plot():
         #y = y[:len(x)]
         ax.plot(x, y)
 
-    ax.set(xlim=[0.0, 2])
+    ax.set(xlim=[0.0, 1])
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
@@ -180,6 +183,7 @@ def create_plot():
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
     ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
     plt.show()
+
 
 #create_data()
 create_plot()

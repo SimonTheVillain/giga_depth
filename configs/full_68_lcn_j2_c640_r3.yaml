@@ -1,5 +1,5 @@
 training:
-  name: full_68_lcn_j2_c640_r1
+  name: full_68_lcn_j2_c640_r3
   batch_size: 4
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
@@ -49,9 +49,9 @@ regressor:
   bb: []
   classes: [16, 10, 4]
   padding: [0, 3, 2]
-  class_bb: [[], [], []]
+  class_bb: [[32, 16], [32, 16], [32, 16]]
   superclasses: 320
-  ch_reg: []
+  ch_reg: [32, 16]
   msk: [16, 8]
   regress_neighbours: 1
   reg_line_div: 1

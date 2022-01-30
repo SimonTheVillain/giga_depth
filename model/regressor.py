@@ -652,15 +652,21 @@ class Regressor(nn.Module):
         #self.r2 = CondMul(height * superclasses, ch_latent_r[0], ch_latent_r[1])
         #self.r3 = CondMul(height * classes123, ch_latent_r[1], 1)
         self.regressor = nn.ModuleList()
-        if close_far_separation:
-            self.regressor.append(CondMul(int(height / reg_line_div) * superclasses, int(ch_in/2), ch_latent_r[0]))
+        if len(ch_latent_r) >= 1:
+            if close_far_separation:
+                self.regressor.append(CondMul(int(height / reg_line_div) * superclasses, int(ch_in/2), ch_latent_r[0]))
+            else:
+                self.regressor.append(CondMul(int(height / reg_line_div) * superclasses, ch_in, ch_latent_r[0]))
+
+            for i in range(1, len(ch_latent_r)):
+                self.regressor.append(CondMul(int(height / reg_line_div) * superclasses, ch_latent_r[i-1], ch_latent_r[i]))
+
+            self.regressor.append(CondMul(height * classes123, ch_latent_r[-1], 1))
         else:
-            self.regressor.append(CondMul(int(height / reg_line_div) * superclasses, ch_in, ch_latent_r[0]))
-
-        for i in range(1, len(ch_latent_r)):
-            self.regressor.append(CondMul(int(height / reg_line_div) * superclasses, ch_latent_r[i-1], ch_latent_r[i]))
-
-        self.regressor.append(CondMul(height * classes123, ch_latent_r[-1], 1))
+            if close_far_separation:
+                self.regressor.append(CondMul(height * classes123, int(ch_in / 2), 1))
+            else:
+                self.regressor.append(CondMul(height * classes123, ch_in, 1))
 
         #if close_far_separation:
         #    self.r2 = CondMul(int(height / reg_line_div) * superclasses, int(ch_in/2), ch_latent_r[0])
