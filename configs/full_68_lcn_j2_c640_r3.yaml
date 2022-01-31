@@ -1,10 +1,10 @@
 training:
-  name: full_68_lcn_j2_c640_r3
+  name: full_68_lcn_j2_c640_r3_v2
   batch_size: 4
   learning_rate: 4.0
   lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
   momentum: 0.9
-  weight_decay: 1e-5
+  weight_decay: 1e-6
   alpha_reg: [500, 1000, 2000, 2000, 2000]
   alpha_sigma: [1e-2, 1e-2, 1e-1, 1e-1, 1]
   edge_weight: [0, 1, 2, 4, 20]

@@ -116,6 +116,9 @@ def create_data():
                   "class_640_r1",
                   "class_640_r2",
                   "class_640_r3"]
+
+    algorithms = [
+                  "class_640_r3"]
     threading = True
 
     if threading:
