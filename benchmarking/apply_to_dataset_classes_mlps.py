@@ -79,14 +79,15 @@ def apply_recursively(model, input_root, output_root, current_sub ):
 
 
 out_folder = "/home/simon/datasets/structure_core_unity_test_results/class_mlp_experiments"
-experiments = [("c288", "class_288_r2"),
-               ("c384", "class_384_r2"),
+experiments = [#("c288", "class_288_r2"),
+               #("c384", "class_384_r2"),
                ("c640_r1", "class_640_r1"),
                ("c640", "class_640_r2"),
-               ("c640_r3", "class_640_r3"),
+               #("c640_r3", "class_640_r3"),
                ("c1280", "class_1280_r2"),
                ("c1920", "class_1920_r2"),
                ("c2688", "class_2688_r2")]
+experiments = [("c640_r3", "class_640_r3")]
 for net, folder_out in experiments:
     regressor_model_pth = f"trained_models/full_68_lcn_j2_{net}_regressor_chk.pt"
     backbone_model_pth = f"trained_models/full_68_lcn_j2_{net}_backbone_chk.pt"

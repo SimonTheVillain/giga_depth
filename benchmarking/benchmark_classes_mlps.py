@@ -21,7 +21,7 @@ def process_results(algorithm):
     inds = set(inds)
     inds = list(inds)
     inds.sort()
-    #inds = inds[:10]
+    inds = inds[:100]
 
     src_res = (1401, 1001)
     src_cxy = (700, 500)
@@ -34,7 +34,7 @@ def process_results(algorithm):
 
     cutoff_dist = 20.0
 
-    thresholds = np.arange(0.05, 20, 0.05)
+    thresholds = np.arange(0.05, 20, 0.01)
 
     relative_th_base = 0.5
     relative_ths = np.arange(0.05, relative_th_base, 0.05)
@@ -108,7 +108,6 @@ def process_results(algorithm):
     f.close()
 
 def create_data():
-    algorithms = ["class_288_r2", "class_384_r2"]
     algorithms = ["class_288_r2",
                   "class_384_r2",
                   "class_1280_r2",
@@ -117,7 +116,7 @@ def create_data():
                   "class_640_r1",
                   "class_640_r2",
                   "class_640_r3"]
-    threading = False
+    threading = True
 
     if threading:
         with Pool(5) as p:
@@ -137,14 +136,14 @@ def create_plot():
                   "class_640_r1",
                   "class_640_r2",
                   "class_640_r3"]
-    legend_names = {"class_288_r2": "288 cl. 2 l. MLPs",
-                    "class_384_r2": "384 cl. 2 l. MLPs",
-                    "class_1280_r2": "1280 cl. 2 l. MLPs",
-                    "class_1920_r2": "1920 cl. 2 l. MLPs",
-                    "class_2688_r2": "2688 cl. 2 l. MLPs",
-                    "class_640_r1": "640 cl. 1 l. MLPs",
-                    "class_640_r2": "640 cl. 2 l. MLPs",
-                    "class_640_r3": "640 cl. 3 l. MLPs",
+    legend_names = {"class_288_r2": "288 class 2 layer MLPs",
+                    "class_384_r2": "384 class 2 layer MLPs",
+                    "class_1280_r2": "1280 class 2 layer MLPs",
+                    "class_1920_r2": "1920 class 2 layer MLPs",
+                    "class_2688_r2": "2688 class 2 layer MLPs",
+                    "class_640_r1": "640 class 1 layer MLPs",
+                    "class_640_r2": "640 class 2 layer MLPs",
+                    "class_640_r3": "640 class 3 layer MLPs",
                     }
     font = {'family': 'normal',
             #'weight': 'bold',
@@ -153,6 +152,7 @@ def create_plot():
     legends = [legend_names[x] for x in algorithms]
 
     fig, ax = plt.subplots()
+    fig.set_size_inches(4, 2)
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
@@ -160,9 +160,12 @@ def create_plot():
         y = data["inliers"]["data"] / data["inliers"]["pix_count"]
         #x = x[x < 5]
         #y = y[:len(x)]
-        ax.plot(x, y)
+        if '640' in algorithm:
+            ax.plot(x, y, linestyle='dotted')
+        else:
+            ax.plot(x, y)
 
-    ax.set(xlim=[0.0, 1])
+    ax.set(xlim=[0.0, 0.5])
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
@@ -177,7 +180,8 @@ def create_plot():
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         ax.plot(data[f"inliers_{th}"]["distances"][2:],
-                 np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:]))
+                 np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:]),
+                linestyle="dotted")
     ax.legend(legends)
     #ax.axes([0, 10, 0, 1])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
@@ -185,5 +189,5 @@ def create_plot():
     plt.show()
 
 
-#create_data()
+create_data()
 create_plot()
