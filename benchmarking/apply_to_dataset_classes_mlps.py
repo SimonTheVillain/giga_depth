@@ -87,7 +87,7 @@ experiments = [#("c288", "class_288_r2"),
                ("c1280", "class_1280_r2"),
                ("c1920", "class_1920_r2"),
                ("c2688", "class_2688_r2")]
-experiments = [("c640_r3", "class_640_r3")]
+experiments = [("c640_r3_v2", "class_640_r3_v2")]
 for net, folder_out in experiments:
     regressor_model_pth = f"trained_models/full_68_lcn_j2_{net}_regressor_chk.pt"
     backbone_model_pth = f"trained_models/full_68_lcn_j2_{net}_backbone_chk.pt"
