@@ -15,6 +15,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 def process_results(algorithm):
     path_src = "/home/simon/datasets/structure_core_unity_test"
     path_results = "/home/simon/datasets/structure_core_unity_test_results/class_mlp_experiments"
+    path_results = "/media/simon/T7/datasets/structure_core_unity_test_results/class_mlp_experiments"
 
     inds = os.listdir(path_src)
     inds = [re.search(r'\d+', s).group() for s in inds]
@@ -118,7 +119,7 @@ def create_data():
                   "class_640_r3"]
 
     algorithms = [
-                  "class_640_r3_v2"]
+                  "class_640_r3_v3"]
     threading = True
 
     if threading:
@@ -131,6 +132,7 @@ def create_data():
 
 def create_plot():
     path_results = "/home/simon/datasets/structure_core_unity_test_results/class_mlp_experiments"
+    path_results = "/media/simon/T7/datasets/structure_core_unity_test_results/class_mlp_experiments"
     algorithms = ["class_288_r2",
                   "class_384_r2",
                   "class_1280_r2",
@@ -139,7 +141,8 @@ def create_plot():
                   "class_640_r1",
                   "class_640_r2",
                   "class_640_r3",
-                  "class_640_r3_v2"]
+                  "class_640_r3_v2",
+                  "class_640_r3_v3"]
     legend_names = {"class_288_r2": "288 class 2 layer MLPs",
                     "class_384_r2": "384 class 2 layer MLPs",
                     "class_1280_r2": "1280 class 2 layer MLPs",
@@ -149,6 +152,7 @@ def create_plot():
                     "class_640_r2": "640 class 2 layer MLPs",
                     "class_640_r3": "640 class 3 layer MLPs",
                     "class_640_r3_v2": "640 class 3 layer MLPs (2)",
+                    "class_640_r3_v3": "640 class 3 layer MLPs (3)",
                     }
     font = {'family': 'normal',
             #'weight': 'bold',
@@ -194,5 +198,5 @@ def create_plot():
     plt.show()
 
 
-create_data()
+#create_data()
 create_plot()
