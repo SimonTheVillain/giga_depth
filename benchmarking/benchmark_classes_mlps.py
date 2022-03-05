@@ -43,13 +43,20 @@ def process_results(algorithm):
     distances = np.arange(0.05, 10 - 0.05, 0.1)
     distances_ths = [0.1, 1, 5]
 
+    rmse_ths = np.array([1])
+
     data = {"inliers": {"ths": thresholds,
                         "data": [0] * thresholds.shape[0],
                         "pix_count": 0},
             "conditional_inliers": {"th": relative_th_base,
                                     "ths": relative_ths,
                                     "data": [0] * relative_ths.shape[0],
-                                    "pix_count": 0}
+                                    "pix_count": 0},
+            "rmse" : {"ths": rmse_ths,
+                      "square_error": [0] * rmse_ths.shape[0],
+                      "inliers": [0] * rmse_ths.shape[0]
+
+                      }
             }
     for ind in inds:
         path_gt = path_src + f"/{ind}_left_d.exr"
@@ -78,6 +85,12 @@ def process_results(algorithm):
 
             valid_count = np.sum(np.logical_and(delta < threshold, msk))
             data["inliers"]["data"][i] += valid_count
+
+        for i, threshold in enumerate(rmse_ths):
+            valid_count = np.sum(np.logical_and(delta < threshold, msk))
+            data["rmse"]["inliers"][i] += valid_count
+            square_error = np.multiply(delta, delta) * np.logical_and(delta < threshold, msk)
+            data["rmse"]["square_error"][0] += np.sum(square_error)
 
         # todo: simon! do you really need this? I THINK IT IS NOT NECESSARY
         msk = np.logical_and(d_gt < cutoff_dist, delta < relative_th_base)
@@ -120,7 +133,18 @@ def create_data():
 
     algorithms = [
                   "class_640_r3_v3"]
-    threading = True
+
+    algorithms = ["class_288_r2_v2",
+                  "class_384_r2_v2",
+                  "class_1280_r2_v2",
+                  "class_1536_r2_v2",
+                  "class_1920_r2_v2",
+                  "class_2688_r2_v2",
+                  "class_640_r1_v2",
+                  "class_640_r2_v2",
+                  "class_640_r3_v2"]
+
+    threading = False
 
     if threading:
         with Pool(5) as p:
@@ -141,8 +165,24 @@ def create_plot():
                   "class_640_r1",
                   "class_640_r2",
                   "class_640_r3",
-                  "class_640_r3_v2",
-                  "class_640_r3_v3"]
+                  "class_640_r3_v3",
+                  "class_288_r2_v2",
+                  "class_384_r2_v2",
+                  "class_1280_r2_v2",
+                  "class_1536_r2_v2",
+                  "class_1920_r2_v2",
+                  "class_2688_r2_v2",
+                  "class_640_r1_v2",
+                  "class_640_r2_v2",
+                  "class_640_r3_v2"]
+    algorithms = ["class_288_r2",
+                  "class_384_r2",
+                  "class_1280_r2",
+                  "class_1920_r2",
+                  "class_2688_r2",
+                  "class_640_r1",
+                  "class_640_r2",
+                  "class_640_r3"]
     legend_names = {"class_288_r2": "288 class 2 layer MLPs",
                     "class_384_r2": "384 class 2 layer MLPs",
                     "class_1280_r2": "1280 class 2 layer MLPs",
@@ -151,8 +191,16 @@ def create_plot():
                     "class_640_r1": "640 class 1 layer MLPs",
                     "class_640_r2": "640 class 2 layer MLPs",
                     "class_640_r3": "640 class 3 layer MLPs",
-                    "class_640_r3_v2": "640 class 3 layer MLPs (2)",
                     "class_640_r3_v3": "640 class 3 layer MLPs (3)",
+                    "class_288_r2_v2": "288 class 2 layer MLPs (2)",
+                    "class_384_r2_v2": "384 class 2 layer MLPs (2)",
+                    "class_1280_r2_v2": "1280 class 2 layer MLPs (2)",
+                    "class_1536_r2_v2": "1536 class 2 layer MLPs (2)",
+                    "class_1920_r2_v2": "1920 class 2 layer MLPs (2)",
+                    "class_2688_r2_v2": "2688 class 2 layer MLPs (2)",
+                    "class_640_r1_v2": "640 class 1 layer MLPs (2)",
+                    "class_640_r2_v2": "640 class 2 layer MLPs (2)",
+                    "class_640_r3_v2": "640 class 3 layer MLPs (2)",
                     }
     font = {'family': 'normal',
             #'weight': 'bold',
@@ -179,9 +227,83 @@ def create_plot():
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
     ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+    legends = [legend_names[x] for x in algorithms]
+    ax.legend(legends)
     #ax.axes([0, 5, 0, 1])
 
+    # NEW VERSIONS WITH WEAKER L2 REGULARIZATION
+    algorithms = [
+                  "class_288_r2_v2",
+                  "class_384_r2_v2",
+                  "class_1280_r2_v2",
+                  "class_1536_r2_v2",
+                  "class_1920_r2_v2",
+                  "class_2688_r2_v2",
+                  "class_640_r1_v2",
+                  "class_640_r2_v2",
+                  "class_640_r3_v2"]
+    fig, ax = plt.subplots()
+    #fig.set_size_inches(4, 2)
+    for algorithm in algorithms:
+
+        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+            data = pickle.load(f)
+
+        print(algorithm)
+        for i, th in enumerate(data["rmse"]["ths"]):
+            print(f"th:{th}")
+            square_error = data["rmse"]["square_error"][i]
+            inliers = data["rmse"]["inliers"][i]
+            inlier_ratio = inliers / data["inliers"]["pix_count"]
+            print(f"inlieres: {inlier_ratio}")
+            print(f"RMSE: {np.sqrt(square_error / inliers)}")
+
+        x = data["inliers"]["ths"]
+        y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        # x = x[x < 5]
+        # y = y[:len(x)]
+        if '640' in algorithm:
+            ax.plot(x, y, linestyle='dotted')
+        else:
+            ax.plot(x, y)
+
+    ax.set(xlim=[0.0, 0.5])
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(MultipleLocator(0.1))
+    ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
+    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+    legends = [legend_names[x][:-4] for x in algorithms]
     ax.legend(legends)
+
+    # COMPARISON WITH REDUCED WEIGHT DECAY (L2 Reg)
+    algorithms = ["class_288_r2",
+                  "class_1920_r2",
+                  "class_2688_r2",
+                  "class_288_r2_v2",
+                  "class_1920_r2_v2",
+                  "class_2688_r2_v2"]
+    fig, ax = plt.subplots()
+    #fig.set_size_inches(4, 2)
+    for algorithm in algorithms:
+        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+            data = pickle.load(f)
+        x = data["inliers"]["ths"]
+        y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        # x = x[x < 5]
+        # y = y[:len(x)]
+        if 'v2' in algorithm:
+            ax.plot(x, y, linestyle='dotted')
+        else:
+            ax.plot(x, y)
+
+    ax.set(xlim=[0.0, 0.5])
+    ax.xaxis.set_major_locator(MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(MultipleLocator(0.1))
+    ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
+    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+    legends = [legend_names[x][:-4] for x in algorithms]
+    ax.legend(legends)
+
 
     th = 1
     fig, ax = plt.subplots()

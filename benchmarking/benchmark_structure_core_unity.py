@@ -23,7 +23,7 @@ def process_results(algorithm):
     inds = set(inds)
     inds = list(inds)
     inds.sort()
-    #inds = inds[:10]
+    inds = inds[:1000]
 
     src_res = (1401, 1001)
     src_cxy = (700, 500)
@@ -68,11 +68,14 @@ def process_results(algorithm):
             d_gt = downsampleDepth(d_gt)
             disp_gt = focal * baseline * 0.5 / d_gt
             delta = np.abs(disp_gt - estimate) * 2.0 # in case
+            d = (focal * baseline * 0.5) / estimate
 
         else:
             disp_gt = focal * baseline / d_gt
             delta = np.abs(disp_gt - estimate)
+            d = (focal * baseline) / estimate
 
+        d[estimate <= 0] = 0
         msk = d_gt < cutoff_dist
         msk_count = np.sum(msk)
         data["inliers"]["pix_count"] += msk_count
@@ -93,6 +96,7 @@ def process_results(algorithm):
             if f"inliers_{th}" not in data:
                 data[f"inliers_{th}"] = {"distances": (distances[:-1] + distances[1:]) * 0.5,
                                          "data": [0] * (distances.shape[0] - 1),
+                                         "depth_rmse": [0] * (distances.shape[0] - 1),
                                          "pix_count": [0] * (distances.shape[0] - 1)}
             for i in range(len(distances) - 1):
                 dist_low = distances[i]
@@ -100,6 +104,9 @@ def process_results(algorithm):
                 msk = np.logical_and(d_gt > dist_low, d_gt < dist_high)
                 msk_count = np.sum(msk)
                 valid_count = np.sum(np.logical_and(delta < threshold, msk))
+                depth_rmse = (d-d_gt) * (d-d_gt) * np.logical_and(delta < threshold, msk)
+                depth_rmse[np.isnan(depth_rmse)] = 0
+                data[f"inliers_{th}"]["depth_rmse"][i] += np.sum(depth_rmse)
                 data[f"inliers_{th}"]["data"][i] += valid_count
                 data[f"inliers_{th}"]["pix_count"][i] += msk_count
 
@@ -114,10 +121,11 @@ def create_data():
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
     #algorithms = ["HyperDepth"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+                  "HyperDepth",
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo"]  #
-    algorithms = ["GigaDepth"]
-    threading = False
+
+    threading = True
 
     if threading:
         with Pool(5) as p:
@@ -168,6 +176,7 @@ def create_plot():
 
     ax.legend(legends)
 
+    #plot the inlier ratios over distance
     th = 1
     fig, ax = plt.subplots()
     for algorithm in algorithms:
@@ -179,6 +188,21 @@ def create_plot():
     #ax.axes([0, 10, 0, 1])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
     ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
+
+
+    #plot the RMSE over distance
+    th = 5 # this is 1 in the structure core!!!!!
+    fig, ax = plt.subplots()
+    for algorithm in algorithms:
+        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+            data = pickle.load(f)
+        rmse = np.sqrt(np.array(data[f"inliers_{th}"]["depth_rmse"][:]) / np.array(data[f"inliers_{th}"]["data"][:]))
+        plt.plot( data[f"inliers_{th}"]["distances"][:], rmse)
+    plt.legend(legends, loc='upper left')
+    ax.set(xlim=[0.0, 6])
+    ax.set(ylim=[0.0, 0.12])
+    ax.set_xlabel(xlabel="distance [m]", fontdict=font)
+    ax.set_ylabel(ylabel=f"RMSE [m]", fontdict=font)
     plt.show()
 
 #create_data()

@@ -18,38 +18,15 @@ from pathlib import Path
 path_src = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
 path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDpeth"
 
-regressor_model_pth = "trained_models/full_64_nolcn_jitter5_regressor.pt"
-backbone_model_pth = "trained_models/full_64_nolcn_jitter5_backbone.pt"
-
-regressor_model_pth = "trained_models/full_65_nolcn_jitter4_regressor.pt"
-backbone_model_pth = "trained_models/full_65_nolcn_jitter4_backbone.pt"
-
-
-regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
-
-regressor_model_pth = "trained_models/full_66_j4_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_j4_backbone_chk.pt"
-
-regressor_model_pth = "trained_models/full_67_regressor_chk.pt"
-regressor_conv_model_pth = "trained_models/full_67_regressor_conv_chk.pt"
-backbone_model_pth = "trained_models/full_67_backbone_chk.pt"
-
-regressor_model_pth = "trained_models/full_66_lcn_j4_domain_shift_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_domain_shift_backbone_chk.pt"
-
-regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
-
-gressor_model_pth = "trained_models/full_66_lcn_j4_domain_shift_v2_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_domain_shift_v2_backbone_chk.pt"
-
-
-gressor_model_pth = "trained_models/full_66_lcn_j4_light_regressor_chk.pt"
+regressor_model_pth = "trained_models/full_66_lcn_j4_light_regressor_chk.pt"
 backbone_model_pth = "trained_models/full_66_lcn_j4_light_backbone_chk.pt"
 
-regressor_model_pth = "trained_models/full_66_j1_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_j1_backbone_chk.pt"
+#regressor_model_pth = "trained_models/full_66_j4_regressor_chk.pt"
+#backbone_model_pth = "trained_models/full_66_j4_backbone_chk.pt"
+
+
+regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 
 
 device = "cuda:0"
@@ -106,7 +83,7 @@ if mode == "rendered_shapenet":
     model = CompositeModel(backbone, regressor)
 
     path = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test/syn"
-    path_out = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test_results/GigaDepth"
+    path_out = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test_results/GigaDepth66LCN"
 
     folders = os.listdir(path)
     scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
@@ -138,8 +115,9 @@ if mode == "captured":
     #path = "/home/simon/datasets/structure_core/sequences_combined_all"
     path_out = "/home/simon/datasets/structure_core_photoneo_test_results/GigaDepth66_domain_transfer"
 
-    #path = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined_all"
-    #path_out = "/media/simon/ssd_datasets/datasets/structure_core/sequences_combined_all_GigaDepth66LCN"
+
+    path = "/media/simon/T7/datasets/structure_core_plane"
+    path_out = "/media/simon/T7/datasets/structure_core_plane_results/GigaDepth66LCN"
 
     folders = os.listdir(path)
     scenes = [x for x in folders if os.path.isdir(Path(path) / x)]

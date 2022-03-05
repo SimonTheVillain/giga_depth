@@ -11,7 +11,7 @@ from pathlib import Path
 #Work in the parent directory
 
 device = "cuda:0"
-def apply_recursively(model, input_root, output_root, current_sub ):
+def apply_recursively(model, input_root, output_root, measure_time = False ):
     src_res = (1401, 1001)
     src_cxy = (700, 500)
     tgt_res = (1216, 896)
@@ -31,6 +31,10 @@ def apply_recursively(model, input_root, output_root, current_sub ):
     for ind in inds:
         paths.append((input_root + f"/{ind}_left.jpg", output_root + f"/{int(ind):05d}"))
 
+    if measure_time:
+        paths = paths[:100]
+        time = 0
+        count = 0
     with torch.no_grad():
         for p, p_tgt in paths:
             irl = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
@@ -48,6 +52,18 @@ def apply_recursively(model, input_root, output_root, current_sub ):
                 irl = irl[:448, :608]
             cv2.imshow("irleft", irl)
             irl = torch.tensor(irl).cuda().unsqueeze(0).unsqueeze(0)
+
+            if measure_time:
+                start = torch.cuda.Event(enable_timing=True)
+                end = torch.cuda.Event(enable_timing=True)
+                x = model.backbone(irl)
+                start.record()
+                x = model.regressor(x)
+                end.record()
+                torch.cuda.synchronize()
+                time += start.elapsed_time(end)
+                count += 1
+                continue
 
             # run local contrast normalization (LCN)
             # TODO: is this the way the x-positions are encoded?
@@ -75,6 +91,7 @@ def apply_recursively(model, input_root, output_root, current_sub ):
             cv2.imwrite(p, result)
             cv2.waitKey(1)
             print(p)
+    print(f"time: {time / count}")
 
 
 
@@ -89,7 +106,19 @@ experiments = [#("c288", "class_288_r2"),
                ("c1920", "class_1920_r2"),
                ("c2688", "class_2688_r2")]
 experiments = [("c640_r3_v3", "class_640_r3_v3")]
+experiments = [("c288_v2", "class_288_r2_v2"),
+               ("c384_v2", "class_384_r2_v2"),
+               ("c640_r1_v2", "class_640_r1_v2"),
+               ("c640_r2_v2", "class_640_r2_v2"),
+               ("c640_r3_v2", "class_640_r3_v2"),
+               ("c1280_v2", "class_1280_r2_v2"),
+               ("c1536_v2", "class_1536_r2_v2"),
+               ("c1920_v2", "class_1920_r2_v2"),
+               ("c2688_v2", "class_2688_r2_v2")]
+
+measure_time = True
 for net, folder_out in experiments:
+    print(folder_out)
     regressor_model_pth = f"trained_models/full_68_lcn_j2_{net}_regressor_chk.pt"
     backbone_model_pth = f"trained_models/full_68_lcn_j2_{net}_backbone_chk.pt"
 
@@ -104,4 +133,4 @@ for net, folder_out in experiments:
     model = CompositeModel(backbone, regressor)
 
     model.to(device)
-    apply_recursively(model, path_src, path_results, "")
+    apply_recursively(model, path_src, path_results, measure_time=measure_time)

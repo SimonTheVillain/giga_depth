@@ -15,6 +15,9 @@ out_path = Path("/home/simon/datasets/structure_core/sequences_combined_all_SGBM
 
 in_path = Path("/home/simon/datasets/structure_core_photoneo_test")
 out_path = Path("/home/simon/datasets/structure_core_photoneo_test_results/SGBM")
+
+in_path = Path("/media/simon/T7/datasets/structure_core_plane")
+out_path = Path("/media/simon/T7/datasets/structure_core_plane_results/SGBM")
 baseline_from = 0.07501
 baseline_to = 0.0634
 
