@@ -12,27 +12,10 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
 
 
 std::vector<torch::Tensor> cond_mul_cuda_backward(
-    torch::Tensor grad_output,//gradient of output
+    torch::Tensor grad_output,
     torch::Tensor input,
     torch::Tensor inds,
     torch::Tensor weights);
-
-/*
-std::vector<torch::Tensor> cond_mul_cuda_forward(
-    torch::Tensor input,
-    torch::Tensor inds,
-    torch::Tensor weights,
-    torch::Tensor bias){
-}
-
-
-std::vector<torch::Tensor> cond_mul_cuda_backward(
-    torch::Tensor grad_h,//gradient of output
-    torch::Tensor input,
-    torch::Tensor inds,
-    torch::Tensor weights){
-}
-*/
 
 // C++ interface
 
@@ -51,7 +34,6 @@ std::vector<torch::Tensor> cond_mul_forward(
   CHECK_INPUT(weights);
   CHECK_INPUT(bias);
 
-  //std::cout << "i shit you not!!! this is forward (c++)" << std::endl;
   return cond_mul_cuda_forward(input, inds, weights, bias);
 }
 
@@ -65,7 +47,6 @@ std::vector<torch::Tensor> cond_mul_backward(
   CHECK_INPUT(inds);
   CHECK_INPUT(weights);
 
-  //std::cout << "i shit you not!!! this is backward (c++)" << std::endl;
   return cond_mul_cuda_backward(
       grad_output,
       input,

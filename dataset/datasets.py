@@ -1,6 +1,5 @@
-from dataset.dataset_rendered_2 import *
 from dataset.dataset_rendered_shapenet import *
-from dataset.dataset_rendered_3 import DatasetRenderedSequences
+from dataset.dataset_rendered import DatasetRenderedSequences
 from dataset.combined_dataset import DatasetCombined
 from pathlib import Path
 
@@ -28,34 +27,6 @@ def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False)
         focal = (567.6 * 2, 570.2 * 2) # same focal length in both directions
         baselines = {'left': -0.075}
         has_lr = False
-        return datasets, baselines, has_lr, focal, principal, src_res
-
-    if version == "structure_core_unity_4":
-        files = os.listdir(path)
-        #print(files)
-        keys = []
-        for file in files:
-            if os.path.isfile(f"{path}/{file}"):
-                keys.append(file.split("_")[0])
-
-        keys = list(set(keys))
-        #print(keys)
-        # split up training and validation set:
-        keys_train = keys[0:int((len(keys) * 95) / 100)]
-        keys_val = keys[int((len(keys) * 95) / 100):]
-
-        datasets = {
-            'train': DatasetRendered4(path, keys_train, vertical_jitter=vertical_jitter,
-                                      tgt_res=tgt_res, debug=debug),
-            'val': DatasetRendered4(path, keys_val, vertical_jitter=vertical_jitter,
-                                    tgt_res=tgt_res, debug=debug)
-        }
-
-        src_res = (1216, 896)
-        principal = (604, 457)
-        focal = (1.1154399414062500e+03, 1.1154399414062500e+03) # same focal length in both directions
-        has_lr = True
-        baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
         return datasets, baselines, has_lr, focal, principal, src_res
 
     if version == "structure_core_unity_sequences":

@@ -22,6 +22,7 @@ def get_mpl_colormap(cmap_name):
 pth_out = "/home/simon/Pictures/images_paper"
 
 base = "/home/simon/datasets"
+#base = "/media/simon/T7/datasets"
 
 
 def to_depth(disp):

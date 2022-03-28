@@ -6,7 +6,6 @@ import torch.nn.modules.loss
 import torch.optim as optim
 from torch.cuda.amp.grad_scaler import GradScaler
 from dataset.datasets import GetDataset
-from experiments.lines.model_lines_CR8_n import *
 from model.composite_model import CompositeModel, GetModel
 from model.backbone import *
 from model.backboneSliced import *

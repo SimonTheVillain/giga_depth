@@ -56,16 +56,12 @@ def prepare_gt(vis, src_pre="SGBM", src="SGBM", dst="Photoneo"):
             reg_p2p = o3d.pipelines.registration.registration_icp(
                 pcd_ref, pcd, threshold, trans_init,
                 o3d.pipelines.registration.TransformationEstimationPointToPoint())
-            #print(reg_p2p)
-            #print("Transformation is:")
-            #print(reg_p2p.transformation)
+
             pcd_ref.transform(reg_p2p.transformation)  # apply first transformation
 
-            #o3d.visualization.draw_geometries([pcd, pcd_ref])
 
             print(pth_src)
             disp = cv2.imread(pth_src, cv2.IMREAD_UNCHANGED)
-            pcd = generate_pcl(disp)
 
             cv2.imshow("disp", disp/100)
             cv2.waitKey(1)
@@ -117,6 +113,7 @@ def prepare_gt(vis, src_pre="SGBM", src="SGBM", dst="Photoneo"):
 
             # Capture image
             time.sleep(1)
+            print(f"write to {output_path}//{i:03}/{src}.png")
             vis.capture_screen_image(f"{output_path}//{i:03}/{src}.png")
             # image = vis.capture_screen_float_buffer()
 
@@ -398,7 +395,7 @@ def prepare_gts():
     vis.create_window()
     for alg in algorithms:
         prepare_gt(vis, src_pre="GigaDepth66LCN", src=alg, dst=f"GT/{alg}")
+
 prepare_gts()
-#prepare_gt()
 #create_data()
 #create_plot()

@@ -305,49 +305,139 @@ def compare_models(model, model_ref, model_conv, batch_size, width, height, clas
 
 
 
-#small_gradient_experiment()
-#sys.exit(0)
-batch_size = 32*32# 32*32
-width = 608#60#8
-height = 448#448
-classes = 32 # (classes per line)
-m = 64
-n = 16#output channels
-absolute_random = False
-#width = 1 #TODO: remove these debug measures
-#height = 1
-#m = 64
-#n = 1
-
-
-linear_custom = CondMul(classes * height, m, n).cuda(device)
 
 
 
-linear_ref = RefCondMul(classes * height, m, n).cuda(device) # 32 as output wouldn't work here
-#linear_conv = RefCondMulConv(classes*height, m, n).cuda(device)
-#compare_models(linear_custom, linear_ref, linear_conv, batch_size, width, height, classes)
-#sys.exit(0)
+
+if False:
+    # small_gradient_experiment()
+    # sys.exit(0)
+    batch_size = 32 * 32  # 32*32
+    width = 608  # 60#8
+    height = 448  # 448
+    classes = 32  # (classes per line)
+    m = 32
+    n = 32  # output channels
+    absolute_random = False
+    # width = 1 #TODO: remove these debug measures
+    # height = 1
+    # m = 64
+    # n = 1
+
+    linear_custom = CondMul(classes * height, m, n).cuda(device)
+
+    linear_ref = RefCondMul(classes * height, m, n).cuda(device)  # 32 as output wouldn't work here
+    # linear_conv = RefCondMulConv(classes*height, m, n).cuda(device)
+    # compare_models(linear_custom, linear_ref, linear_conv, batch_size, width, height, classes)
+    # sys.exit(0)
+    print("time used by inference (custom)")
+    measure_time_two_way(linear_custom, torch.int32, width, height, classes, absolute_random)
+    sys.exit(0)
+    print("time used by inference (reference)")
+    measure_time_two_way(linear_ref, torch.int64, width, height, classes, absolute_random)
+
+    # TODO: comparison to basic 1x1 convolution
+    n = 128
+    print("time used by inference (reference convolution)")
+    test = nn.Conv2d(m, n, 1).cuda()
+    measure_time_two_way_conv(test, width, height)
+
+    # check out linewise convolution:
+    n = 128
+    print("time used by line-wise convolution (reference)")
+    measure_time_two_way_per_line_conv(width, height, m, n)
 
 
-print("time used by inference (custom)")
-measure_time_two_way(linear_custom, torch.int32, width, height, classes, absolute_random)
-sys.exit(0)
-print("time used by inference (reference)")
-measure_time_two_way(linear_ref, torch.int64, width, height, classes, absolute_random)
-
-# TODO: comparison to basic 1x1 convolution
-n = 128
-print("time used by inference (reference convolution)")
-test = nn.Conv2d(m, n, 1).cuda()
-measure_time_two_way_conv(test, width, height)
-
-# check out linewise convolution:
-n = 128
-print("time used by line-wise convolution (reference)")
-measure_time_two_way_per_line_conv(width, height, m, n)
+    #print(linear_custom.w.grad)
+    #print(linear_custom.b.grad)
+    #print(X.grad)
 
 
-#print(linear_custom.w.grad)
-#print(linear_custom.b.grad)
-#print(X.grad)
+def run_time(model, type_ind, width, height, classes, runs, repeats):
+
+    test = torch.rand((width * height, model.w.shape[1]), dtype=torch.float32).cuda()
+    test_ind = torch.randint(0, classes * height, (int(width * height // repeats),), dtype=type_ind).cuda()
+    test_ind = test_ind.repeat(repeats, 1)
+    test_ind = test_ind.transpose(0, 1).flatten()
+
+    #test_ind = torch.randint(0, classes * height, (int(width * height),), dtype=type_ind).cuda()
+    warm_up = True
+    with torch.no_grad():
+        if warm_up:
+            model(test, test_ind)
+
+        torch.cuda.synchronize()
+
+        tsince = time.time()
+        for i in range(0, runs):
+            model(test, test_ind)
+            torch.cuda.synchronize()
+
+        ttime_elapsed = time.time() - tsince
+
+    return ttime_elapsed / runs
+
+def check_consistency(model1, model2, type_ind, width, height, classes):
+    repeats = 1
+    test = torch.rand((width * height, model1.w.shape[1]), dtype=torch.float32).cuda()
+    test_ind = torch.randint(0, classes * height, (int(width * height // repeats),), dtype=type_ind).cuda()
+    test_ind = test_ind.repeat(repeats, 1)
+    test_ind = test_ind.transpose(0, 1).flatten()
+
+    consistent = True
+    eps = 0.0001
+    with torch.no_grad():
+        y1 = model1(test, test_ind)
+        y2 = model2(test, test_ind)
+        delta = torch.abs(y1-y2) #/ torch.abs(y1)
+
+        if torch.any(delta > eps):
+            consistent = False
+
+    return consistent
+
+# inputs:
+ms = [1, 2, 4, 8, 16, 32, 64]
+ns = [1, 2, 4, 8, 16, 32, 64]
+runs = [10, 10, 10, 3, 3, 3, 1, 1]
+width = 448//2
+height = 608
+classes = 56
+repeat=4
+type_ind = torch.int32
+
+linear_ref = CondMul(classes * height, 32, 32).cuda(device)
+time_base = run_time(linear_ref, type_ind, width, height, classes, 10, repeat)
+
+
+
+if True:
+
+    ms = [64]
+    ns = [32]
+    runs = [1]
+    for m, r1 in zip(ms, runs):
+        for n, r2 in zip(ns, runs):
+            r = r1*r2
+            linear_custom = CondMul(classes * height, m, n).cuda(device)
+            linear_ref = RefCondMul(classes * height, m, n).cuda(device)
+            time_custom = run_time(linear_custom, type_ind, width, height, classes, r, repeat)
+            time_ref = run_time(linear_ref, type_ind, width, height, classes, r, repeat)
+            fitness = (time_custom * 32 * 32 / (m*n)) / time_base
+            print(f"m {m} to n {n} reference {int(time_ref * 1e6)} us, new {int(time_custom* 1e6)} us fitness = {fitness}")
+
+
+# test consistency!!!
+for m, r1 in zip(ms, runs):
+    for n, r2 in zip(ns, runs):
+        r = r1 * r2
+        linear_custom = CondMul(classes * height, m, n).cuda(device)
+        linear_ref = RefCondMul(classes * height, m, n).cuda(device)
+        #linear_ref.w.data[:] = 0 #debug
+        #linear_ref.b.data[:] = 0 #debug
+        linear_custom.w = linear_ref.w
+        linear_custom.b = linear_ref.b
+        #linear_custom.w.serialized_data = linear_ref.w.serialized_data.clone()
+        #linear_custom.b.serialized_data = linear_ref.b.serialized_data.clone()
+        consistent = check_consistency(linear_custom, linear_ref, type_ind, width, height, classes)
+        print(f" check m {m} to n {n}: {consistent}")

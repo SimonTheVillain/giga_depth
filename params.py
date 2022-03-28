@@ -13,6 +13,7 @@ def merge_configs(default, additional):
             merged[key1][key2] = additional[key1][key2]
     return merged
 
+
 def parse_args():
     with open("configs/default.yaml", "r") as ymlfile:
         config = yaml.safe_load(ymlfile)
@@ -26,8 +27,7 @@ def parse_args():
         with open(args.config, "r") as ymlfile:
             configNew = yaml.safe_load(ymlfile)
             config = merge_configs(config, configNew)
-            # todo: recursively merge both config structures!!!!!!!
-    # parser.add_argument("-V", "--version", help="show program version", action="store_true")
+
     parser.add_argument("-d", "--dataset_path", dest="path", action="store",
                         help="Path to the dataset.",
                         default=os.path.expanduser(config["dataset"]["path"]))
@@ -116,7 +116,7 @@ def parse_args():
     parser.add_argument("--dataset_type", dest="dataset_type", action="store",
                         help="Dataset type. Possible options: dataset_rendered_unity_4, shapenet_half_res",
                         default=config["dataset"]["dataset_type"],
-                        choices=['dataset_rendered_unity_4','shapenet_half_res'])
+                        choices=['dataset_rendered_unity_4', 'shapenet_half_res'])
 
     parser.add_argument("--downsample_output", dest="downsample_output", action="store",
                         help="If this flag is set, the depthmap is calculated for half the resolution of input images.",

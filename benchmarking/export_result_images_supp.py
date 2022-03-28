@@ -199,7 +199,8 @@ def comparison_captured():
         disp_gt_color = color_code(disp_gt, lower_limit, upper_limit)
         cv2.imshow("disp_gt", disp_gt_color)
 
-        os.mkdir(f"{pth_out}/{frame_ind}")
+        if not os.path.exists(f"{pth_out}/{frame_ind}"):
+            os.mkdir(f"{pth_out}/{frame_ind}")
         pth = f"{pth_out}/{frame_ind}/ir.png"
         cv2.imwrite(pth, ir)
         pth = f"{pth_out}/{frame_ind}/gt.png"
@@ -207,7 +208,7 @@ def comparison_captured():
 
         cv2.imshow("ir", ir)
         #cv2.imshow("depth_gt", depth_gt/5.0)
-        cv2.waitKey(1)
+        cv2.waitKey()
         for algorithm in algorithms:
             print(algorithm)
 
@@ -244,7 +245,7 @@ def comparison_captured():
 
 
             cv2.waitKey(1)
-        cv2.waitKey()
+        cv2.waitKey(1)
         #return
 
 def comparison_shapenet():
@@ -375,9 +376,8 @@ def store_lcn():
 
 
 #comparison_structure_ours()
-pth = 
 
-comparison_rendered()
-#comparison_captured()
+#comparison_rendered()
+comparison_captured()
 #comparison_shapenet()
 #store_lcn()
