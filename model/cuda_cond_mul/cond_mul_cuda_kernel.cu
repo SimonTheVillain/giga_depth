@@ -7,6 +7,7 @@
 #include <iostream>
 #include <chrono>
 #include "cond_mul_cuda_forward_kernel.cuh"
+#include "cond_mul_cuda_experimental.cuh"
 //#define FORCE_DOUBLE
 
 
@@ -219,7 +220,6 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
       if((((n == 1) || (n == 2) || (n == 4)) && m%32 == 0)){
           //this is one very common path as n=1 and m=32 is used for the regressor
 
-          //TODO: is there any merit to this:?
           //neither is it good for n == 32 nor for n == 16 and for n == 1 its for sure not any better!
 #ifdef FORCE_DOUBLE
 		  size_t shared_size = 2 * sizeof(double) * 32 * n; // for the accumulator
@@ -269,20 +269,16 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
           //shared memory (approx 4kb used) is used for the accumulator of the weights.
 
           //only using 32 threads per block means we have low occupancy (50%)
-          //for full occupancy we want to have e.g.
-          // 64 threads per block, max 4096 of smem
-          // 64 registers per thread
-
+          // the memory bandwith still is well utilized with 70 to 85% though.
           const int threads = 32;
-          // for the accumulator
-          size_t shared_size = sizeof(scalar_t) * threads * (threads + 1);
+          // shared memory for the accumulator
+          size_t shared_size = sizeof(scalar_t) * threads * (threads);
 
           const int per_group = 32 / n;
           const dim3 threads3(n, per_group);
           const dim3 blocks((overall_samples + 32 - 1) / 32);
           const int parts_in = (m + 32 - 1) / 32;
           const int parts_out = (n - 1) / 32 + 1; //in this branch, parts_out should always be 1 (it is meant for n>32)
-          //std::cout << "shared_size: " << shared_size << std::endl;
           switch (n) {
               case 8:
                   kernels::cond_mul_cache_output<scalar_t, 4, 8> << < blocks, threads3, shared_size >> > (
@@ -295,13 +291,8 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                                   output.packed_accessor<scalar_t, 2, torch::RestrictPtrTraits, size_t>());
                   break;
               case 16:
-                  //TODO: this here could be more specialized as this version uses a lot of registers per thread
-                  // I am thinking of one thread per stored weight with the shared memory storing blocks of the output
-                  // use of shuffle accumulation and atomic accumulate on shared memory should do the rest.
-                  // m should be multiple of 32, shared memory only storing output (+ inputs?) could be 32k bytes
-                  // 64 registers woulc be the hard limit before loosing occupancy to 50%
                   kernels::cond_mul_cache_output<scalar_t, 2, 16> << < blocks, threads3, shared_size >> > (
-                          parts_in,
+                                  parts_in,
                                   parts_out,
                                   input.packed_accessor<scalar_t, 2, torch::RestrictPtrTraits, size_t>(),
                                   inds.packed_accessor<int32_t, 1, torch::RestrictPtrTraits, size_t>(),//indices are in cheaper datatype
@@ -310,9 +301,8 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
                                   output.packed_accessor<scalar_t, 2, torch::RestrictPtrTraits, size_t>());
                   break;
               case 32:
-                  //TODO: this here could be more specialized as a pretty big chunk of registers is used per thread
                   kernels::cond_mul_cache_output<scalar_t, 1, 32> << < blocks, threads3, shared_size >> > (
-                          parts_in,
+                                  parts_in,
                                   parts_out,
                                   input.packed_accessor<scalar_t, 2, torch::RestrictPtrTraits, size_t>(),
                                   inds.packed_accessor<int32_t, 1, torch::RestrictPtrTraits, size_t>(),//indices are in cheaper datatype
@@ -388,55 +378,6 @@ std::vector<torch::Tensor> cond_mul_cuda_forward(
               default:
                   std::cout << "argh! this is a trap" << std::endl;
           };
-
-      }else if(     (((m == 1) && ((n==4) || (n == 8) || (n==16) || (n%32 == 0) )) || //n==1,2 would also be an inefficient option
-                    ((m == 2) && ((n==4)|| (n==8) || (n%16 == 0))) || //n==1,2 would probably be very inefficient
-                    ((m == 4) && ((n==2) || (n==4) || (n%8 == 0)))) && true){
-          //branch mainly used for the backpropagation from the regressor stage
-          //for m=1 and n=32 it is about 30% faster with this branch than without
-          //TODO: remove? (are 30% speedup in this branch worth this many lines?)
-          //std::cout << "you better not call this one" << std::endl;
-
-          //This branch cares for cases in which the input is smaller than 32. Ideally the output has enough output channels
-          //to sufficiently saturate the warps.
-          //e.g. 16 input channels and only 1 output channel would only use only half of a given warp in the output
-          //so for saturation the ideal combinations would be
-          // m==1 n%32==0
-          // m==2 n%16==0
-          // m==4 n%8==0 etc.
-
-          //e.g. for m==16 / n==1 one warp could handle 2 pixel at once (by changing a pixel_per_warp
-          // parameter/template, as this is currently describing how many pixels we loop trough. Not how many we work
-          // simultaneously)
-          // Or for m==1 / n==1 one warp could handle 32 pixel simultaneously, which would probably be worse than
-          // the unbuffered version. To better utilize these weights would need to be reused for more than 32 pixel,
-          // data & implementation wise.
-
-          {
-              size_t per_group = 32 / m;
-              const dim3 threads3(m, per_group, 2); //64 threads 2 active warps per block
-              const int pixel_per_warp = 32;
-
-              int simultaneous_output_pixel = std::max(1, static_cast<int>(threads3.y / n));
-              int simultaneous_output_channels = threads3.y /
-                                                 simultaneous_output_pixel;
-              int loop_pixel = pixel_per_warp / simultaneous_output_pixel;
-              dim3 blocks((overall_samples + 2 * pixel_per_warp - 1) /
-                          (2 * pixel_per_warp)); // most of the blocks take the next 32 pixel for each active warp (64)
-              size_t shared_size =
-                      sizeof(scalar_t) * m * pixel_per_warp * 2; // twice since we have 2 warps working on stuff!!!
-
-              kernels::cond_mul_cache_input_few_in<scalar_t, 32><<<blocks, threads3, shared_size>>>(
-                      loop_pixel, //in the normal case we would loop over pixel_per_warp pixel since we go 1 pixel at a time TODO: rename loop_out_pixel
-                      simultaneous_output_pixel, //if we have very few output channels we can handle multiple pixel at once
-                      simultaneous_output_channels, //TODO: simultaneous out_channels can be derived from blockDim.y (blockDim.y = simultaneous_out_pixel * simultaneous_out_channels)
-                      input.packed_accessor<scalar_t, 2, torch::RestrictPtrTraits, size_t>(),
-                      inds.packed_accessor<int32_t, 1, torch::RestrictPtrTraits, size_t>(),//indices are in cheaper datatype
-                      weights.packed_accessor<scalar_t, 3, torch::RestrictPtrTraits, size_t>(),
-                      bias.packed_accessor<scalar_t, 3, torch::RestrictPtrTraits, size_t>(),
-                      output.packed_accessor<scalar_t, 2, torch::RestrictPtrTraits, size_t>()
-              );
-          }
 
       }else{
           //a more generic fallback branch!

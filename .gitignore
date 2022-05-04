@@ -13,3 +13,7 @@ model/cuda_cond_mul/dist
 ScreenCamera*
 ScreenCapture*
 *.pkl
+profiled*
+prof*
+*.nvvp
+*.ncu-rep

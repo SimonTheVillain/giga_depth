@@ -413,7 +413,7 @@ time_base = run_time(linear_ref, type_ind, width, height, classes, 10, repeat)
 
 if True:
 
-    ms = [64]
+    ms = [32]#64]
     ns = [32]
     runs = [1]
     for m, r1 in zip(ms, runs):
@@ -433,7 +433,7 @@ for m, r1 in zip(ms, runs):
         r = r1 * r2
         linear_custom = CondMul(classes * height, m, n).cuda(device)
         linear_ref = RefCondMul(classes * height, m, n).cuda(device)
-        #linear_ref.w.data[:] = 0 #debug
+        #linear_ref.w.data[:] = 1 #debug
         #linear_ref.b.data[:] = 0 #debug
         linear_custom.w = linear_ref.w
         linear_custom.b = linear_ref.b
