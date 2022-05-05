@@ -6,7 +6,7 @@ training:
   momentum: 0.9
   weight_decay: 1e-5
   alpha_reg: [500, 1000, 2000, 2000, 2000]
-  alpha_sigma: [1e-2, 1e-2, 1e-1, 1, 10]
+  alpha_sigma: [1e-2, 1e-2, 1e-1, 1e-1, 1]
   edge_weight: [0, 1, 2, 4, 20]
   sigma_mode: automask
   gpu_list: [0]
