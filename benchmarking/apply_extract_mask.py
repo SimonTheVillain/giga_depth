@@ -11,8 +11,8 @@ import timeit
 run_artificial = True
 
 device = "cuda:0"
-regressor_model_pth = "trained_models/full_67_lcn_j4_light_regressor.pt"
-backbone_model_pth = "trained_models/full_67_lcn_j4_light_backbone.pt"
+regressor_model_pth = "trained_models/full_69_lcn_j4_regressor.pt"
+backbone_model_pth = "trained_models/full_69_lcn_j4_backbone.pt"
 
 if run_artificial:
     path_src = "/media/simon/T7/datasets/structure_core_unity_test"
