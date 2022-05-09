@@ -27,12 +27,14 @@ class MaskLoss(nn.Module):
 
     def forward(self, sigma, x, x_gt, mask_gt):
         if self.type == "mask":
-            return torch.mean(self.loss(sigma, mask_gt))
+            loss = self.loss(sigma, mask_gt)
+            loss[mask_gt == 0.0] *= 10.0
+            return torch.mean(loss, dim=(1, 2, 3)) #torch.mean(self.loss(sigma, mask_gt))
         if self.type == "automask":
             mask = mask_gt.clone()
-            mask[torch.abs(x - x_gt) > (5 / 1280)] = 0.0 # invalidate every pixel we are more than 5 pixel away
+            mask[torch.abs(x - x_gt) > (10 / 1280)] = 0.0 # invalidate every pixel we are more than 10 pixel away
             loss = self.loss(sigma, mask)
-            #loss[mask == 0.0] *= 10.0
+            loss[mask == 0.0] *= 10.0
             return torch.mean(loss, dim=(1, 2, 3))
 
 #todo: remove this old code!!!!

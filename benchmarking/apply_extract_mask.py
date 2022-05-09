@@ -8,9 +8,12 @@ import numpy as np
 import timeit
 
 
-run_artificial = True
+run_artificial = False
 
 device = "cuda:0"
+regressor_model_pth = "trained_models/full_69_lcn_j4_fullmsk_regressor.pt"
+backbone_model_pth = "trained_models/full_69_lcn_j4_fullmsk_backbone.pt"
+
 regressor_model_pth = "trained_models/full_69_lcn_j4_regressor.pt"
 backbone_model_pth = "trained_models/full_69_lcn_j4_backbone.pt"
 
