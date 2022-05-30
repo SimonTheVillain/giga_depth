@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import os
 import re
-from common.common import downsampleDepth
+from common.common import downsampleDepth, dilatation
 import pickle
 import matplotlib
 matplotlib.use('tkAgg')
@@ -17,6 +17,8 @@ def process_results(algorithm):
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
     path_src = "/home/simon/datasets/structure_core_unity_test"
     path_results = "/home/simon/datasets/structure_core_unity_test_results"
+    path_src = "/media/simon/T7/datasets/structure_core_unity_test"
+    path_results = "/media/simon/T7/datasets/structure_core_unity_test_results"
 
     inds = os.listdir(path_src)
     inds = [re.search(r'\d+', s).group() for s in inds]
@@ -36,7 +38,6 @@ def process_results(algorithm):
 
     cutoff_dist = 20.0
 
-
     thresholds = np.arange(0.05, 20, 0.05)
 
     relative_th_base = 0.5
@@ -45,6 +46,9 @@ def process_results(algorithm):
     distances = np.arange(0.05, 10 - 0.05, 0.1)
     distances_ths = [0.1, 1, 5]
 
+    edge_ths = [0.5, 1, 2]
+    edge_radii = np.arange(2, 32, 4)
+
     data = {"inliers": {"ths": thresholds,
                         "data": [0] * thresholds.shape[0],
                         "pix_count": 0},
@@ -52,6 +56,7 @@ def process_results(algorithm):
                                     "ths": relative_ths,
                                     "data": [0] * relative_ths.shape[0],
                                     "pix_count": 0}
+
             }
     for ind in inds:
         path_gt = path_src + f"/{ind}_left_d.exr"
@@ -62,9 +67,10 @@ def process_results(algorithm):
         if not os.path.exists(path_dst):
             path_dst = path_results + "/" + algorithm + f"/{int(ind)}.exr"
         estimate = cv2.imread(path_dst, cv2.IMREAD_UNCHANGED)
-
+        output_scale = 1
         if d_gt.shape[0] // 2 == estimate.shape[0]:
             # downsample by a factor of 2
+            output_scale = 0.5
             d_gt = downsampleDepth(d_gt)
             disp_gt = focal * baseline * 0.5 / d_gt
             delta = np.abs(disp_gt - estimate) * 2.0 # in case
@@ -110,6 +116,42 @@ def process_results(algorithm):
                 data[f"inliers_{th}"]["data"][i] += valid_count
                 data[f"inliers_{th}"]["pix_count"][i] += msk_count
 
+        for th in edge_ths:
+
+            data[f"edge_{th}"] = {
+                              "radii": edge_radii,
+                              "inlier_count": [0] * edge_radii.shape[0],
+                              "depth_rmse": [0] * edge_radii.shape[0],
+                              "pix_count": [0] * edge_radii.shape[0]}
+            for i in range(len(edge_radii)):
+                r = int(edge_radii[i] * output_scale)
+                depth_gt = d_gt
+                # Create Edge map by executing sobel on depth
+                #  threshold
+                grad_x = cv2.Sobel(disp_gt, cv2.CV_32F, 1, 0, ksize=3)
+                grad_y = cv2.Sobel(disp_gt, cv2.CV_32F, 0, 1, ksize=3)
+                edge_threshold = 2  # a 1 pixel threshold
+                edges = (grad_x * grad_x + grad_y * grad_y) > edge_threshold * edge_threshold
+                edges = edges.astype(np.float32)
+                edges[depth_gt > 5] = 0
+                #  dilate
+                edges = dilatation(edges, r)
+
+                delta = np.abs(disp_gt - estimate) / output_scale
+
+                inliers = np.logical_and(delta < th, edges)
+                inlier_count = np.count_nonzero(inliers)
+
+                depth_rmse = (d-d_gt) * (d-d_gt) * np.logical_and(delta < th, inliers)
+
+                data[f"edge_{th}"]["depth_rmse"][i] += np.sum(depth_rmse)
+                data[f"edge_{th}"]["inlier_count"][i] += inlier_count
+                data[f"edge_{th}"]["pix_count"][i] += np.sum(edges)
+
+                #cv2.imshow("edges", edges)
+                #cv2.waitKey()
+
+
         #cv2.imshow("gt", disp_gt * 0.02)
         #cv2.imshow("estimate", estimate * 0.02)
         #cv2.waitKey()
@@ -120,10 +162,11 @@ def process_results(algorithm):
 def create_data():
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
     #algorithms = ["HyperDepth"]
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
-                  "HyperDepth",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68",
                   "ActiveStereoNet", "ActiveStereoNetFull",
-                  "connecting_the_dots_full", "connecting_the_dots_stereo"]  #
+                  "connecting_the_dots_full", "connecting_the_dots_stereo",
+                  "HyperDepth"]  #
+    algorithms = ["GigaDepth68"]
 
     threading = True
 
@@ -132,19 +175,24 @@ def create_data():
             p.map(process_results, algorithms)
     else:
         for algorithm in algorithms:
+            print(f"evaluating samples for {algorithm}")
             process_results(algorithm)
 
 
 def create_plot():
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
     path_results = "/home/simon/datasets/structure_core_unity_test_results"
+    path_src = "/media/simon/T7/datasets/structure_core_unity_test"
+    path_results = "/media/simon/T7/datasets/structure_core_unity_test_results"
+
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"] # "HyperDepth", "GigaDepthLCN"]
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68LCN",
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
+                    "GigaDepth68LCN": "GigaDepthNew",
                     "GigaDepth66LCN": "GigaDepth (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
@@ -194,16 +242,48 @@ def create_plot():
     th = 5 # this is 1 in the structure core!!!!!
     fig, ax = plt.subplots()
     for algorithm in algorithms:
+        print(algorithm)
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         rmse = np.sqrt(np.array(data[f"inliers_{th}"]["depth_rmse"][:]) / np.array(data[f"inliers_{th}"]["data"][:]))
-        plt.plot( data[f"inliers_{th}"]["distances"][:], rmse)
+        plt.plot(data[f"inliers_{th}"]["distances"][:], rmse)
     plt.legend(legends, loc='upper left')
     ax.set(xlim=[0.0, 6])
     ax.set(ylim=[0.0, 0.12])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
     ax.set_ylabel(ylabel=f"RMSE [m]", fontdict=font)
+
+
+    #plot inlier ratios over pixel proximity to edges
+    for th in [0.5, 1, 2]:
+        fig, ax = plt.subplots()
+        for algorithm in algorithms:
+            with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+                data = pickle.load(f)
+            inliers = np.array(data[f"edge_{th}"]["inlier_count"][:]) / np.array(data[f"edge_{th}"]["pix_count"][:])
+            plt.plot(data[f"edge_{th}"]["radii"][:], inliers)
+        plt.legend(legends, loc='lower right')
+        #ax.set(xlim=[0.0, 6])
+        #ax.set(ylim=[0.0, 0.12])
+        ax.set_xlabel(xlabel="edge radius", fontdict=font)
+        ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
+
+
+    #plot RMSE over pixel proximity to edges
+    th=1
+    fig, ax = plt.subplots()
+    for algorithm in algorithms:
+        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+            data = pickle.load(f)
+        rmse = np.sqrt(np.array(data[f"edge_{th}"]["depth_rmse"][:]) / np.array(data[f"edge_{th}"]["inlier_count"][:]))
+        plt.plot( data[f"edge_{th}"]["radii"][:], rmse)
+    plt.legend(legends, loc='lower right')
+    #ax.set(xlim=[0.0, 6])
+    ax.set(ylim=[0.0, 0.3])
+    ax.set_xlabel(xlabel="edge radius", fontdict=font)
+    ax.set_ylabel(ylabel="RMSE [m]", fontdict=font)
     plt.show()
+
 
 #create_data()
 create_plot()

@@ -18,7 +18,7 @@ class CompositeModel(nn.Module):
         # another TODO: set affine parameters to false!
         # self.bn = nn.BatchNorm2d(64, affine=False)
 
-    def forward(self, x, x_gt=None):
+    def forward(self, x, x_gt=None, output_entropies=False):
 
         if x_gt != None:
             if self.half_precision:
@@ -48,7 +48,8 @@ class CompositeModel(nn.Module):
             else:
                 x = self.backbone(x)
 
-            results = self.regressor(x, x_gt)
+            results = self.regressor(x, x_gt,
+                                     output_entropies=output_entropies)
             if self.regressor_conv:
                 result = self.regressor_conv(x)
                 results = results + result
@@ -83,6 +84,8 @@ def GetModel(args, config):
                                    vertical_slices=config["backbone"]["slices"],
                                    pad_proj=args.pad_proj)
         else:
+            #TODO: REMOVE EVERYTHING Reg_3stage related!!!!
+            print("THIS IS DEPRECATED!!!!! DON'T USE ANYMORE")
             regressor = Reg_3stage(ch_in=config["regressor"]["ch_in"],
                                    height=config["regressor"]["lines"],  # 64,#448,
                                    ch_latent=config["regressor"]["bb"],
@@ -105,9 +108,6 @@ def GetModel(args, config):
     if config["backbone"]["load_file"] != "":
         backbone = torch.load(config["backbone"]["load_file"])
         backbone.eval()
-        # fix parameters in the backbone (or maybe not!)
-        # for param in backbone.parameters():
-        #    param.requires_grad = False
     else:
         # todo: remove numpy support!!!!
         name = config["backbone"]["name"].replace("Sliced", "")
@@ -143,52 +143,6 @@ def GetModel(args, config):
             if args.LCN:
                 in_channels = 2
             backbone = constructor('both', in_channels, args.downsample_output)
-
-        if False:
-            if config["backbone"]["name"] == "BackboneNoSlice3":
-                print("BackboneNoSlice3")
-                backbone = BackboneNoSlice3(height=config["dataset"]["slice_in"]["height"],
-                                            channels=config["backbone"]["channels"],
-                                            channels_sub=config["backbone"]["channels2"],
-                                            use_bn=True, lcn=args.LCN)
-            if config["backbone"]["name"] == "Backbone3Sliced":
-                constructor = lambda pad, channels, downsample: Backbone3Slice(
-                    channels=config["backbone"]["channels"],
-                    channels_sub=config["backbone"]["channels2"],
-                    use_bn=True,
-                    pad=pad, channels_in=channels, downsample=downsample)
-
-                backbone = BackboneSlicer(Backbone3Slice, constructor,
-                                          config["backbone"]["slices"],
-                                          lcn=args.LCN,
-                                          downsample_output=args.downsample_output)
-            if config["backbone"]["name"] == "BackboneU1":
-                print("BACKBONEU1")
-                backbone = BackboneU1()
-            if config["backbone"]["name"] == "BackboneU2":
-                print("BACKBONEU2")
-                backbone = BackboneU2()
-            if config["backbone"]["name"] == "BackboneU3":
-                print("BACKBONEU3")
-                backbone = BackboneU3()
-
-            if config["backbone"]["name"] == "BackboneU4":
-                print("BACKBONEU4")
-                backbone = BackboneU4()
-
-            if config["backbone"]["name"] == "BackboneU5":
-                print("BACKBONEU5")
-                backbone = BackboneU5(norm=config["backbone"]["norm"], lcn=args.LCN)
-
-            if config["backbone"]["name"] == "BackboneU5Sliced":
-                print("BACKBONEU5Sliced")
-                #backbone = BackboneU5Sliced(slices=config["backbone"]["slices"], lcn=args.LCN)
-                assert args.downsample_output, "For the U shaped network it is required to downsample the network"
-                constructor = lambda pad, channels, downsample: BackboneU5Slice(pad=pad, in_channels=channels)
-                backbone = BackboneSlicer(BackboneU5Slice, constructor,
-                                          config["backbone"]["slices"],
-                                          lcn=args.LCN,
-                                          downsample_output=args.downsample_output)
 
     regressor_conv = None
     if "regressor_conv" in config:

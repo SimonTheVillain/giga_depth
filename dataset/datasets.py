@@ -3,7 +3,7 @@ from dataset.dataset_rendered import DatasetRenderedSequences
 from dataset.combined_dataset import DatasetCombined
 from pathlib import Path
 
-def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False):
+def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False, left_only=False):
     if version == "shapenet_half_res":
 
         datasets = {"train": DatasetRenderedShapenet(path, "train", debug=debug),
@@ -40,9 +40,9 @@ def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False)
 
         datasets = {
             'train': DatasetRenderedSequences(paths_train, vertical_jitter=vertical_jitter,
-                                      tgt_res=tgt_res, debug=debug),
+                                      tgt_res=tgt_res, debug=debug, left_only=left_only),
             'val': DatasetRenderedSequences(paths_val, vertical_jitter=vertical_jitter,
-                                    tgt_res=tgt_res, use_all_frames=True, debug=debug)
+                                    tgt_res=tgt_res, use_all_frames=True, debug=debug, left_only=left_only)
         }
 
         src_res = (1216, 896)

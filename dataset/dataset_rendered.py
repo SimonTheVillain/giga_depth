@@ -17,6 +17,7 @@ class DatasetRenderedSequences(data.Dataset):
                  tgt_cxy=(604, 457),
                  focal=1.1154399414062500e+03,
                  use_all_frames=False,
+                 left_only=False,
                  debug=False):
 
         self.sequence_dirs = sequence_dirs
@@ -32,6 +33,7 @@ class DatasetRenderedSequences(data.Dataset):
         # the focal length is shared between src and target frame
         self.focal = focal
         self.use_all_frames = use_all_frames
+        self.left_only = left_only
 
         self.readout_rect = (self.src_cxy[0] - self.tgt_cxy[0], self.src_cxy[1] - self.tgt_cxy[1],
                              self.tgt_res[0], self.tgt_res[1])
@@ -44,25 +46,35 @@ class DatasetRenderedSequences(data.Dataset):
         self.baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
 
     def __len__(self):
+        count = len(self.sequence_dirs)
+        if not self.left_only:
+            count *= 2
         if self.use_all_frames:
-            return len(self.sequence_dirs) * 2 * 4
+            count *= 4
         # * 2 since we are working with stereo images
-        return len(self.sequence_dirs) * 2
+        return count
 
     def __getitem__(self, idx):
         # index within sequence:
         if self.use_all_frames:
             side = "left"
-            if idx % 2 == 1:
-                side = "right"
-            idx = idx // 2
-            frm = idx % 4
-            idx = idx // 4
+            if self.left_only:
+                idx = idx
+                frm = idx % 4
+                idx = idx // 4
+            else:
+                if idx % 2 == 1:
+                    side = "right"
+                idx = idx // 2
+                frm = idx % 4
+                idx = idx // 4
         else:
             side = "left"
-            if idx % 2 == 1:
-                side = "right"
-            idx = int(idx / 2)
+            if not self.left_only:
+                if idx % 2 == 1:
+                    side = "right"
+                idx = int(idx / 2)
+
 
             #frame index:
             frm = np.random.randint(0, 3)
@@ -147,8 +159,10 @@ class DatasetRenderedSequences(data.Dataset):
 
         # Create Edge map by executing sobel on depth
         #  threshold
-        grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
-        grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
+        depth_1 = 1.0/depth
+        depth_1[np.isnan(depth_1)] = 0
+        grad_x = cv2.Sobel(depth_1, cv2.CV_32F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(depth_1, cv2.CV_32F, 0, 1, ksize=3)
         edge_threshold = 0.1  # a 10 centimeter threshold!!!!
         edges = (grad_x * grad_x + grad_y * grad_y) > edge_threshold * edge_threshold
         edges = edges.astype(np.float32)

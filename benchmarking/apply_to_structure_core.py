@@ -28,6 +28,9 @@ backbone_model_pth = "trained_models/full_66_lcn_j4_light_backbone_chk.pt"
 regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
 backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 
+regressor_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_regressor_chk.pt"
+backbone_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_backbone_chk.pt"
+
 
 device = "cuda:0"
 backbone = torch.load(backbone_model_pth, map_location=device)
@@ -38,7 +41,7 @@ model = CompositeModel(backbone, regressor)
 regressor_conv = False
 
 use_conv = False
-mode = "captured"#"rendered" rendered_shapenet or captured
+mode = "rendered"#"rendered" rendered_shapenet or captured
 half_res = False
 if use_conv:
     regressor_conv = torch.load(regressor_conv_model_pth, map_location=device)
@@ -58,8 +61,8 @@ if mode == "rendered":
     rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
     path = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
 
-    path = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
-    path_out = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDepth67"
+    path = "/media/simon/T7/datasets/structure_core_unity_test"
+    path_out = "/media/simon/T7/datasets/structure_core_unity_test_results/GigaDepth68"
     inds = os.listdir(path)
     inds  = [re.search(r'\d+', s).group() for s in inds]
     inds = set(inds)
@@ -154,9 +157,9 @@ with torch.no_grad():
         #run local contrast normalization (LCN)
         # TODO: is this the way the x-positions are encoded?
         if regressor_conv:
-            _, _, x, msk = model(irl)
+            _, _, x = model(irl)
         else:
-            x, msk = model(irl)
+            x = model(irl)
         x = x[0, 0, :, :]
         x = x * x.shape[1]
         x_0 = torch.arange(0, x.shape[1]).unsqueeze(0).to(device)
@@ -164,7 +167,7 @@ with torch.no_grad():
         x *= -1.0
 
         result = x.cpu()[:, :].numpy()
-        msk = np.clip(msk.cpu()[0, 0, :, :].numpy()*255, 0, 255).astype(np.uint8)
+        #msk = np.clip(msk.cpu()[0, 0, :, :].numpy()*255, 0, 255).astype(np.uint8)
 
         #result = coresup_pred.cpu()[0, 0, :, :].numpy()
 
@@ -174,7 +177,7 @@ with torch.no_grad():
 
 
         p = str(p_tgt) + "_msk.png"# path_out + f"/{int(ind):05d}_msk.png"
-        cv2.imshow("mask", msk)
-        cv2.imwrite(p, result)
+        #cv2.imshow("mask", msk)
+        #cv2.imwrite(p, result)
         cv2.waitKey(1)
         print(p)

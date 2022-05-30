@@ -190,7 +190,7 @@ class Classifier3Stage(nn.Module):
         x = x.permute((0, 2, 1, 3)).reshape((x_in.shape[0], -1, 1, x_in.shape[3]))
         return x
 
-    def forward(self, x_in, inds_gt=None):
+    def forward(self, x_in, inds_gt=None, output_entropies=False):
         bs = x_in.shape[0]  # batch size
         height = x_in.shape[2]
         width = x_in.shape[3]
@@ -201,6 +201,7 @@ class Classifier3Stage(nn.Module):
         classes12 = self.classes[0] * self.classes[1]
         classes123 = classes12 * self.classes[2]
         classes23 = self.classes[1] * self.classes[2]
+        entropies = []
 
         # STEP 1:
         x = self.get_far_segment(x_in)
@@ -214,11 +215,16 @@ class Classifier3Stage(nn.Module):
         #x = F.leaky_relu(self.c2[0](x))
         #x = self.c3[0](x)
 
+
         #convert from (b, h*c, 1, w) to (b, h, c, w) to (b, c, h, w)
         x = x.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
         x1 = x
         inds1 = x.argmax(dim=1).unsqueeze(1)
         inds1_l = inds1.type(torch.int32) + self.classes[0] * offsets# add offset for each line!
+
+        p = F.softmax(x, dim=1)
+        if output_entropies:
+            entropies.append(torch.sum(-torch.log(p) * p, dim=1).reshape((bs, 1, height, width)))
 
         # STEP 2:
         # convert from (b, 1, h, w) to (b * h * w)
@@ -245,6 +251,9 @@ class Classifier3Stage(nn.Module):
         inds12_l = inds12_l.type(torch.int32).flatten()
         inds12_l_scaled_lines = inds12_l_scaled_lines.type(torch.int32).flatten()
 
+        p = F.softmax(x, dim=1)
+        if output_entropies:
+            entropies.append(torch.sum(-torch.log(p) * p, dim=1).reshape((bs, 1, height, width)))
 
 
         # STEP 3:
@@ -262,9 +271,19 @@ class Classifier3Stage(nn.Module):
         # (b * h * w, c) to (b * h * w, 1) to (b, 1, h, w)
         inds3 = x.argmax(dim=1).reshape((bs, 1, height, width))
 
+        # look at the probabilities of the output (we probably also need to incorporate the neighbouring classes)
+        p = F.softmax(x, dim=1)
+        #inds3sm = inds3sm.max(dim=1)
+        if output_entropies:
+            entropies.append(torch.sum(-torch.log(p) * p, dim=1).reshape((bs, 1, height, width)))
+        #inds3sm = torch.amax(inds3sm, 1)
+        #probability_hacked = entropy1 + entropy2 + entropy3
+
         inds123_real = inds12 * self.classes[2] + (inds3 - self.pad[2])
         inds123_real = inds123_real.clamp(0, classes123 - 1) # due to padding the clamping might be necessary
         if inds_gt is None:
+            if output_entropies:
+                return inds123_real, entropies[0], entropies[1], entropies[2]
             return inds123_real
         else:
             losses = []
@@ -340,6 +359,9 @@ class Classifier3Stage(nn.Module):
             return inds123_real, losses
 
 
+
+#TODO: GET RID OF THIS REGRESSOR AND PUT ALL THE FUNCTIONALITY INTO THE NEXT ONE!!!
+#ALSO PROBABLY REMOVE THE SIGMA / MASK CREATION STUFF HERE AS IT DIDN'T WORK OUT IN THE END!!!
 # same as #5 but without batch normalization
 class Reg_3stage(nn.Module):
 
@@ -433,7 +455,7 @@ class Reg_3stage(nn.Module):
                 self.msk.append(CondMul(height * classes123, ch_latent_msk[i], ch_latent_msk[i + 1]))
 
 
-    def forward(self, x_in, x_gt=None):
+    def forward(self, x_in, x_gt=None, output_entropies=False):
 
         #scale the groundtruth that -pad_proj to 1.0 + pad_proj
         #are scaled to between 0.0 and 1.0
@@ -458,41 +480,15 @@ class Reg_3stage(nn.Module):
         #convert from (b, h * c, 1, w) to (b, h, c, w) to (b, c, h, w)
         x_l = x_l.reshape((bs, height, -1, width)).permute((0, 2, 1, 3))
 
-        if self.sigma_mode == "line":
-            # calculate the mask/confidence on these lines
-            x = x_in
-            for node in self.msk:
-                x = F.leaky_relu(node(x))
-            mask = x
-
-            # reshape from (b, h * c, 1, w) (c=1) to (b, h, c, w) to (b, c, h, w)
-            # or in short from (b, h, 1, w) to (b, 1, h, w)
-            mask = mask.reshape((bs, 1, height, -1))
-        if self.sigma_mode == "conv":
-            # todo: clean up the code around this so that we don't need to reshape here
-            # convert from (b, h * c, 1, w) to (b, h, c, w) to (b, c, h, w)
-            x = x_in.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
-            if self.vertical_slices != 1:
-                # todo: clean up the code in here
-                msks = [] # slices of the mask
-                slice_height = x.shape[2] // self.vertical_slices
-                for i in range(self.vertical_slices):
-                    x_slice = x[:, :, i * slice_height: (i + 1) * slice_height, :]
-                    for node in self.msk[i]:
-                        x_slice = F.leaky_relu(node(x_slice))
-                    msks.append(x_slice)
-                x = torch.cat(msks, dim=2)
-            else:
-                for node in self.msk:
-                    x = F.leaky_relu(node(x))
-            mask = x
-
         # create vector with index offsets along the vertical dimension (1, 1, h, 0)
         line_offsets = torch.arange(0, height, device=device).unsqueeze(1).unsqueeze(0).unsqueeze(0)
         if x_gt is None:
 
             # the input for the classifier (as well as the output) should come in (b, c, h, w)
-            inds = self.c(x_l)
+            if output_entropies:
+                inds, entropy1, entropy2, entropy3 = self.c(x_l, output_entropies=True)
+            else:
+                inds = self.c(x_l, output_entropies=False)
             inds_super = inds // self.class_factor + self.superclasses * (line_offsets // self.reg_line_div)
             inds_l = inds + line_offsets * classes123
             inds_super = inds_super.flatten().type(torch.int32)
@@ -510,20 +506,13 @@ class Reg_3stage(nn.Module):
             x = (inds.flatten().type(torch.float32) + r) * (1.0 / float(classes123))
             x_real = x.reshape((bs, 1, height, width))
 
-            if self.sigma_mode == "class":
-                # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-                x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
-                x_l = x_l.reshape((bs * height * width, -1)).contiguous()
-                x = x_l
-                for node in self.msk:
-                    x = F.leaky_relu(node(x, inds_l))
-
-                # from (b * h * w, 1) to (b, 1, h, w)
-                mask = x.reshape((bs, 1, height, width))
 
             #undo the scaling that is made at the beginning
             x_real = (x_real - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
-            return x_real, mask
+
+            if output_entropies:
+                return x_real, entropy1, entropy2, entropy3
+            return x_real
         else:
 
             inds_gt = (x_gt * classes123).type(torch.int32).clamp(0, classes123 - 1)
@@ -569,28 +558,22 @@ class Reg_3stage(nn.Module):
             x_real = x.reshape((bs, 1, height, width))
             #torch.cuda.synchronize()
 
-            #lets check if the weights
-            debugs = self.c.get_mean_weights()
-            debug_r = self.r2.w.abs().mean() + self.r3.w.abs().mean()
-            debugs["mean_w_reg"] = debug_r
+            #Collect weights to check if they might run away!
+            if False:
+                debugs = self.c.get_mean_weights()
+                debug_r = self.r2.w.abs().mean() + self.r3.w.abs().mean()
+                debugs["mean_w_reg"] = debug_r
+            else:
+                debugs = []
 
-            if self.sigma_mode == "class":
-                # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-                x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
-                x_l = x_l.reshape((bs * height * width, -1)).contiguous()
-                x = x_l
-                for node in self.msk:
-                    x = F.leaky_relu(node(x, inds_l))
-
-                # from (b * h * w, 1) to (b, 1, h, w)
-                mask = x.reshape((bs, 1, height, width))
 
             #undo the scaling that is made at the beginning of this function
             x_real = (x_real - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
             x_reg_combined = (x_reg_combined - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
-            return x_reg_combined, mask, class_losses, x_real, debugs
+            return x_reg_combined, class_losses, x_real, debugs
 
 
+#more modern regressor that allows for regressors of different resolution
 class Regressor(nn.Module):
 
     # default parameters are the same as for CR8_reg_cond_mul_2
@@ -643,14 +626,6 @@ class Regressor(nn.Module):
                                   c3_line_div=c3_line_div,
                                   close_far_separation=close_far_separation)
 
-        # only one output (regression!!
-        # self.cond_mul = RefCondMulConv(classes, input_features=ch_latent, output_features=1)
-        # self.cond_mul = RefCondMul(classes, input_features=ch_latent, output_features=1)
-
-        #todo: is it really the best using the raw input here. maybe we use the per line backbone?
-        #self.r1 = nn.Conv2d(height * ch_in, height * ch_latent_r[0], 1, groups=height)
-        #self.r2 = CondMul(height * superclasses, ch_latent_r[0], ch_latent_r[1])
-        #self.r3 = CondMul(height * classes123, ch_latent_r[1], 1)
         self.regressor = nn.ModuleList()
         if len(ch_latent_r) >= 1:
             if close_far_separation:
@@ -668,44 +643,13 @@ class Regressor(nn.Module):
             else:
                 self.regressor.append(CondMul(height * classes123, ch_in, 1))
 
-        #if close_far_separation:
-        #    self.r2 = CondMul(int(height / reg_line_div) * superclasses, int(ch_in/2), ch_latent_r[0])
-        #else:
-        #    self.r2 = CondMul(int(height / reg_line_div) * superclasses, ch_in, ch_latent_r[0])
-        #self.r3 = CondMul(height * classes123, ch_latent_r[0], 1)
-
-        # kernels for masks:
-        #todo: is it really the best using the raw input here. maybe we use the per line backbone?
-        ch_latent_msk.insert(0, ch_in)
-        ch_latent_msk.append(1)
-        self.sigma_mode = sigma_mode
-        if sigma_mode == "line":
-            self.msk = nn.ModuleList()
-            for i in range(0, len(ch_latent_msk) - 1):
-                self.msk.append(nn.Conv2d(height * ch_latent_msk[i], height * ch_latent_msk[i + 1], 1, groups=height))
-        if sigma_mode == "conv":
-            if vertical_slices != 1:
-                self.msk = nn.ModuleList()
-                for j in range(vertical_slices):
-                    self.msk.append(nn.ModuleList())
-                    for i in range(0, len(ch_latent_msk) - 1):
-                        self.msk[j].append(nn.Conv2d(ch_latent_msk[i], ch_latent_msk[i + 1], 1))
-            else:
-                self.msk = nn.ModuleList()
-                for i in range(0, len(ch_latent_msk) - 1):
-                    self.msk.append(nn.Conv2d(ch_latent_msk[i], ch_latent_msk[i + 1], 1))
-        if sigma_mode == "class":
-            self.msk = nn.ModuleList()
-            for i in range(0, len(ch_latent_msk) - 1):
-                self.msk.append(CondMul(height * classes123, ch_latent_msk[i], ch_latent_msk[i + 1]))
-
     def regress_at_leaf(self, x, inds, inds_super):
         for i in range(len(self.regressor)-1):
             x = F.leaky_relu(self.regressor[i](x, inds_super))
 
         return self.regressor[-1](x, inds)
 
-    def forward(self, x_in, x_gt=None):
+    def forward(self, x_in, x_gt=None, output_entropies=False):
 
         #scale the groundtruth that -pad_proj to 1.0 + pad_proj
         #are scaled to between 0.0 and 1.0
@@ -730,41 +674,15 @@ class Regressor(nn.Module):
         #convert from (b, h * c, 1, w) to (b, h, c, w) to (b, c, h, w)
         x_l = x_l.reshape((bs, height, -1, width)).permute((0, 2, 1, 3))
 
-        if self.sigma_mode == "line":
-            # calculate the mask/confidence on these lines
-            x = x_in
-            for node in self.msk:
-                x = F.leaky_relu(node(x))
-            mask = x
-
-            # reshape from (b, h * c, 1, w) (c=1) to (b, h, c, w) to (b, c, h, w)
-            # or in short from (b, h, 1, w) to (b, 1, h, w)
-            mask = mask.reshape((bs, 1, height, -1))
-        if self.sigma_mode == "conv":
-            # todo: clean up the code around this so that we don't need to reshape here
-            # convert from (b, h * c, 1, w) to (b, h, c, w) to (b, c, h, w)
-            x = x_in.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
-            if self.vertical_slices != 1:
-                # todo: clean up the code in here
-                msks = [] # slices of the mask
-                slice_height = x.shape[2] // self.vertical_slices
-                for i in range(self.vertical_slices):
-                    x_slice = x[:, :, i * slice_height: (i + 1) * slice_height, :]
-                    for node in self.msk[i]:
-                        x_slice = F.leaky_relu(node(x_slice))
-                    msks.append(x_slice)
-                x = torch.cat(msks, dim=2)
-            else:
-                for node in self.msk:
-                    x = F.leaky_relu(node(x))
-            mask = x
-
         # create vector with index offsets along the vertical dimension (1, 1, h, 0)
         line_offsets = torch.arange(0, height, device=device).unsqueeze(1).unsqueeze(0).unsqueeze(0)
         if x_gt is None:
 
             # the input for the classifier (as well as the output) should come in (b, c, h, w)
-            inds = self.c(x_l)
+            if output_entropies:
+                inds, entropy1, entropy2, entropy3 = self.c(x_l, output_entropies=True)
+            else:
+                inds = self.c(x_l, output_entropies=False)
             inds_super = inds // self.class_factor + self.superclasses * (line_offsets // self.reg_line_div)
             inds_l = inds + line_offsets * classes123
             inds_super = inds_super.flatten().type(torch.int32)
@@ -783,20 +701,13 @@ class Regressor(nn.Module):
             x = (inds.flatten().type(torch.float32) + r) * (1.0 / float(classes123))
             x_real = x.reshape((bs, 1, height, width))
 
-            if self.sigma_mode == "class":
-                # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-                x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
-                x_l = x_l.reshape((bs * height * width, -1)).contiguous()
-                x = x_l
-                for node in self.msk:
-                    x = F.leaky_relu(node(x, inds_l))
-
-                # from (b * h * w, 1) to (b, 1, h, w)
-                mask = x.reshape((bs, 1, height, width))
 
             #undo the scaling that is made at the beginning
             x_real = (x_real - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
-            return x_real, mask
+
+            if output_entropies:
+                return x_real, entropy1, entropy2, entropy3
+            return x_real
         else:
 
             inds_gt = (x_gt * classes123).type(torch.int32).clamp(0, classes123 - 1)
@@ -851,18 +762,8 @@ class Regressor(nn.Module):
             #debug_r = self.r2.w.abs().mean() + self.r3.w.abs().mean()
             #debugs["mean_w_reg"] = debug_r
 
-            if self.sigma_mode == "class":
-                # from (b, h * c, 1, w) to (b, h, c, w) to (b * h * w, c)
-                x_l = x_in.reshape((bs, height, -1, width)).permute((0, 1, 3, 2))
-                x_l = x_l.reshape((bs * height * width, -1)).contiguous()
-                x = x_l
-                for node in self.msk:
-                    x = F.leaky_relu(node(x, inds_l))
-
-                # from (b * h * w, 1) to (b, 1, h, w)
-                mask = x.reshape((bs, 1, height, width))
 
             #undo the scaling that is made at the beginning of this function
             x_real = (x_real - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
             x_reg_combined = (x_reg_combined - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
-            return x_reg_combined, mask, class_losses, x_real, debugs
+            return x_reg_combined, class_losses, x_real, debugs
