@@ -110,7 +110,7 @@ def train():
     step = -1
     for epoch in range(args.start_epoch, args.epochs+1):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
-        print(f'Epoch {epoch}/{args.epochs - 1}')
+        print(f'Epoch {epoch}/{args.epochs}')
         print('-' * 10)
         alpha_reg = alpha_regs[find_index(epoch - 1, key_steps)]
         edge_weight = float(edge_weights[find_index(epoch - 1, key_steps)])

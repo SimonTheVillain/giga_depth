@@ -130,7 +130,9 @@ def GetModel(args, config):
             backboneType = BackboneSlice
             constructor = lambda pad, channels, downsample: BackboneSlice(
                 channels=config["backbone"]["channels"],
-                channels_sub=config["backbone"]["channels2"],
+                kernel_sizes=config["backbone"]["kernel_sizes"],
+                channels_sub=config["backbone"]["channels_sub"],
+                kernel_sizes_sub=config["backbone"]["kernel_sizes_sub"],
                 use_bn=True,
                 pad=pad, channels_in=channels)
         if name == "UNet":
