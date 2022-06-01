@@ -14,8 +14,8 @@ from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 base_path = "/media/simon/ssd_datasets/datasets"
-base_path = "/media/simon/T7/datasets"
 base_path = "/home/simon/datasets"
+base_path = "/media/simon/T7/datasets"
 
 def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
     print(dst)
@@ -247,7 +247,7 @@ def process_results(algorithm):
 def create_plot():
     path_results = f"{base_path}/structure_core_photoneo_test_results"
 
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
@@ -255,6 +255,8 @@ def create_plot():
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
                     "GigaDepth66LCN": "GigaDepth (LCN)",
+                    "GigaDepth68": "GigaDepthNew",
+                    "GigaDepth68LCN": "GigaDepthNew (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",
@@ -322,12 +324,12 @@ def create_plot():
     plt.show()
 
 def create_data():
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "ActiveStereoNet",
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    #algorithms = ["HyperDepth"] #TODO: find bug in the hyperdepth implementation!!!!
+    algorithms = ["GigaDepth68LCN"] #TODO: find bug in the hyperdepth implementation!!!!
     #algorithms = ["HyperDepthXDomain"]
     threading = False
 
@@ -341,11 +343,14 @@ def prepare_gts():
     algorithms = [("GigaDepth", "GigaDepth"),
                   ("GigaDepth66", "GigaDepth66") ,
                   ("GigaDepth66LCN", "GigaDepth66LCN"),
+                  ("GigaDepth68", "GigaDepth68"),
+                  ("GigaDepth68LCN", "GigaDepth68LCN"),
                   ("ActiveStereoNet", "ActiveStereoNet"),
                   ("connecting_the_dots", "connecting_the_dots"),
                   ("HyperDepth", "HyperDepth"),
                   ("HyperDepthXDomain", "HyperDepthXDomain"),
                   ("SGBM", "SGBM")]
+    algorithms = [("GigaDepth68LCN", "GigaDepth68LCN")]
     for alg in algorithms:
         prepare_gt(src_pre="GigaDepth66LCN", src=alg[1], dst=f"GT/{alg[0]}")
 

@@ -186,14 +186,15 @@ def create_plot():
     path_results = "/media/simon/T7/datasets/structure_core_unity_test_results"
 
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"] # "HyperDepth", "GigaDepthLCN"]
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68LCN",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
-                    "GigaDepth68LCN": "GigaDepthNew",
                     "GigaDepth66LCN": "GigaDepth (LCN)",
+                    "GigaDepth68": "GigaDepthNew",
+                    "GigaDepth68LCN": "GigaDepthNew (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots_stereo": "ConnectingTheDots",

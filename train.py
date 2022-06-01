@@ -108,7 +108,7 @@ def train():
     dataset_sizes = {x: len(datasets[x]) for x in ['train', 'val']}
     min_test_disparity = 100000.0
     step = -1
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(args.start_epoch, args.epochs+1):
         # TODO: setup code like so: https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html
         print(f'Epoch {epoch}/{args.epochs - 1}')
         print('-' * 10)
@@ -365,15 +365,13 @@ def train():
                         module = model
 
                     print("storing network")
-                    torch.save(module.backbone, f"trained_models/{args.experiment_name}_backbone_chk.pt")
-                    torch.save(module.regressor, f"trained_models/{args.experiment_name}_regressor_chk.pt")
+                    torch.save(module, f"trained_models/{args.experiment_name}_chk.pt")
 
                     if disparity < min_test_disparity:
                         print("storing network")
                         min_test_disparity = disparity
-                        torch.save(module.backbone,
-                                   f"trained_models/{args.experiment_name}_backbone.pt")  # maybe use type(x).__name__()
-                        torch.save(module.regressor, f"trained_models/{args.experiment_name}_regressor.pt")
+                        torch.save(module, f"trained_models/{args.experiment_name}.pt")
+
         scheduler.step()
     writer.close()
 

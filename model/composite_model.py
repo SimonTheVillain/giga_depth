@@ -4,21 +4,27 @@ from torch.cuda.amp import autocast
 from model.backbone import *
 from model.backboneSliced import *
 from model.regressor import Reg_3stage, RegressorConv, Regressor
+from model.uNet import UNet
 
 
 class CompositeModel(nn.Module):
-    def __init__(self, backbone, regressor, regressor_conv=None, half_precision=False):
+    def __init__(self, backbone, regressor, half_precision=False, apply_lcn=False):
         super(CompositeModel, self).__init__()
         self.half_precision = half_precision
         self.backbone = backbone
         self.regressor = regressor
-        self.regressor_conv = regressor_conv
-
-        # TODO: remove this debug(or at least make it so it can run with other than 64 channels
-        # another TODO: set affine parameters to false!
-        # self.bn = nn.BatchNorm2d(64, affine=False)
+        self.apply_lcn = apply_lcn
 
     def forward(self, x, x_gt=None, output_entropies=False):
+        if hasattr(self.backbone, 'LCN'):
+            # TODO: REMOVE THIS BRANCH AS SOON AS WE KNOW THAT THE OLD EXPERIMENTS CAN BE DELETED!
+            if self.backbone.LCN:
+                lcn, _, _ = LCN_tensors(x)
+                x = torch.cat((x, lcn), 1)
+        else:
+            if self.apply_lcn:
+                lcn, _, _ = LCN_tensors(x)
+                x = torch.cat((x, lcn), 1)
 
         if x_gt != None:
             if self.half_precision:
@@ -35,9 +41,6 @@ class CompositeModel(nn.Module):
             for key, val in debugs.items():
                 results[-1][key] = val
 
-            if self.regressor_conv != None:
-                result = self.regressor_conv(x)
-                results = results + result
             return results
         else:
 
@@ -50,39 +53,42 @@ class CompositeModel(nn.Module):
 
             results = self.regressor(x, x_gt,
                                      output_entropies=output_entropies)
-            if self.regressor_conv:
-                result = self.regressor_conv(x)
-                results = results + result
+
             return results
 
 
 
 def GetModel(args, config):
 
+    if config["training"]["load_model"] != "":
+        model = torch.load(config["training"]["load_model"])
+        model.eval()
+        return model
+
     if config["regressor"]["load_file"] != "":
         regressor = torch.load(config["regressor"]["load_file"])
         regressor.eval()
     else:
+
+        in_channels = 1
+        if args.LCN:
+            in_channels = 2
+
         # https://stackoverflow.com/questions/334655/passing-a-dictionary-to-a-function-as-keyword-parameters
         if config["regressor"]["name"] == "Regressor":
-            regressor = Regressor(ch_in=config["regressor"]["ch_in"],
-                                   height=config["regressor"]["lines"],  # 64,#448,
-                                   ch_latent=config["regressor"]["bb"],
-                                   # [128, 128, 128],#todo: make this of variable length
-                                   superclasses=config["regressor"]["superclasses"],
-                                   ch_latent_r=config["regressor"]["ch_reg"],
-                                   # 64/64 # in the current implementation there is only one stage between input
-                                   ch_latent_msk=config["regressor"]["msk"],
-                                   classes=config["regressor"]["classes"],
-                                   pad=config["regressor"]["padding"],
-                                   ch_latent_c=config["regressor"]["class_bb"],  # todo: make these of variable length
-                                   regress_neighbours=config["regressor"]["regress_neighbours"],
-                                   reg_line_div=config["regressor"]["reg_line_div"],
-                                   c3_line_div=config["regressor"]["c3_line_div"],
-                                   close_far_separation=config["regressor"]["close_far_separation"],
-                                   sigma_mode=config["regressor"]["sigma_mode"],
-                                   vertical_slices=config["backbone"]["slices"],
-                                   pad_proj=args.pad_proj)
+            regressor = Regressor(  height=config["regressor"]["lines"],
+                                    classes=config["regressor"]["classes"],
+                                    class_pad=config["regressor"]["class_padding"],
+                                    class_ch_in_offset=config["regressor"]["class_ch_in_offset"],
+                                    class_ch_in=config["regressor"]["class_ch_in"],
+                                    class_ch=config["regressor"]["class_ch"],
+                                    reg_data_start=config["regressor"]["reg_data_start"],
+                                    reg_ch_in=config["regressor"]["reg_ch_in"],
+                                    reg_ch=config["regressor"]["reg_ch"],
+                                    reg_superclasses=config["regressor"]["reg_superclasses"],
+                                    reg_overlap_neighbours=config["regressor"]["reg_overlap_neighbours"], # take channels
+                                    reg_shared_over_lines=config["regressor"]["reg_shared_over_lines"],
+                                    reg_pad=config["regressor"]["reg_pad"])
         else:
             #TODO: REMOVE EVERYTHING Reg_3stage related!!!!
             print("THIS IS DEPRECATED!!!!! DON'T USE ANYMORE")
@@ -127,6 +133,14 @@ def GetModel(args, config):
                 channels_sub=config["backbone"]["channels2"],
                 use_bn=True,
                 pad=pad, channels_in=channels)
+        if name == "UNet":
+            backboneType = UNet
+            constructor = lambda pad, channels, downsample: UNet(
+                cin=config["backbone"]["input_channels"],
+                cout=config["backbone"]["output_channels"],
+                half_out=True,
+                channel_size_scale=config["backbone"]["unet_channel_count_scale"]
+            )
 
         if name == "BackboneU5":
             assert args.downsample_output, "For the U shaped network it is required to downsample the network"
@@ -136,27 +150,11 @@ def GetModel(args, config):
         if config["backbone"]["name"].endswith("Sliced"):
             backbone = BackboneSlicer(backboneType, constructor,
                                       config["backbone"]["slices"],
-                                      lcn=args.LCN,
+                                      in_channels=in_channels,
                                       downsample_output=args.downsample_output)
         else:
-            in_channels = 1
-            if args.LCN:
-                in_channels = 2
             backbone = constructor('both', in_channels, args.downsample_output)
 
-    regressor_conv = None
-    if "regressor_conv" in config:
-        if config["regressor_conv"]["load_file"] != "":
-            regressor_conv = torch.load(config["regressor_conv"]["load_file"])
-            regressor_conv.eval()
-        else:
-            regressor_conv = RegressorConv(
-                lines=config["regressor"]["lines"],
-                ch_in=config["regressor"]["ch_in"],
-                ch_latent=config["regressor_conv"]["layers"],
-                ch_latent_msk=config["regressor_conv"]["layers_msk"],
-                slices=config["regressor_conv"]["slices"],
-                vertical_fourier_encoding=config["regressor_conv"]["vertical_fourier_encoding"],
-                batch_norm=config["regressor_conv"]["batch_norm"])
-    model = CompositeModel(backbone, regressor, regressor_conv, args.half_precision)
+
+    model = CompositeModel(backbone, regressor, args.half_precision, apply_lcn=args.LCN)
     return model

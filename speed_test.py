@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 import time
 from model.composite_model import CompositeModel
 from model.backboneSliced import *
+from model.uNet import UNet
 
 import re
 
@@ -52,16 +53,23 @@ if False:
 
 if True:
     backboneType = BackboneSlice
-    constructor = lambda pad, channels, downsample: BackboneSlice(
+    constructor = lambda pad, channels, downsample: BackboneSliceConv3(
         channels=[],#[8, 16],
-        channels_sub=[16, 32, 32, 64, 64],#[32, 32, 64, 64],
+        channels_sub=[16, 24, 32, 40, 48, 64, 72, 80, 88, 128],#[16, 32, 32, 64, 64+32+32],#[32, 32, 64, 64],
         use_bn=True,
         pad=pad, channels_in=channels)#,downsample=True)
+    if False:
+        constructor = lambda pad, channels, downsample: BackboneSlice(
+            channels=[],#[8, 16],
+            channels_sub=[16, 32, 32, 64, 128],#[16, 32, 32, 64, 64+32+32],#[32, 32, 64, 64],
+            use_bn=True,
+            pad=pad, channels_in=channels)#,downsample=True)
     backbone = constructor('both', 2, True)
     backbone = BackboneSlicer(backboneType, constructor,
                               1,
-                              lcn=True,
+                              in_channels=1,
                               downsample_output=True)
+    #backbone = UNet(1, 64, True, 0.5)
     backbone.cuda()
     model = backbone
 path = "/home/simon/datasets/structure_core_unity_test"

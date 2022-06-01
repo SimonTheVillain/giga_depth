@@ -136,6 +136,7 @@ def generate_pcl(disp):
     pcd.points = o3d.utility.Vector3dVector(pts)
     return pcd
 
+
 def process_results(algorithm):
     path_src = f"{base_path}/structure_core_photoneo_test_results/GT/{algorithm}"
     path_results = f"{base_path}/structure_core_photoneo_test_results"
@@ -236,112 +237,6 @@ def process_results(algorithm):
     f = open(path_results + f"/{algorithm}.pkl", "wb")
     pickle.dump(data, f)
     f.close()
-
-def create_plot():
-    path_results = f"{base_path}/structure_core_photoneo_test_results"
-
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
-                  "ActiveStereoNet", "connecting_the_dots",
-                  "HyperDepth", "HyperDepthXDomain",
-                  "SGBM"]
-    algorithms = []
-
-    legend_names = {"GigaDepth": "GigaDepth light",
-                    "GigaDepth66": "GigaDepth",
-                    "GigaDepth66LCN": "GigaDepth (LCN)",
-                    "ActiveStereoNet": "ActiveStereoNet",
-                    "ActiveStereoNetFull": "ActiveStereoNet (full)",
-                    "connecting_the_dots": "ConnectingTheDots",
-                    "connecting_the_dots_stereo": "ConnectingTheDots",
-                    "connecting_the_dots_full": "ConnectingTheDots (full)",
-                    "HyperDepth": "HyperDepth",
-                    "HyperDepthXDomain": "HyperDepthXDomain",
-                    "SGBM": "SGBM"}
-    legends = [legend_names[x] for x in algorithms]
-    font = {'family': 'normal',
-            #'weight': 'bold',
-            'size': 16}
-    #plt.figure(1)
-    #for algorithm in algorithms:
-    #    with open(path_results + f"/{algorithm}.pkl", "rb") as f:
-    #        data = pickle.load(f)
-    #    plt.plot(data["inliers"]["ths"], data["inliers"]["data"] / data["inliers"]["pix_count"])
-    #plt.legend(algorithms)
-    fig, ax = plt.subplots()
-    for algorithm in algorithms:
-        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
-            data = pickle.load(f)
-        x = data["inliers"]["ths"]
-        y = data["inliers"]["data"] / data["inliers"]["pix_count"]
-        #x = x[x < 5]
-        #y = y[:len(x)]
-        ax.plot(x, y)
-
-    ax.set(xlim=[0.0, 5.0])
-    ax.xaxis.set_major_locator(MultipleLocator(0.5))
-    ax.xaxis.set_minor_locator(MultipleLocator(0.1))
-    ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
-    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
-
-    ax.legend(legends, loc='lower right')
-    # todo: maybe reinstert the plots by threshold
-
-    #plot the inlier ratios over distance
-    th = 5 # this is 1 in the structure core!!!!!
-    fig, ax = plt.subplots()
-    for algorithm in algorithms:
-        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
-            data = pickle.load(f)
-        plt.plot( data[f"inliers_{th}"]["distances"][:],
-                 np.array(data[f"inliers_{th}"]["data"][:]) / np.array(data[f"inliers_{th}"]["pix_count"][:]))
-    plt.legend(legends, loc='upper right')
-    ax.set(xlim=[0.0, 3.5])
-    ax.set_xlabel(xlabel="distance [m]", fontdict=font)
-    ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
-
-    #plot the RMSE over distance
-    th = 5 # this is 1 in the structure core!!!!!
-    fig, ax = plt.subplots()
-    for algorithm in algorithms:
-        with open(path_results + f"/{algorithm}.pkl", "rb") as f:
-            data = pickle.load(f)
-        rmse = np.sqrt(np.array(data[f"inliers_{th}"]["depth_rmse"][:]) / np.array(data[f"inliers_{th}"]["data"][:]))
-        plt.plot( data[f"inliers_{th}"]["distances"][:], rmse)
-    plt.legend(legends, loc='upper left')
-    ax.set(xlim=[0.0, 3.5])
-    ax.set(ylim=[0.0, 0.03])
-    ax.set_xlabel(xlabel="distance [m]", fontdict=font)
-    ax.set_ylabel(ylabel=f"RMSE [m]", fontdict=font)
-
-    plt.show()
-
-def create_data():
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
-                  "ActiveStereoNet",
-                  "connecting_the_dots",
-                  "HyperDepth", "HyperDepthXDomain",
-                  "SGBM"]
-    #algorithms = ["HyperDepth"] #TODO: find bug in the hyperdepth implementation!!!!
-    #algorithms = ["HyperDepthXDomain"]
-    threading = False
-
-    if threading:
-        with Pool(5) as p:
-            p.map(process_results, algorithms)
-    else:
-        for algorithm in algorithms:
-            process_results(algorithm)
-def prepare_gts():
-    algorithms = [("GigaDepth", "GigaDepth"),
-                  ("GigaDepth66", "GigaDepth66") ,
-                  ("GigaDepth66LCN", "GigaDepth66LCN"),
-                  ("ActiveStereoNet", "ActiveStereoNet"),
-                  ("connecting_the_dots", "connecting_the_dots"),
-                  ("HyperDepth", "HyperDepth"),
-                  ("HyperDepthXDomain", "HyperDepthXDomain"),
-                  ("SGBM", "SGBM")]
-    for alg in algorithms:
-        prepare_gt(src_pre="GigaDepth66LCN", src=alg[1], dst=f"GT/{alg[0]}")
 
 
 def processTile(disp):
@@ -528,30 +423,33 @@ def process_data_of_algorithm(algorithm):
 
 def process_data():
     path_results = f"{base_path}/structure_core_plane_results"
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "SGBM"]
-    algorithms = ["HyperDepth", "HyperDepthXDomain",]
+    algorithms = ["GigaDepth68LCN"]
 
     for algorithm in algorithms:
         process_data_of_algorithm(algorithm)
     return
 
+
 def create_plot():
     path_results = f"{base_path}/structure_core_plane_results"
 
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet",
+    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN", "ActiveStereoNet",
                   "HyperDepth", "HyperDepthXDomain", "SGBM"]
 
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
                     "GigaDepth66LCN": "GigaDepth (LCN)",
+                    "GigaDepth68": "GigaDepthNew",
+                    "GigaDepth68LCN": "GigaDepthNew (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",
@@ -584,6 +482,5 @@ def create_plot():
     plt.show()
 
 
-
-#process_data()
+process_data()
 create_plot()
