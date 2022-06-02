@@ -188,6 +188,12 @@ def create_plot():
 
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"] # "HyperDepth", "GigaDepthLCN"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
+                  "GigaDepth70", "GigaDepth71",
+                  "ActiveStereoNet", "ActiveStereoNetFull",
+                  "connecting_the_dots_full", "connecting_the_dots_stereo",
+                  "HyperDepth"]
+    algorithms = ["GigaDepth66", "GigaDepth66LCN",
+                  "GigaDepth71",
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]
@@ -289,5 +295,5 @@ def create_plot():
     plt.show()
 
 
-create_data()
+#create_data()
 create_plot()

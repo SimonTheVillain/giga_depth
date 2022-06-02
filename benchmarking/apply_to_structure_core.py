@@ -31,7 +31,7 @@ backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 regressor_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_regressor_chk.pt"
 backbone_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_backbone_chk.pt"
 
-combined_model_pth = "trained_models/full_71_j2_c1920.pt"
+combined_model_pth = "trained_models/full_70_j2_c1920.pt"
 
 #regressor_model_pth = "trained_models/full_68_j4_c1920_regressor_chk.pt"
 #backbone_model_pth = "trained_models/full_68_j4_c1920_backbone_chk.pt"
@@ -49,7 +49,7 @@ else:
 regressor_conv = False
 
 use_conv = False
-mode = "rendered"#"rendered" rendered_shapenet or captured
+mode = "captured"#"rendered" rendered_shapenet or captured
 half_res = False
 if use_conv:
     regressor_conv = torch.load(regressor_conv_model_pth, map_location=device)
@@ -127,11 +127,11 @@ if mode == "captured":
     path_out = "/home/simon/datasets/structure_core_photoneo_test_results/GigaDepth66_domain_transfer"
 
 
-    path = "/media/simon/T7/datasets/structure_core_plane"
-    path_out = "/media/simon/T7/datasets/structure_core_plane_results/GigaDepth68LCN"
+    #path = "/media/simon/T7/datasets/structure_core_plane"
+    #path_out = "/media/simon/T7/datasets/structure_core_plane_results/GigaDepth70"
 
-    #path = "/media/simon/T7/datasets/structure_core_photoneo_test"
-    #path_out = "/media/simon/T7/datasets/structure_core_photoneo_test_results/GigaDepth68LCN"
+    path = "/media/simon/T7/datasets/structure_core_photoneo_test"
+    path_out = "/media/simon/T7/datasets/structure_core_photoneo_test_results/GigaDepth70"
 
     folders = os.listdir(path)
     scenes = [x for x in folders if os.path.isdir(Path(path) / x)]

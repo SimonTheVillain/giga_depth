@@ -48,10 +48,10 @@ regressor:
   lines: 448
   classes: [16, 12, 10]
   class_padding: [0, 2, 3]
-  class_ch_in_offset: [0, 32, 64] # TODO: implement this!!!
+  class_ch_in_offset: [0, 32, 64]
   class_ch_in: [32, 32, 32]
-  class_ch: [[32], [32], [32]] #[[32], [32], [32]]
-  reg_data_start: 96 #TODO: implement this
+  class_ch: [[32], [32], [32]]
+  reg_data_start: 96
   reg_superclasses: 384 # TODO: SHOULD/COULD BE HIGHER! 240, 384, 480, 640 960
   reg_ch_in: 32
   reg_ch: [16] # 32
