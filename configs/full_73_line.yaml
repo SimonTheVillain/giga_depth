@@ -47,6 +47,6 @@ regressor:
   load_file: ""
   name: Lines
   ch_in: 128
-  ch_latent: [256, 256, 256, 512, 1024]
+  ch_latent: [256, 256, 256 , 256] #512, 1024]
   lines: 448
 
