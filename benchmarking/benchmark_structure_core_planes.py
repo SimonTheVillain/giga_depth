@@ -424,11 +424,12 @@ def process_data_of_algorithm(algorithm):
 def process_data():
     path_results = f"{base_path}/structure_core_plane_results"
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
+                  "GigaDepth70", "GigaDepth71",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "SGBM"]
-    algorithms = ["GigaDepth68LCN"]
+    algorithms = ["GigaDepth70", "GigaDepth71"]
 
     for algorithm in algorithms:
         process_data_of_algorithm(algorithm)
@@ -439,10 +440,11 @@ def create_plot():
     path_results = f"{base_path}/structure_core_plane_results"
 
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
+                  "GigaDepth70", "GigaDepth71",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN", "ActiveStereoNet",
+    algorithms = ["GigaDepth66", "GigaDepth66LCN", "GigaDepth71", "GigaDepth70", "ActiveStereoNet",
                   "HyperDepth", "HyperDepthXDomain", "SGBM"]
 
     legend_names = {"GigaDepth": "GigaDepth light",
@@ -450,6 +452,8 @@ def create_plot():
                     "GigaDepth66LCN": "GigaDepth (LCN)",
                     "GigaDepth68": "GigaDepthNew",
                     "GigaDepth68LCN": "GigaDepthNew (LCN)",
+                    "GigaDepth70": "GigaDepth70",
+                    "GigaDepth71": "GigaDepth71",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",
