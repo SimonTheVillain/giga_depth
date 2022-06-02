@@ -1,0 +1,46 @@
+training:
+  name: full_72_unet
+  load_model: ""
+  batch_size: 4
+  optimizer: adam
+  learning_rate: 0.004
+  lr_scales: [1.0, 0.5, 0.25, 0.12, 0.01]
+  momentum: 0.9
+  weight_decay: 1e-5 # 1e-6
+  alpha_reg: [500, 1000, 2000, 2000, 2000]
+  edge_weight: [0, 1, 2, 4, 20]
+  gpu_list: [0]
+  epochs: 10
+  key_epochs: [ 2, 4, 6, 8 ]
+  half_precision: True
+
+dataset:
+  path: /media/simon/ssd_datasets/datasets/structure_core_unity_sequences
+  is_npy: False
+  workers: 8
+  tgt_res: [ 1216, 896 ]
+  vertical_jitter: 2
+  downsample_output: True
+  dataset_type: structure_core_unity_sequences
+  slice_in:
+    start: 0
+    height: 896
+  slice_out:
+    start: 0
+    height: 448
+
+
+backbone:
+  load_file: ""
+  name: UNet
+  input_channels: 1
+  output_channels: 1
+  lines: 896
+  slices: 1
+  unet_channel_count_scale: 1.0
+  local_contrast_norm: False
+
+regressor:
+  load_file: ""
+  name: None
+

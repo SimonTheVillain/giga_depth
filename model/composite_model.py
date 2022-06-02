@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.cuda.amp import autocast
 from model.backbone import *
 from model.backboneSliced import *
-from model.regressor import Reg_3stage, RegressorConv, Regressor
+from model.regressor import *
 from model.uNet import UNet
 
 
@@ -89,6 +89,12 @@ def GetModel(args, config):
                                     reg_overlap_neighbours=config["regressor"]["reg_overlap_neighbours"], # take channels
                                     reg_shared_over_lines=config["regressor"]["reg_shared_over_lines"],
                                     reg_pad=config["regressor"]["reg_pad"])
+        elif config["regressor"]["name"] == "None":
+            regressor = RegressorNone( )
+        elif config["regressor"]["name"] == "Lines":
+            regressor = RegressorLinewise(lines=config["regressor"]["lines"],
+                                          ch_in=config["regressor"]["ch_in"],
+                                          ch_latent=config["regressor"]["ch_latent"])
         else:
             #TODO: REMOVE EVERYTHING Reg_3stage related!!!!
             print("THIS IS DEPRECATED!!!!! DON'T USE ANYMORE")

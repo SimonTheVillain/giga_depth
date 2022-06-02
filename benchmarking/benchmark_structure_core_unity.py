@@ -163,10 +163,11 @@ def create_data():
     algorithms = ["GigaDepth", "ActiveStereoNet", "connecting_the_dots", "HyperDepth"]#, "GigaDepthLCN"]
     #algorithms = ["HyperDepth"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68",
+                  "GigaDepth70", "GigaDepth71",
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]  #
-    algorithms = ["GigaDepth68"]
+    algorithms = ["GigaDepth70", "GigaDepth71"]
 
     threading = True
 
@@ -195,6 +196,8 @@ def create_plot():
                     "GigaDepth66LCN": "GigaDepth (LCN)",
                     "GigaDepth68": "GigaDepthNew",
                     "GigaDepth68LCN": "GigaDepthNew (LCN)",
+                    "GigaDepth70": "GigaDepth70",
+                    "GigaDepth71": "GigaDepth71",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots_stereo": "ConnectingTheDots",
@@ -286,5 +289,5 @@ def create_plot():
     plt.show()
 
 
-#create_data()
+create_data()
 create_plot()

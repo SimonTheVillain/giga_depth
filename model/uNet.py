@@ -85,5 +85,5 @@ class UNet(nn.Module):
             # CLASSIFIER
             outputs = self.outputs(d4)
         if debugs:
-            return outputs, []
+            return outputs, {}
         return outputs

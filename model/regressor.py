@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from model.cuda_cond_mul.cond_mul import CondMul
 import numpy as np
 
-
+#TODO: remove!
 class RegressorConv(nn.Module):
     def __init__(self,
                  lines=448,
@@ -569,6 +569,8 @@ class Reg_3stage(nn.Module):
             return x_reg_combined, class_losses, x_real, debugs
 
 
+
+
 #more modern regressor that allows for regressors of different resolution
 class Regressor(nn.Module):
 
@@ -743,3 +745,42 @@ class Regressor(nn.Module):
             x_real = (x_real - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
             x_reg_combined = (x_reg_combined - self.pad_proj) / (1.0 - 2.0 * self.pad_proj)
             return x_reg_combined, class_losses, x_real, debugs
+
+
+class RegressorLinewise(nn.Module):
+    def __init__(self,
+                 lines=448,
+                 ch_in=128,
+                 ch_latent=[64, 64, 128, 1024, 1024, 128]):
+        super(RegressorLinewise, self).__init__()
+
+        chs = [ch_in] + ch_latent
+        self.seq = nn.Sequential()
+        for ch_in, ch_out, i in zip(chs[:-1], chs[1:], range(len(chs)-1)):
+            self.seq.add_module(f"conv{i}", nn.Conv2d(ch_in*lines, ch_out*lines, 1, groups=lines))
+            self.seq.add_module(f"bn{i}", nn.BatchNorm2d(ch_out * lines))
+            self.seq.add_module(f"ReLU{i}", nn.LeakyReLU())
+        self.seq.add_module(f"conv_out", nn.Conv2d(chs[-1] * lines, lines, 1, groups=lines))
+
+    def forward(self, x, x_gt=None, output_entropies=False):
+        bs = x.shape[0]
+        height = x.shape[2]
+        width = x.shape[3]
+        # convert from (b, c, h, w) to (b, h, c, w) to (b, h*c, 1, w)
+        x = x.permute((0, 2, 1, 3)).reshape((bs, -1, 1, width))
+        x = self.seq(x)
+        # convert from (b, h*c, 1, w) to (b, h, c, w) to (b, c, h, w)
+        x = x.reshape(bs, height, -1, width).permute((0, 2, 1, 3))
+
+        if x_gt != None:
+            return x, {}, x, {}
+        return x
+
+class RegressorNone(nn.Module):
+    def __init__(self):
+        super(RegressorNone, self).__init__()
+
+    def forward(self, x, x_gt=None, output_entropies=False):
+        if x_gt != None:
+            return x, {}, x, {}
+        return x

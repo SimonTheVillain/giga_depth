@@ -186,15 +186,23 @@ class BackboneSlice(nn.Module):
             p = kernel_sizes[0] // 2
             self.receptive_field += p
 
-            modules = [nn.ConstantPad2d(self.get_pad(pad, p), 0),
-                       nn.Conv2d(channels_in, channels[0], kernel_sizes[0], padding=(0, p)),  # + p
-                       nn.BatchNorm2d(channels[0]),
-                       nn.LeakyReLU()]
+            modules = []
+
+            if pad == "both":
+                modules.append(nn.Conv2d(channels_in, channels[0], kernel_sizes[0], padding=(p, p)))  # + p
+            else:
+                modules.append(nn.ConstantPad2d(self.get_pad(pad, p), 0))
+                modules.append(nn.Conv2d(channels_in, channels[0], kernel_sizes[0], padding=(0, p)))# + p
+            modules.append(nn.BatchNorm2d(channels[0]))
+            modules.append(nn.LeakyReLU())
             for ch_in, ch_out, ks in zip(channels[:-1], channels[1:], kernel_sizes[1:]):
                 p = ks // 2
                 self.receptive_field += p
-                modules.append(nn.ConstantPad2d(self.get_pad(pad, p), 0))
-                modules.append(nn.Conv2d(ch_in, ch_out, ks, padding=(0, p)))  # + p
+                if pad == "both":
+                    modules.append(nn.Conv2d(ch_in, ch_out, ks, padding=(p, p)))  # + p
+                else:
+                    modules.append(nn.ConstantPad2d(self.get_pad(pad, p), 0))
+                    modules.append(nn.Conv2d(ch_in, ch_out, ks, padding=(0, p)))  # + p
                 if use_bn:
                     modules.append(nn.BatchNorm2d(ch_out))
                 modules.append(nn.LeakyReLU())
@@ -205,15 +213,26 @@ class BackboneSlice(nn.Module):
         if self.downsample:
             p = kernel_sizes_sub[0] // 2
             self.receptive_field += p
-            modules = [nn.ConstantPad2d(self.get_pad(pad, p), 0),
-                       nn.Conv2d(channels[-1], channels_sub[0], kernel_sizes_sub[0], padding=(0, p), stride=(2, 2)),  # + 2
-                       nn.BatchNorm2d(channels_sub[0]),
-                       nn.LeakyReLU()]
+            modules = []
+            if pad == "both":
+                modules.append(
+                    nn.Conv2d(channels[-1], channels_sub[0], kernel_sizes_sub[0], padding=(p, p), stride=(2, 2)))  # + 2
+            else:
+                modules.append(nn.ConstantPad2d(self.get_pad(pad, p), 0))
+                modules.append(
+                    nn.Conv2d(channels[-1], channels_sub[0], kernel_sizes_sub[0], padding=(0, p), stride=(2, 2)))  # + 2
+
+            modules.append(nn.BatchNorm2d(channels_sub[0]))
+            modules.append(nn.LeakyReLU())
+
             for ch_in, ch_out, ks in zip(channels_sub[:-1], channels_sub[1:], kernel_sizes_sub[1:]):
                 p = ks // 2
                 self.receptive_field += 2 * p
-                modules.append(nn.ConstantPad2d(self.get_pad(pad, p), 0))
-                modules.append(nn.Conv2d(ch_in, ch_out, ks, padding=(0, p)))  # + 2*p
+                if pad == "both":
+                    modules.append(nn.Conv2d(ch_in, ch_out, ks, padding=(p, p)))  # + 2*p
+                else:
+                    modules.append(nn.ConstantPad2d(self.get_pad(pad, p), 0))
+                    modules.append(nn.Conv2d(ch_in, ch_out, ks, padding=(0, p)))  # + 2*p
                 if use_bn:
                     modules.append(nn.BatchNorm2d(ch_out))
                 modules.append(nn.LeakyReLU())
@@ -226,65 +245,6 @@ class BackboneSlice(nn.Module):
             x = self.block2(x)
         if with_debug:
             return x, {}
-        return x
-
-class BackboneSliceConv3(nn.Module):
-
-    def get_required_padding(self, downsample=True):
-        return self.receptive_field
-
-    def __init__(self, channels=[16, 32], channels_sub=[64, 64, 64, 64],
-                 use_bn=False, pad='', channels_in=2):
-        super(BackboneSliceConv3, self).__init__()
-        self.downsample = len(channels_sub) > 0
-        p = (0, 0, 0, 0)
-        if pad == 'top':
-            p = (0, 0, 1, 0)
-        if pad == 'bottom':
-            p = (0, 0, 0, 1)
-        if pad == 'both':
-            p = (0, 0, 1, 1)
-
-        self.base_res = False
-        self.receptive_field = 0
-        if len(channels) != 0:
-            self.base_res = True
-            self.receptive_field += 1
-            modules = [nn.ConstantPad2d(p, 0),
-                       nn.Conv2d(channels_in, channels[0], 3, padding=(0, 1)),  # + 1
-                       nn.BatchNorm2d(channels[0]),
-                       nn.LeakyReLU()]
-            for ch_in, ch_out in zip(channels[:-1], channels[1:]):
-                self.receptive_field += 1
-                modules.append(nn.ConstantPad2d(p, 0))
-                modules.append(nn.Conv2d(ch_in, ch_out, 3, padding=(0, 1)))  # + 1
-                if use_bn:
-                    modules.append(nn.BatchNorm2d(ch_out))
-                modules.append(nn.LeakyReLU())
-            self.block1 = nn.Sequential(*modules)
-        else:
-            channels = [channels_in]
-
-        if self.downsample:
-            self.receptive_field += 2
-            modules = [nn.ConstantPad2d(p, 0),
-                       nn.Conv2d(channels[-1], channels_sub[0], 5, padding=(0, 2), stride=(2, 2)),  # + 2 = 5
-                       nn.BatchNorm2d(channels_sub[0]),
-                       nn.LeakyReLU()]
-            for ch_in, ch_out in zip(channels_sub[:-1], channels_sub[1:]):
-                self.receptive_field += 2
-                modules.append(nn.ConstantPad2d(p, 0))
-                modules.append(nn.Conv2d(ch_in, ch_out, 3, padding=(0, 1)))  # + 2*2
-                if use_bn:
-                    modules.append(nn.BatchNorm2d(ch_out))
-                modules.append(nn.LeakyReLU())
-            self.block2 = nn.Sequential(*modules)
-
-    def forward(self, x):
-        if self.base_res:
-            x = self.block1(x)
-        if self.downsample:
-            x = self.block2(x)
         return x
 
 
