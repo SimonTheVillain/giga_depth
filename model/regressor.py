@@ -144,7 +144,7 @@ class Classifier3Stage(nn.Module):
             self.c2.append(CondMul(height * classes[0], ch_latent[1][i], ch_latent[1][i + 1]))
 
         for i in range(0, len(ch_latent[2]) - 1):
-            self.c3.append(CondMul(height * classes12, ch_latent[0][i], ch_latent[1][i + 1]))
+            self.c3.append(CondMul(height * classes12, ch_latent[2][i], ch_latent[2][i + 1]))
 
     def get_mean_weights(self):
         mean_weights = {}
