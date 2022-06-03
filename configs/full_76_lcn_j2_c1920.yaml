@@ -1,5 +1,5 @@
 training:
-  name: full_75_lcn_j2_c1920
+  name: full_76_lcn_j2_c1920
   load_model: ""
   batch_size: 8
   learning_rate: 4.0
