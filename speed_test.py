@@ -56,8 +56,8 @@ if True:
     constructor = lambda pad, channels, downsample: BackboneSlice(
         channels=[],#[8, 16],
         kernel_sizes=[],
-        channels_sub=[16, 24, 32, 40, 48, 64, 96, 128],#[16, 32, 32, 64, 64+32+32],#[32, 32, 64, 64],
-        kernel_sizes_sub=[5, 3, 3, 3, 3, 3, 5, 3, 3],
+        channels_sub=[16, 24, 32, 40, 64, 64, 96, 160],#[16, 32, 32, 64, 64+32+32],#[32, 32, 64, 64],
+        kernel_sizes_sub=[5, 3, 3, 3, 3, 5, 3, 3],
         use_bn=True,
         pad=pad, channels_in=channels)#,downsample=True)
     if False:
