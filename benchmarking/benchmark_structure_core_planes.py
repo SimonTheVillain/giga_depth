@@ -429,7 +429,7 @@ def process_data():
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "SGBM"]
-    algorithms = ["GigaDepth70", "GigaDepth71"]
+    algorithms = ["GigaDepth76", "GigaDepth76LCN"]
 
     for algorithm in algorithms:
         process_data_of_algorithm(algorithm)
@@ -441,10 +441,15 @@ def create_plot():
 
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "GigaDepth70", "GigaDepth71",
+                  "GigaDepth74", "GigaDepth75",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth66", "GigaDepth66LCN", "GigaDepth71", "GigaDepth70", "ActiveStereoNet",
+    algorithms = ["GigaDepth66", "GigaDepth66LCN",
+                  "GigaDepth71",
+                  "GigaDepth70", "GigaDepth74", "GigaDepth75",
+                  "GigaDepth76","GigaDepth76LCN",
+                  "ActiveStereoNet",
                   "HyperDepth", "HyperDepthXDomain", "SGBM"]
 
     legend_names = {"GigaDepth": "GigaDepth light",
@@ -454,6 +459,10 @@ def create_plot():
                     "GigaDepth68LCN": "GigaDepthNew (LCN)",
                     "GigaDepth70": "GigaDepth70",
                     "GigaDepth71": "GigaDepth71",
+                    "GigaDepth74": "GigaDepth74",
+                    "GigaDepth75": "GigaDepth75",
+                    "GigaDepth76": "GigaDepth76",
+                    "GigaDepth76LCN": "GigaDepth76 (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",

@@ -31,7 +31,12 @@ backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
 regressor_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_regressor_chk.pt"
 backbone_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_backbone_chk.pt"
 
-combined_model_pth = "trained_models/full_70_j2_c1920.pt"
+
+datasets_root_path = "/media/simon/T7/datasets"
+combined_model_pth = "trained_models/full_76_lcn_j2_c1920.pt"
+output_folder_name = "GigaDepth76LCN"
+mode = "rendered"#"rendered" rendered_shapenet or captured
+experiment = "plane" # plane or photoneo
 
 #regressor_model_pth = "trained_models/full_68_j4_c1920_regressor_chk.pt"
 #backbone_model_pth = "trained_models/full_68_j4_c1920_backbone_chk.pt"
@@ -46,17 +51,8 @@ if combined_model_pth == "":
 else:
     model = torch.load(combined_model_pth, map_location=device)
     model.eval()
-regressor_conv = False
 
-use_conv = False
-mode = "captured"#"rendered" rendered_shapenet or captured
 half_res = False
-if use_conv:
-    regressor_conv = torch.load(regressor_conv_model_pth, map_location=device)
-    regressor_conv.eval()
-
-    model = CompositeModel(backbone, regressor, regressor_conv)
-
 
 if mode == "rendered":
     src_res = (1401, 1001)
@@ -67,10 +63,9 @@ if mode == "rendered":
     focal = 1.1154399414062500e+03
 
     rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
-    path = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
 
-    path = "/media/simon/T7/datasets/structure_core_unity_test"
-    path_out = "/media/simon/T7/datasets/structure_core_unity_test_results/GigaDepth71"
+    path = f"{datasets_root_path}/structure_core_unity_test"
+    path_out = f"/media/simon/T7/datasets/structure_core_unity_test_results/{output_folder_name}"
     inds = os.listdir(path)
     inds  = [re.search(r'\d+', s).group() for s in inds]
     inds = set(inds)
@@ -117,21 +112,13 @@ if mode == "captured":
     focal = 1.1154399414062500e+03
 
     rr = (tgt_res[0], 0, tgt_res[0], tgt_res[1])
-    path = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test"
-    path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth66"
-    path_out = "/media/simon/ssd_datasets/datasets/structure_core_photoneo_test_results/GigaDepth66_domain_transfer"
 
-
-    path = "/home/simon/datasets/structure_core_photoneo_test"
-    #path = "/home/simon/datasets/structure_core/sequences_combined_all"
-    path_out = "/home/simon/datasets/structure_core_photoneo_test_results/GigaDepth66_domain_transfer"
-
-
-    #path = "/media/simon/T7/datasets/structure_core_plane"
-    #path_out = "/media/simon/T7/datasets/structure_core_plane_results/GigaDepth70"
-
-    path = "/media/simon/T7/datasets/structure_core_photoneo_test"
-    path_out = "/media/simon/T7/datasets/structure_core_photoneo_test_results/GigaDepth70"
+    if experiment == "plane":
+        path = f"{datasets_root_path}/structure_core_plane"
+        path_out = f"{datasets_root_path}/structure_core_plane_results/{output_folder_name}"
+    else: # experiment is photoneo
+        path = f"{datasets_root_path}/structure_core_photoneo_test"
+        path_out = f"{datasets_root_path}/structure_core_photoneo_test_results/{output_folder_name}"
 
     folders = os.listdir(path)
     scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
@@ -167,10 +154,8 @@ with torch.no_grad():
 
         #run local contrast normalization (LCN)
         # TODO: is this the way the x-positions are encoded?
-        if regressor_conv:
-            _, _, x = model(irl)
-        else:
-            x = model(irl)
+
+        x = model(irl)
         x = x[0, 0, :, :]
         x = x * x.shape[1]
         x_0 = torch.arange(0, x.shape[1]).unsqueeze(0).to(device)

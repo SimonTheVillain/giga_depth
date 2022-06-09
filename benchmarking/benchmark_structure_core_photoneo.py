@@ -248,7 +248,8 @@ def create_plot():
     path_results = f"{base_path}/structure_core_photoneo_test_results"
 
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
-                  "GigaDepth70", "GigaDepth71",
+                  "GigaDepth70", "GigaDepth71", "GigaDepth74", "GigaDepth75",
+                  "GigaDepth76", "GigaDepth76LCN",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
@@ -260,6 +261,10 @@ def create_plot():
                     "GigaDepth68LCN": "GigaDepth68 (LCN)",
                     "GigaDepth70": "GigaDepth70",
                     "GigaDepth71": "GigaDepth71",
+                    "GigaDepth74": "GigaDepth74",
+                    "GigaDepth75": "GigaDepth75",
+                    "GigaDepth76": "GigaDepth76",
+                    "GigaDepth76LCN": "GigaDepth76 (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",
@@ -333,7 +338,7 @@ def create_data():
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth70", "GigaDepth71"] #TODO: find bug in the hyperdepth implementation!!!!
+    algorithms = ["GigaDepth76", "GigaDepth76LCN"] #TODO: find bug in the hyperdepth implementation!!!!
     #algorithms = ["HyperDepthXDomain"]
     threading = False
 
@@ -351,13 +356,17 @@ def prepare_gts():
                   ("GigaDepth68LCN", "GigaDepth68LCN"),
                   ("GigaDepth70", "GigaDepth70"),
                   ("GigaDepth71", "GigaDepth71"),
+                  ("GigaDepth74", "GigaDepth74"),
+                  ("GigaDepth75", "GigaDepth75"),
+                  ("GigaDepth76", "GigaDepth76"),
+                  ("GigaDepth76LCN", "GigaDepth76LCN"),
                   ("ActiveStereoNet", "ActiveStereoNet"),
                   ("connecting_the_dots", "connecting_the_dots"),
                   ("HyperDepth", "HyperDepth"),
                   ("HyperDepthXDomain", "HyperDepthXDomain"),
                   ("SGBM", "SGBM")]
-    algorithms = [("GigaDepth70", "GigaDepth70"),
-                  ("GigaDepth71", "GigaDepth71")]
+    algorithms = [("GigaDepth76", "GigaDepth76"),
+                  ("GigaDepth76LCN", "GigaDepth76LCN"),]
     for alg in algorithms:
         prepare_gt(src_pre="GigaDepth66LCN", src=alg[1], dst=f"GT/{alg[0]}")
 

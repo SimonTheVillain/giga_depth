@@ -56,8 +56,8 @@ if True:
     constructor = lambda pad, channels, downsample: BackboneSlice(
         channels=[],#[8, 16],
         kernel_sizes=[],
-        channels_sub=[16, 24, 32, 40, 64, 64, 96, 160],#[16, 32, 32, 64, 64+32+32],#[32, 32, 64, 64],
-        kernel_sizes_sub=[5, 3, 3, 3, 3, 5, 3, 3],
+        channels_sub=[16, 24, 32, 40, 64, 64, 64],#[16, 32, 32, 64, 64+32+32],#[32, 32, 64, 64],
+        kernel_sizes_sub=[5, 3, 3, 3, 3, 5, 3],
         use_bn=True,
         pad=pad, channels_in=channels)#,downsample=True)
     if False:
@@ -76,6 +76,13 @@ if True:
     #backbone = UNet(1, 64, True, 0.5)
     backbone.cuda()
     model = backbone
+
+    #TODO: REMOVE THIS SPEED TEST
+    #model = torch.load("trained_models/full_76_j2_c1920.pt")#76_lcn
+    #model.eval()
+    #model=model.backbone
+    #model.cuda()
+
 path = "/home/simon/datasets/structure_core_unity_test"
 inds = os.listdir(path)
 inds = [re.search(r'\d+', s).group() for s in inds]
@@ -107,12 +114,12 @@ for half_precision in [False, True]:#, True]:
     model.eval()
 
     with torch.no_grad():
-        #half_precision = True
         if half_precision:
             model.half()
             model.half_precision = True
             test = test.half()
         else:
+            model.half_precision = False
             test = test.float()
         print(test.device)
         print(torch.cuda.get_device_name(test.device))
@@ -127,8 +134,9 @@ for half_precision in [False, True]:#, True]:
         ttime_elapsed = int(round(time.time() * 1000)) - tsince
         print(f"test time elapsed {ttime_elapsed / runs} ms")
 
+        #output = model(test)
         #output = output[0,0,:,:].cpu().detach().numpy()
         #cv2.imshow("input", irl.cpu().numpy())
-        #cv2.imshow("output", output)
+        #cv2.imshow("output", output/1)
         #cv2.waitKey()
     model.train()

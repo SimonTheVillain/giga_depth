@@ -5,6 +5,7 @@ from model.backbone import *
 from model.backboneSliced import *
 from model.regressor import *
 from model.uNet import UNet
+import time
 
 
 class CompositeModel(nn.Module):
@@ -15,7 +16,7 @@ class CompositeModel(nn.Module):
         self.regressor = regressor
         self.apply_lcn = apply_lcn
 
-    def forward(self, x, x_gt=None, output_entropies=False):
+    def forward(self, x, x_gt=None, output_entropies=False, measure_time=False):
         if hasattr(self.backbone, 'LCN'):
             # TODO: REMOVE THIS BRANCH AS SOON AS WE KNOW THAT THE OLD EXPERIMENTS CAN BE DELETED!
             if self.backbone.LCN:
@@ -43,16 +44,29 @@ class CompositeModel(nn.Module):
 
             return results
         else:
+            #measure_time = True
 
+            if measure_time:
+                self.half_precision = False
+                tsince = int(round(time.time() * 1000))
             if self.half_precision:
                 with autocast():
                     x = self.backbone(x)
                 x = x.type(torch.float32)
             else:
                 x = self.backbone(x)
+            if measure_time:
+                torch.cuda.synchronize()
+                ttime_elapsed = int(round(time.time() * 1000)) - tsince
+                print(f"backbone time elapsed {ttime_elapsed} ms")
 
+                tsince = int(round(time.time() * 1000))
             results = self.regressor(x, x_gt,
                                      output_entropies=output_entropies)
+            if measure_time:
+                torch.cuda.synchronize()
+                ttime_elapsed = int(round(time.time() * 1000)) - tsince
+                print(f"regressor time elapsed {ttime_elapsed} ms")
 
             return results
 
