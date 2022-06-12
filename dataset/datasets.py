@@ -4,6 +4,23 @@ from dataset.combined_dataset import DatasetCombined
 from pathlib import Path
 
 def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False, left_only=False):
+    if version == "depth_in_space":
+
+        datasets = {"train": DatasetRenderedShapenet(path, "train", debug=debug, vertical_jitter= vertical_jitter),
+                    "val": DatasetRenderedShapenet(path, "val", debug=debug, vertical_jitter= vertical_jitter),
+                    "test": DatasetRenderedShapenet(path, "test", debug=debug, vertical_jitter= vertical_jitter)}
+
+        # for the captured: 512, 432
+        # for rendered_default: 512, 432
+        # for rendered_kinect: 512, 432
+        # for rendered_real: 512, 432
+        src_res = (432, 512) # 512 vertically, 432 horizontally
+        principal = (432.0/2.0, 512.0/2.0)
+        focal = (570, 570) # same focal length in both directions
+        baselines = {'left': -0.075}
+        has_lr = False
+        return datasets, baselines, has_lr, focal, principal, src_res
+
     if version == "shapenet_half_res":
 
         datasets = {"train": DatasetRenderedShapenet(path, "train", debug=debug),

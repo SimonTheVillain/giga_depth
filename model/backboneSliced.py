@@ -247,6 +247,58 @@ class BackboneSlice(nn.Module):
             return x, {}
         return x
 
+class BackboneULight(nn.Module):
+    def __init__(self, in_channels):
+        super(BackboneULight, self).__init__()
+        self.conv1 = self.downsample_conv(in_channels, 32, 7) # receptive field = 3 + 2*3 -> 9
+        #self.conv2 = self.downsample_conv(32, 64, 5) # += 2*2 + 4*2 -> 21
+        self.conv2 = torch.nn.Sequential(
+            torch.nn.Conv2d(32, 32, kernel_size=5, padding=2), # += 2*2 -> 13
+            nn.BatchNorm2d(32),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(32, 64, kernel_size=3, padding=1), # += 2*1 ->15
+            nn.BatchNorm2d(64),
+            torch.nn.ReLU(inplace=True))
+
+        self.upconv1 = self.upconv(64, 32)
+
+        self.outconv = torch.nn.Sequential(
+            torch.nn.Conv2d(32, 32, kernel_size=3, padding=1), #  += 2*3 -> 9
+            nn.BatchNorm2d(32),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(32, 64, kernel_size=3, padding=1), #  += 2*3 -> 9
+            nn.BatchNorm2d(64),
+            torch.nn.ReLU(inplace=True))
+
+    def get_required_padding(self, downsample=True):
+        return 15
+
+    def downsample_conv(self, in_planes, out_planes, kernel_size=3):
+        return torch.nn.Sequential(
+            torch.nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=2, padding=(kernel_size - 1) // 2),
+            nn.BatchNorm2d(out_planes),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(out_planes, out_planes, kernel_size=kernel_size, padding=(kernel_size - 1) // 2),
+            nn.BatchNorm2d(out_planes),
+            torch.nn.ReLU(inplace=True)
+        )
+
+    def upconv(self, in_planes, out_planes):
+        return torch.nn.Sequential(
+            torch.nn.ConvTranspose2d(in_planes, out_planes, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(out_planes),
+            torch.nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x, with_debug=False):
+        x1 = self.conv1(x)
+        x2 = self.conv2(x1)
+        x3 = self.upconv1(x2)
+        xout = self.outconv(x3)
+        if with_debug:
+            return xout, {}
+        return xout
+
 
 class BackboneSlicer(nn.Module):
 

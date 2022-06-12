@@ -13,6 +13,7 @@ from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
 
 def process_results(algorithm):
+    # TODO: get this from configs/paths-local.yaml
     path_src = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
     path_src = "/home/simon/datasets/structure_core_unity_test"
@@ -167,9 +168,9 @@ def create_data():
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]  #
-    algorithms = ["GigaDepth76", "GigaDepth76LCN"]
+    algorithms = ["GigaDepth77LCN"]
 
-    threading = True
+    threading = False
 
     if threading:
         with Pool(5) as p:
@@ -181,6 +182,7 @@ def create_data():
 
 
 def create_plot():
+    # TODO: get this from configs/paths-local.yaml
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
     path_results = "/home/simon/datasets/structure_core_unity_test_results"
     path_src = "/media/simon/T7/datasets/structure_core_unity_test"
@@ -194,8 +196,10 @@ def create_plot():
                   "HyperDepth"]
     algorithms = ["GigaDepth66", "GigaDepth66LCN",
                   "GigaDepth71",
+                  "GigaDepth73",
                   "GigaDepth74", "GigaDepth75",
                   "GigaDepth76", "GigaDepth76LCN",
+                  "GigaDepth77LCN",
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]
@@ -206,10 +210,12 @@ def create_plot():
                     "GigaDepth68LCN": "GigaDepthNew (LCN)",
                     "GigaDepth70": "GigaDepth70",
                     "GigaDepth71": "GigaDepth71",
+                    "GigaDepth73": "UNET lines",
                     "GigaDepth74": "GigaDepth74",
                     "GigaDepth75": "GigaDepth75",
                     "GigaDepth76": "GigaDepth76",
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
+                    "GigaDepth77LCN": "GigaDepth77 (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots_stereo": "ConnectingTheDots",

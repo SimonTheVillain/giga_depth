@@ -10,10 +10,18 @@ import pickle
 import matplotlib
 matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
+from pathlib import Path
+import yaml
 from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 
-base_path = "/media/simon/T7/datasets"
+#TODO: get this from configs/paths-local.yaml
+with open("configs/paths-local.yaml", "r") as ymlfile:
+    config = yaml.safe_load(ymlfile)
+
+for key in config.keys():
+    config[key] = str(Path(config[key]))
+#base_path = "/media/simon/T7/datasets"
 
 src_res = (1401, 1001)
 src_cxy = (700, 500)
@@ -27,10 +35,11 @@ baseline = 0.0634
 
 def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
     print(dst)
-    gt_path = f"{base_path}/structure_core_photoneo_test"
-    eval_path = f"{base_path}/structure_core_photoneo_test_results/{src}"#GigaDepth66LCN"
-    eval_path_pre = f"{base_path}/structure_core_photoneo_test_results/{src_pre}"#GigaDepth66LCN"
-    output_path = f"{base_path}/structure_core_photoneo_test_results/{dst}"
+    gt_path = config["dataset_structure_photoneo_test_path"]
+    results_path = config["dataset_structure_photoneo_test_results_path"]
+    eval_path = f"{results_path}/{src}"#GigaDepth66LCN"
+    eval_path_pre = f"{results_path}/{src_pre}"#GigaDepth66LCN"
+    output_path = f"{results_path}/{dst}"
 
     if not os.path.exists(output_path):
         os.mkdir(output_path)
@@ -138,8 +147,9 @@ def generate_pcl(disp):
 
 
 def process_results(algorithm):
-    path_src = f"{base_path}/structure_core_photoneo_test_results/GT/{algorithm}"
-    path_results = f"{base_path}/structure_core_photoneo_test_results"
+    results_path = config["dataset_structure_photoneo_test_results_path"]
+    path_src = f"{results_path}/GT/{algorithm}"
+    path_results = results_path
 
     paths = []
     for i in range(11):
@@ -358,8 +368,8 @@ def to_pcd(depth):
     return pcd
 
 def process_data_of_algorithm(algorithm):
-
-    path_src_base = f"{base_path}/structure_core_plane_results/{algorithm}"
+    results_path = config["dataset_structure_photoneo_test_results_path"]
+    path_src_base = f"{results_path}/{algorithm}"
     paths = []
 
     for i in range(4):
@@ -416,20 +426,20 @@ def process_data_of_algorithm(algorithm):
         # cv2.imshow("gt", disp_gt * 0.02)
         # cv2.imshow("estimate", estimate * 0.02)
         # cv2.waitKey()
-    f = open(base_path + f"/structure_core_plane_results/{algorithm}.pkl", "wb")
+    f = open(f"{results_path}/{algorithm}.pkl", "wb")
     pickle.dump(data, f)
     f.close()
 
 
 def process_data():
-    path_results = f"{base_path}/structure_core_plane_results"
+    path_results = config["dataset_structure_photoneo_test_results_path"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "GigaDepth70", "GigaDepth71",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "SGBM"]
-    algorithms = ["GigaDepth76", "GigaDepth76LCN"]
+    algorithms = ["GigaDepth77LCN"]
 
     for algorithm in algorithms:
         process_data_of_algorithm(algorithm)
@@ -437,7 +447,7 @@ def process_data():
 
 
 def create_plot():
-    path_results = f"{base_path}/structure_core_plane_results"
+    path_results = config["dataset_structure_photoneo_test_results_path"]
 
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "GigaDepth70", "GigaDepth71",
@@ -448,7 +458,8 @@ def create_plot():
     algorithms = ["GigaDepth66", "GigaDepth66LCN",
                   "GigaDepth71",
                   "GigaDepth70", "GigaDepth74", "GigaDepth75",
-                  "GigaDepth76","GigaDepth76LCN",
+                  "GigaDepth76", "GigaDepth76LCN",
+                  "GigaDepth77LCN",
                   "ActiveStereoNet",
                   "HyperDepth", "HyperDepthXDomain", "SGBM"]
 
@@ -463,6 +474,7 @@ def create_plot():
                     "GigaDepth75": "GigaDepth75",
                     "GigaDepth76": "GigaDepth76",
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
+                    "GigaDepth77LCN": "GigaDepth77 (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",

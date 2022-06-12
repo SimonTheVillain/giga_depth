@@ -1,1 +1,28 @@
-datasets_base: \media\simon\
+# create a path file just like this names paths-local.yaml. It will be the default for all the trainings
+dataset_unity_training_path: "/path/to/unity/rendered/sequences"
+dataset_structure_training_path: "/path/to/structure/core/dataset"
+dataset_structure_ambient_training_path: "/path/to/structure/core/dataset/with/ambient/captures"
+
+dataset_unity_test_path: "/path/to/unity/rendered/test/dataset"
+dataset_unity_test_results_path: "/path/to/unity/rendered/test/dataset_results"
+
+dataset_structure_photoneo_test_path: "/path/to/structure/core/dataset/with/photoneo/groundtruth"
+dataset_structure_photoneo_test_results_path: "/path/to/structure/core/test/results"
+
+dataset_structure_plane_test_path: "/path/to/structure/core/dataset/capturing/planes"
+dataset_structure_plane_test_results_path: "/path/to/structure/core/test/results"
+
+
+#e.g.
+#dataset_unity_training_path: "/media/simon/T7/datasets/structure_core_unity_sequences"
+#dataset_structure_training_path: "/media/simon/T7/datasets/structure_core/sequences_combined"
+#dataset_structure_ambinet_training_path: "/media/simon/T7/datasets/structure_core/sequences_combined_ambient"
+
+#dataset_unity_test_path: "/media/simon/T7/datasets/structure_core_unity_test"
+#dataset_unity_test_results_path: "/media/simon/T7/datasets/structure_core_unity_test_results"
+
+#dataset_structure_photoneo_test_path: "/media/simon/T7/datasets/structure_core_photoneo_test"
+#dataset_structure_photoneo_test_results_path: "/media/simon/T7/datasets/structure_core_photoneo_test_result"
+
+#dataset_structure_plane_test_path: "/media/simon/T7/datasets/structure_core_plane"
+#dataset_structure_plane_test_results_path: "/media/simon/T7/datasets/structure_core_plane_results"

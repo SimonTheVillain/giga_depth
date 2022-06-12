@@ -250,6 +250,7 @@ def create_plot():
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "GigaDepth70", "GigaDepth71", "GigaDepth74", "GigaDepth75",
                   "GigaDepth76", "GigaDepth76LCN",
+                  "GigaDepth77LCN",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
@@ -265,6 +266,7 @@ def create_plot():
                     "GigaDepth75": "GigaDepth75",
                     "GigaDepth76": "GigaDepth76",
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
+                    "GigaDepth77LCN": "GigaDepth77 (LCN)",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",
@@ -338,7 +340,7 @@ def create_data():
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth76", "GigaDepth76LCN"] #TODO: find bug in the hyperdepth implementation!!!!
+    algorithms = ["GigaDepth77LCN"] #TODO: find bug in the hyperdepth implementation!!!!
     #algorithms = ["HyperDepthXDomain"]
     threading = False
 
@@ -365,12 +367,11 @@ def prepare_gts():
                   ("HyperDepth", "HyperDepth"),
                   ("HyperDepthXDomain", "HyperDepthXDomain"),
                   ("SGBM", "SGBM")]
-    algorithms = [("GigaDepth76", "GigaDepth76"),
-                  ("GigaDepth76LCN", "GigaDepth76LCN"),]
+    algorithms = [("GigaDepth77LCN", "GigaDepth77LCN"),]
     for alg in algorithms:
         prepare_gt(src_pre="GigaDepth66LCN", src=alg[1], dst=f"GT/{alg[0]}")
 
 
-#prepare_gts()
-#create_data()
+prepare_gts()
+create_data()
 create_plot()

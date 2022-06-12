@@ -14,166 +14,171 @@ import cv2
 import numpy as np
 import re
 from pathlib import Path
-
-path_src = "/media/simon/ssd_datasets/datasets/structure_core_unity_test"
-path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results/GigaDpeth"
-
-regressor_model_pth = "trained_models/full_66_lcn_j4_light_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_light_backbone_chk.pt"
-
-#regressor_model_pth = "trained_models/full_66_j4_regressor_chk.pt"
-#backbone_model_pth = "trained_models/full_66_j4_backbone_chk.pt"
+import yaml
+import argparse
 
 
-regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
+def apply_to_dataset(combined_model_pth="", output_folder_name="",
+                     backbone_model_pth="", regressor_model_pth="",
+                     mode="rendered"):
+    with open("configs/paths-local.yaml", "r") as ymlfile:
+        config = yaml.safe_load(ymlfile)
 
-regressor_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_68_lcn_j2_c1920_v2_backbone_chk.pt"
+    for key in config.keys():
+        config[key] = Path(config[key])
 
-
-datasets_root_path = "/media/simon/T7/datasets"
-combined_model_pth = "trained_models/full_76_lcn_j2_c1920.pt"
-output_folder_name = "GigaDepth76LCN"
-mode = "rendered"#"rendered" rendered_shapenet or captured
-experiment = "plane" # plane or photoneo
-
-#regressor_model_pth = "trained_models/full_68_j4_c1920_regressor_chk.pt"
-#backbone_model_pth = "trained_models/full_68_j4_c1920_backbone_chk.pt"
-
-device = "cuda:0"
-if combined_model_pth == "":
-    backbone = torch.load(backbone_model_pth, map_location=device)
-    backbone.eval()
-    regressor = torch.load(regressor_model_pth, map_location=device)
-    regressor.eval()
-    model = CompositeModel(backbone, regressor)
-else:
-    model = torch.load(combined_model_pth, map_location=device)
-    model.eval()
-
-half_res = False
-
-if mode == "rendered":
-    src_res = (1401, 1001)
-    src_cxy = (700, 500)
-    tgt_res = (1216, 896)
-    tgt_cxy = (604, 457)
-    # the focal length is shared between src and target frame
-    focal = 1.1154399414062500e+03
-
-    rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
-
-    path = f"{datasets_root_path}/structure_core_unity_test"
-    path_out = f"/media/simon/T7/datasets/structure_core_unity_test_results/{output_folder_name}"
-    inds = os.listdir(path)
-    inds  = [re.search(r'\d+', s).group() for s in inds]
-    inds = set(inds)
-    inds = list(inds)
-    inds.sort()
-    paths = []
-    for ind in inds:
-        paths.append((path + f"/{ind}_left.jpg", path_out + f"/{int(ind):05d}"))
-
-if mode == "rendered_shapenet":
-
-    tgt_res = (640, 480)
-    rr = (0, 0, tgt_res[0], tgt_res[1])
-    regressor_model_pth = "trained_models/full_66_shapenet_regressor_chk.pt"
-    backbone_model_pth = "trained_models/full_66_shapenet_backbone_chk.pt"
     device = "cuda:0"
-    backbone = torch.load(backbone_model_pth, map_location=device)
-    backbone.eval()
-    regressor = torch.load(regressor_model_pth, map_location=device)
-    regressor.eval()
-    model = CompositeModel(backbone, regressor)
+    if combined_model_pth == "":
+        backbone = torch.load(backbone_model_pth, map_location=device)
+        backbone.eval()
+        regressor = torch.load(regressor_model_pth, map_location=device)
+        regressor.eval()
+        model = CompositeModel(backbone, regressor)
+    else:
+        model = torch.load(combined_model_pth, map_location=device)
+        model.eval()
 
-    path = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test/syn"
-    path_out = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test_results/GigaDepth66LCN"
+    half_res = False
 
-    folders = os.listdir(path)
-    scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
+    if mode == "rendered":
+        src_res = (1401, 1001)
+        src_cxy = (700, 500)
+        tgt_res = (1216, 896)
+        tgt_cxy = (604, 457)
+        # the focal length is shared between src and target frame
+        focal = 1.1154399414062500e+03
 
-    scenes.sort()
-    paths = []
-    for scene in scenes:
-        tgt_path = Path(path_out) / scene
-        if not os.path.exists(tgt_path):
-            os.mkdir(tgt_path)
-        for i in range(4):
-            src_pth = Path(path) / scene / f"im0_{i}.png"
-            tgt_pth = Path(tgt_path) / f"{i}"
-            paths.append((src_pth, tgt_pth))
+        rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
 
-if mode == "captured":
-    tgt_res = (1216, 896)
-    tgt_cxy = (604, 457)
-    # the focal length is shared between src and target frame
-    focal = 1.1154399414062500e+03
+        path = config["dataset_unity_test_path"]
+        path_out_root = config["dataset_unity_test_results_path"]
+        path_out = f"{path_out_root}/{output_folder_name}"
 
-    rr = (tgt_res[0], 0, tgt_res[0], tgt_res[1])
+        if not os.path.exists(path_out):
+            os.mkdir(path_out)
 
-    if experiment == "plane":
-        path = f"{datasets_root_path}/structure_core_plane"
-        path_out = f"{datasets_root_path}/structure_core_plane_results/{output_folder_name}"
-    else: # experiment is photoneo
-        path = f"{datasets_root_path}/structure_core_photoneo_test"
-        path_out = f"{datasets_root_path}/structure_core_photoneo_test_results/{output_folder_name}"
+        inds = os.listdir(path)
+        inds  = [re.search(r'\d+', s).group() for s in inds]
+        inds = set(inds)
+        inds = list(inds)
+        inds.sort()
+        paths = []
+        for ind in inds:
+            paths.append((str(path) + f"/{ind}_left.jpg", path_out + f"/{int(ind):05d}"))
 
-    folders = os.listdir(path)
-    scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
+    if mode == "rendered_shapenet":
 
-    scenes.sort()
-    paths = []
-    for scene in scenes:
-        tgt_path = Path(path_out) / scene
-        if not os.path.exists(tgt_path):
-            os.mkdir(tgt_path)
-        for i in range(4):
-            src_pth = Path(path) / scene / f"ir{i}.png"
-            tgt_pth = Path(tgt_path) / f"{i}"
-            paths.append((src_pth, tgt_pth))
+        tgt_res = (640, 480)
+        rr = (0, 0, tgt_res[0], tgt_res[1])
+        regressor_model_pth = "trained_models/full_66_shapenet_regressor_chk.pt"
+        backbone_model_pth = "trained_models/full_66_shapenet_backbone_chk.pt"
+        device = "cuda:0"
+        backbone = torch.load(backbone_model_pth, map_location=device)
+        backbone.eval()
+        regressor = torch.load(regressor_model_pth, map_location=device)
+        regressor.eval()
+        model = CompositeModel(backbone, regressor)
 
-with torch.no_grad():
-    for p, p_tgt in paths:
-        irl = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
-        if len(irl.shape) == 3:
-            # the rendered images are 3 channel bgr
-            irl = cv2.cvtColor(irl, cv2.COLOR_BGR2GRAY)
-        else:
-            # the rendered images are 16
-            irl = irl / 255.0
-        irl = irl[rr[1]:rr[1] + rr[3], rr[0]:rr[0] + rr[2]]
-        irl = irl.astype(np.float32) * (1.0 / 255.0)
+        path = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test/syn"
+        path_out = "/media/simon/ssd_datasets/datasets/shapenet_rendered_compressed_test_results/GigaDepth66LCN"
 
-        if half_res:
-            irl = cv2.resize(irl, (int(irl.shape[1] / 2), int(irl.shape[0] / 2)))
-            irl = irl[:448, :608]
-        cv2.imshow("irleft", irl)
-        irl = torch.tensor(irl).cuda().unsqueeze(0).unsqueeze(0)
+        folders = os.listdir(path)
+        scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
 
-        #run local contrast normalization (LCN)
-        # TODO: is this the way the x-positions are encoded?
+        scenes.sort()
+        paths = []
+        for scene in scenes:
+            tgt_path = Path(path_out) / scene
+            if not os.path.exists(tgt_path):
+                os.mkdir(tgt_path)
+            for i in range(4):
+                src_pth = Path(path) / scene / f"im0_{i}.png"
+                tgt_pth = Path(tgt_path) / f"{i}"
+                paths.append((src_pth, tgt_pth))
 
-        x = model(irl)
-        x = x[0, 0, :, :]
-        x = x * x.shape[1]
-        x_0 = torch.arange(0, x.shape[1]).unsqueeze(0).to(device)
-        x -= x_0
-        x *= -1.0
+    if mode == "captured_photoneo" or mode == "captured_plane":
+        tgt_res = (1216, 896)
+        tgt_cxy = (604, 457)
+        # the focal length is shared between src and target frame
+        focal = 1.1154399414062500e+03
 
-        result = x.cpu()[:, :].numpy()
-        #msk = np.clip(msk.cpu()[0, 0, :, :].numpy()*255, 0, 255).astype(np.uint8)
+        rr = (tgt_res[0], 0, tgt_res[0], tgt_res[1])
 
-        #result = coresup_pred.cpu()[0, 0, :, :].numpy()
+        if mode == "captured_plane":
+            path = config["dataset_structure_plane_test_path"]
+            path_out_root = config["dataset_structure_plane_test_results_path"]
+            path_out = f"{path_out_root}/{output_folder_name}"
+        else: # experiment is photoneo
+            path = config["dataset_structure_photoneo_test_path"]
+            path_out_root = config["dataset_structure_photoneo_test_results_path"]
+            path_out = f"{path_out_root}/{output_folder_name}"
 
-        p = str(p_tgt) + ".exr" # = path_out + f"/{int(ind):05d}.exr"
-        cv2.imshow("result", result * (1.0 / 50.0))
-        cv2.imwrite(p, result)
+        if not os.path.exists(path_out):
+            os.mkdir(path_out)
+
+        folders = os.listdir(path)
+        scenes = [x for x in folders if os.path.isdir(Path(path) / x)]
+
+        scenes.sort()
+        paths = []
+        for scene in scenes:
+            tgt_path = Path(path_out) / scene
+            if not os.path.exists(tgt_path):
+                os.mkdir(tgt_path)
+            for i in range(4):
+                src_pth = Path(path) / scene / f"ir{i}.png"
+                tgt_pth = Path(tgt_path) / f"{i}"
+                paths.append((src_pth, tgt_pth))
+
+    with torch.no_grad():
+        for p, p_tgt in paths:
+            irl = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
+            if len(irl.shape) == 3:
+                # the rendered images are 3 channel bgr
+                irl = cv2.cvtColor(irl, cv2.COLOR_BGR2GRAY)
+            else:
+                # the rendered images are 16
+                irl = irl / 255.0
+            irl = irl[rr[1]:rr[1] + rr[3], rr[0]:rr[0] + rr[2]]
+            irl = irl.astype(np.float32) * (1.0 / 255.0)
+
+            if half_res:
+                irl = cv2.resize(irl, (int(irl.shape[1] / 2), int(irl.shape[0] / 2)))
+                irl = irl[:448, :608]
+            cv2.imshow("irleft", irl)
+            irl = torch.tensor(irl).cuda().unsqueeze(0).unsqueeze(0)
+
+            #run local contrast normalization (LCN)
+            # TODO: is this the way the x-positions are encoded?
+
+            x = model(irl)
+            x = x[0, 0, :, :]
+            x = x * x.shape[1]
+            x_0 = torch.arange(0, x.shape[1]).unsqueeze(0).to(device)
+            x -= x_0
+            x *= -1.0
+
+            result = x.cpu()[:, :].numpy()
+            #msk = np.clip(msk.cpu()[0, 0, :, :].numpy()*255, 0, 255).astype(np.uint8)
+
+            #result = coresup_pred.cpu()[0, 0, :, :].numpy()
+
+            p = str(p_tgt) + ".exr" # = path_out + f"/{int(ind):05d}.exr"
+            cv2.imshow("result", result * (1.0 / 50.0))
+            cv2.imwrite(p, result)
 
 
-        p = str(p_tgt) + "_msk.png"# path_out + f"/{int(ind):05d}_msk.png"
-        #cv2.imshow("mask", msk)
-        #cv2.imwrite(p, result)
-        cv2.waitKey(1)
-        print(p)
+            p = str(p_tgt) + "_msk.png"# path_out + f"/{int(ind):05d}_msk.png"
+            #cv2.imshow("mask", msk)
+            #cv2.imwrite(p, result)
+            cv2.waitKey(1)
+            print(p)
+
+
+combined_model_pth = "trained_models/full_77_lcn_j2_c1920.pt"
+output_folder_name = "GigaDepth77LCN"
+mode = "rendered"#"rendered" rendered_shapenet, captured_photoneo, captured_planes
+for mode in ["captured_plane", "captured_photoneo"]: # "rendered",
+    apply_to_dataset(combined_model_pth=combined_model_pth,
+                     mode=mode,
+                     output_folder_name=output_folder_name)

@@ -168,6 +168,10 @@ def GetModel(args, config):
             assert args.downsample_output, "For the U shaped network it is required to downsample the network"
             constructor = lambda pad, channels, downsample: BackboneU5Slice(pad=pad, in_channels=channels)
             backboneType = BackboneU5Slice
+        if name == "BackboneULight":
+            constructor = lambda pad, channels, downsample: BackboneULight(in_channels=channels)
+            backboneType = BackboneULight
+
 
         if config["backbone"]["name"].endswith("Sliced"):
             backbone = BackboneSlicer(backboneType, constructor,

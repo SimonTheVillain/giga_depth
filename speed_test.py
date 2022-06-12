@@ -28,18 +28,6 @@ focal = 1.1154399414062500e+03
 
 rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
 
-regressor_model_pth = "trained_models/full_66_lcn_j4_regressor_chk.pt"
-backbone_model_pth = "trained_models/full_66_lcn_j4_backbone_chk.pt"
-
-#regressor_model_pth = "trained_models/full_65_nolcn_jitter4_regressor_chk.pt"
-#backbone_model_pth = "trained_models/full_65_nolcn_jitter4_backbone_chk.pt"
-
-device = "cuda:0"
-backbone = torch.load(backbone_model_pth, map_location=device)
-backbone.eval()
-regressor = torch.load(regressor_model_pth, map_location=device)
-regressor.eval()
-model = CompositeModel(backbone, regressor)
 
 if False:
     constructor = lambda pad, channels, downsample: BackboneU5Slice(pad=pad, in_channels=channels)
@@ -60,6 +48,16 @@ if True:
         kernel_sizes_sub=[5, 3, 3, 3, 3, 5, 3],
         use_bn=True,
         pad=pad, channels_in=channels)#,downsample=True)
+
+    constructor = lambda pad, channels, downsample: BackboneSlice(
+        channels=     [],#[8, 16],
+        kernel_sizes= [], # receptive field: 8*2 pixel!
+        channels_sub=[32, 32, 64, 64],#[16, 32, 32, 64, 64+32+32],#[32, 32, 64, 64],
+        kernel_sizes_sub=[7,7,5,3], # 3*2 + 3*2 + 2*2 + 1*2 = 18 ----> now upsample and evaluate! 2 more layers
+        use_bn=True,
+        pad=pad, channels_in=channels)#,downsample=True)
+
+    constructor = lambda pad, channels, downsample: BackboneULight(in_channels=channels)
     if False:
         constructor = lambda pad, channels, downsample: BackboneSlice(
             channels=[],#[8, 16],
@@ -121,6 +119,7 @@ for half_precision in [False, True]:#, True]:
         else:
             model.half_precision = False
             test = test.float()
+        test = test[:,:,0:512, 0:432] # todo remove
         print(test.device)
         print(torch.cuda.get_device_name(test.device))
         if warm_up:
