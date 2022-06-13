@@ -18,3 +18,4 @@ prof*
 *.nvvp
 *.ncu-rep
 configs/paths-local.yaml
+tmp

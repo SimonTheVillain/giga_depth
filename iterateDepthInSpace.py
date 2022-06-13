@@ -4,7 +4,7 @@ import cv2
 
 for i in range(150):
     print(i)
-    f = h5py.File(f'/media/simon/T7/datasets/DepthInSpace/rendered_real/{i:08d}/frames.hdf5', 'r')
+    f = h5py.File(f'/media/simon/T7/datasets/DepthInSpace/rendered_kinect/{i:08d}/frames.hdf5', 'r')
     l = list(f.keys())
     R = np.array(f.get("R")) # ["R"]
     ambient = np.array(f["ambient"])

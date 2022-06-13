@@ -35,6 +35,10 @@ def train():
     slice = True
 
     model = GetModel(args, config)
+    if False:
+        model = torch.load(f"trained_models/dis_def_lcn_j2_c960_v2_chk.pt")
+        model.eval()
+        model.cuda()
 
     if len(args.gpu_list) > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -161,7 +165,7 @@ def train():
                 # scale the normalized x_pos so it extends a bit to the left and right of the projector
                 #x_gt = x_gt * (1.0 - 2.0 * args.pad_proj) + args.pad_proj
                 if False:
-                    cv2.imshow("x", x_gt[0,0,:,:].detach().cpu().numpy())
+                    cv2.imshow("x_gt", x_gt[0,0,:,:].detach().cpu().numpy())
                     cv2.imshow("mask_gt", mask_gt[0,0,:,:].detach().cpu().numpy())
                     cv2.imshow("ir", ir[0,0,:,:].detach().cpu().numpy())
                     cv2.imshow("edge_mask", edge_mask[0,0,:,:].detach().cpu().numpy())
@@ -185,6 +189,13 @@ def train():
                     x_real = x_real.detach()
                     #delta = torch.abs(x - x_gt) * (1.0 / (1.0 - 2.0 * args.pad_proj))
                     delta = torch.abs(x - x_gt)
+
+                    if False:
+                        cv2.imshow("x_gt", x_gt[0, 0, :, :].detach().cpu().numpy())
+                        cv2.imshow("x_out", x_real[0, 0, :, :].detach().cpu().numpy())
+                        cv2.imshow("mask_gt", mask_gt[0, 0, :, :].detach().cpu().numpy())
+                        cv2.imshow("ir", ir[0, 0, :, :].detach().cpu().numpy())
+                        cv2.waitKey()
 
                     # log weights and activations of different layers
                     if False:
@@ -281,6 +292,16 @@ def train():
 
                 # print progress every 99 steps!
                 if i_batch % 100 == 99:
+                    cv2.imwrite("tmp/input.png", ir[0, 0, :, :].detach().cpu().numpy()*255)
+                    cv2.imwrite("tmp/x_gt.png", x_gt[0, 0, :, :].detach().cpu().numpy()*255)
+                    cv2.imwrite("tmp/x_real.png", x_real[0, 0, :, :].detach().cpu().numpy()*255)
+                    if False: # TODO: remove this debug
+                        cv2.imshow("x_gt", x_gt[0,0,:,:].detach().cpu().numpy())
+                        cv2.imshow("tmp/x_real.png", x_real[0, 0, :, :].detach().cpu().numpy())
+                        cv2.imshow("mask_gt", mask_gt[0,0,:,:].detach().cpu().numpy())
+                        cv2.imshow("ir", ir[0,0,:,:].detach().cpu().numpy())
+                        cv2.imshow("edge_mask", edge_mask[0,0,:,:].detach().cpu().numpy())
+                        cv2.waitKey()
                     writer.add_scalar(f'{phase}_subepoch/disparity_error',
                                       loss_disparity_acc_sub / 100.0 * width, step)
 

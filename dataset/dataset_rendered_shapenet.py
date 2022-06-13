@@ -10,7 +10,7 @@ from common.common import *
 
 class DatasetRenderedShapenet(data.Dataset):
 
-    def __init__(self, root_dir, type="train", noise=0.3, vertical_jitter=2, full_res=False, use_npy=False, debug=False):
+    def __init__(self, root_dir, type="train", source="synthetic", noise=0.3, vertical_jitter=2, full_res=False, use_npy=False, debug=False):
         self.root_dir = root_dir
         self.use_npy = use_npy
         self.noise = noise
@@ -24,6 +24,15 @@ class DatasetRenderedShapenet(data.Dataset):
         self.use_hdf = False
         if os.path.exists(f"{root_dir}/00000000/frames.hdf5"):
             self.use_hdf = True
+            # TODO: use these for DepthInSpace
+            # rendered:
+            if source == "synthetic":
+                self.train_inds = np.arange(2 ** 10, 1024*9)
+                self.test_inds = np.arange(2 ** 9, 2 ** 10)
+                self.valid_paths = np.arange(0, 2 ** 9)
+                # real
+            else:
+                self.test_inds = np.arange(4, 147,8)
         elif os.path.exists(f"{root_dir}/syn/00000000/im0_0.npy"):
             self.use_npy = True
         elif os.path.exists(f"{self.root_dir}/syn/00000000/im0_0.png"):
@@ -51,10 +60,13 @@ class DatasetRenderedShapenet(data.Dataset):
         idx = idx + self.from_idx
         scene_idx = idx
         frame_idx = np.random.randint(0, 4)
-        v_offset = np.random.randint(-self.vertical_jitter, self.vertical_jitter)
+        if self.vertical_jitter == 0:
+            v_offset = 0
+        else:
+            v_offset = np.random.randint(-self.vertical_jitter, self.vertical_jitter)
 
         if self.use_hdf:
-            f = h5py.File(f'/media/simon/T7/datasets/DepthInSpace/rendered_real/{scene_idx:08d}/frames.hdf5', 'r')
+            f = h5py.File(f'{self.root_dir}/{scene_idx:08d}/frames.hdf5', 'r')
             im = np.array(f["im"])[frame_idx, 0, :, :]
             disp = np.array(f["disp"])[frame_idx, 0, :, :]
             if v_offset > 0:
