@@ -44,12 +44,12 @@ regressor:
   classes: [16, 12, 10]
   class_padding: [0, 2, 3]
   class_ch_in_offset: [0, 16, 32]
-  class_ch_in: [64, 64, 64]
+  class_ch_in: [64, 64, 32]
   class_ch: [[64, 32], [32], [32]] # [64, 32] for number 1
   reg_data_start: 64
-  reg_superclasses: 480 #480 would be great
+  reg_superclasses: 240 #480 would be great
   reg_ch_in: 32
-  reg_ch: [32] # 32
+  reg_ch: [16] # 32
   reg_overlap_neighbours: 1
   reg_shared_over_lines: 2 # two lines share the same weight for the regressor (maybe make this 4?)
   reg_pad: 0.1 # padding that is applied to the regression result/regression target
