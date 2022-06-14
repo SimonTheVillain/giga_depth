@@ -3,6 +3,7 @@ import torch
 from pathlib import Path
 import h5py
 import cv2
+import time
 
 #todo: get this from the config file
 data_path = str(Path("/media/simon/T7/datasets/DepthInSpace/"))
@@ -41,7 +42,11 @@ for name, model_name, subpath, inds in algorithms:
         #disp = np.array(f["disp"])
         #todo: run_network
         with torch.no_grad():
+
+            tsince = int(round(time.time() * 1000))
             result = model(im)
+            torch.cuda.synchronize()
+            ttime_elapsed = int(round(time.time() * 1000)) - tsince
             result *= result.shape[3]
             result -= torch.arange(0, result.shape[3]).reshape([1, 1, 1, -1]).cuda()
             result = -result
@@ -50,6 +55,7 @@ for name, model_name, subpath, inds in algorithms:
             delta = torch.abs(result - disp)
 
             if True:
+                print(f"test time elapsed {ttime_elapsed } ms")
                 cv2.imshow("im", im[0,0,:,:].detach().cpu().numpy())
                 cv2.imshow("disp", disp[0,0,:,:].detach().cpu().numpy()/10)
                 cv2.imshow("result", result[0,0,:,:].detach().cpu().numpy()/10)
