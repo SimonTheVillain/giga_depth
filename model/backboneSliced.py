@@ -255,26 +255,26 @@ class BackboneULight(nn.Module):
             torch.nn.Conv2d(in_channels, 16, kernel_size=5, padding=2),
             nn.BatchNorm2d(16),
             torch.nn.ReLU(inplace=True),
-            torch.nn.Conv2d(16, 16, kernel_size=3, padding=1),
-            nn.BatchNorm2d(16),
+            torch.nn.Conv2d(16, 32, kernel_size=5, padding=2),
+            nn.BatchNorm2d(32),
             torch.nn.ReLU(inplace=True))
-        self.conv1 = self.downsample_conv(16, 32, 5) # receptive field = 3 + 2*3 -> 9
+        self.conv1 = self.downsample_conv(32, 64, 5) # receptive field = 3 + 2*3 -> 9
         #self.conv2 = self.downsample_conv(32, 64, 5) # += 2*2 + 4*2 -> 21
         self.conv2 = torch.nn.Sequential(
-            torch.nn.Conv2d(32, 64, kernel_size=5, padding=2), # += 2*2 -> 13
-            nn.BatchNorm2d(64),
+            torch.nn.Conv2d(64, 128, kernel_size=5, padding=2), # += 2*2 -> 13
+            nn.BatchNorm2d(128),
             torch.nn.ReLU(inplace=True),
-            torch.nn.Conv2d(64, 64, kernel_size=3, padding=1), # += 2*1 ->15
-            nn.BatchNorm2d(64),
+            torch.nn.Conv2d(128, 128, kernel_size=3, padding=1), # += 2*1 ->15
+            nn.BatchNorm2d(128),
             torch.nn.ReLU(inplace=True))
 
-        self.upconv1 = self.upconv(64, 32)
+        self.upconv1 = self.upconv(128, 64)
 
         self.outconv = torch.nn.Sequential(
-            torch.nn.Conv2d(32+16, 64, kernel_size=3, padding=1), #  += 2*3 -> 9
-            nn.BatchNorm2d(64),
+            torch.nn.Conv2d(96, 96, kernel_size=3, padding=1), #  += 2*3 -> 9
+            nn.BatchNorm2d(96),
             torch.nn.ReLU(inplace=True),
-            torch.nn.Conv2d(64, 96, kernel_size=3, padding=1), #  += 2*3 -> 9
+            torch.nn.Conv2d(96, 96, kernel_size=3, padding=1), #  += 2*3 -> 9
             nn.BatchNorm2d(96),
             torch.nn.ReLU(inplace=True))
 
