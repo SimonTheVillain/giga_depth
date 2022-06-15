@@ -33,7 +33,7 @@ backbone:
   load_file: ""
   name: UNet
   input_channels: 1
-  output_channels: 128
+  output_channels: 160
   lines: 896
   slices: 1
   unet_channel_count_scale: 1.0
@@ -45,14 +45,13 @@ regressor:
   lines: 448
   classes: [16, 12, 10]
   class_padding: [0, 2, 3]
-  class_ch_in_offset: [0, 32, 64]
+  class_ch_in_offset: [0, 16, 80]
   class_ch_in: [64, 64, 64]
   class_ch: [[64, 32], [32], [32]]
-  reg_data_start: 0
-  reg_superclasses: 640 # TODO: SHOULD/COULD BE HIGHER! 240, 384, 480, 640 960
+  reg_data_start: 128
+  reg_superclasses: 384 # TODO: SHOULD/COULD BE HIGHER! 240, 384, 480, 640 960
   reg_ch_in: 32
   reg_ch: [32] # 32
   reg_overlap_neighbours: 1
   reg_shared_over_lines: 2 # two lines share the same weight for the regressor (maybe make this 4?)
   reg_pad: 0.1 # padding that is applied to the regression result/regression target
-
