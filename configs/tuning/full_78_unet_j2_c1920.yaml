@@ -7,7 +7,7 @@ training:
   momentum: 0.9
   weight_decay: 1e-5 # 1e-6
   alpha_reg: [500, 1000, 2000, 2000, 2000]
-  edge_weight: [0, 1, 2, 4, 20]
+  edge_weight: [0, 1, 2, 4, 10]
   gpu_list: [0]
   epochs: 10
   key_epochs: [ 2, 4, 6, 8 ]
