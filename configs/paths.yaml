@@ -1,5 +1,6 @@
 # create a path file just like this names paths-local.yaml. It will be the default for all the trainings
 dataset_unity_training_path: "/path/to/unity/rendered/sequences"
+dataset_unity_training_dis_path: "/media/simon/T7/datasets/structure_core_unity_sequences/as/required/for/depth/in/space"
 dataset_structure_training_path: "/path/to/structure/core/dataset"
 dataset_structure_ambient_training_path: "/path/to/structure/core/dataset/with/ambient/captures"
 

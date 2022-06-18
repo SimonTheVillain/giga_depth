@@ -9,8 +9,8 @@ training:
   alpha_reg: [500, 1000, 2000, 2000, 2000]
   edge_weight: [0, 1, 2, 4, 20]
   gpu_list: [0]
-  epochs: 5
-  key_epochs: [ 1, 2, 3, 4 ]
+  epochs: 10
+  key_epochs: [ 2, 4, 6, 8 ]
   half_precision: True
 
 dataset:
@@ -46,7 +46,7 @@ regressor:
   class_ch_in_offset: [0, 16, 32]
   class_ch_in: [64, 64, 64]
   class_ch: [[64, 32], [32], [32]] # [64, 32] for number 1
-  reg_data_start: 64
+  reg_data_start: 96
   reg_superclasses: 640
   reg_ch_in: 32
   reg_ch: [32] # 32

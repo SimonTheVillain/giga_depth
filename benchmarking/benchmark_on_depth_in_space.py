@@ -11,7 +11,7 @@ data_inds_captured = np.arange(4, 147, 8)
 data_inds_rendered = np.arange(2 ** 9, 2 ** 10)
 thresholds = [0.1, 0.5, 1, 2, 5]
 
-algorithms = [  ("syn_default", "dis_def_lcn_c960_chk.pt", "rendered_default", data_inds_rendered),
+algorithms = [  ("syn_default", "dis_def_lcn_c1920.pt", "rendered_default", data_inds_rendered),
                 ("syn_kinect", "dis_kin_lcn_c960_chk.pt", "rendered_kinect", data_inds_rendered),
                 ("syn_real", "dis_real_lcn_c960_chk.pt", "rendered_real", data_inds_rendered),
                 ("real", "dis_real_lcn_j2_c960_chk.pt", "captured", data_inds_captured)
@@ -54,7 +54,7 @@ for name, model_name, subpath, inds in algorithms:
             valid_count = torch.count_nonzero(msk).item()
             delta = torch.abs(result - disp)
 
-            if True:
+            if False:
                 print(f"test time elapsed {ttime_elapsed } ms")
                 cv2.imshow("im", im[0,0,:,:].detach().cpu().numpy())
                 cv2.imshow("disp", disp[0,0,:,:].detach().cpu().numpy()/10)
