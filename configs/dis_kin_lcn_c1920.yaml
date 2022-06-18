@@ -12,6 +12,7 @@ training:
   epochs: 10
   key_epochs: [ 2, 4, 6, 8 ]
   half_precision: True
+  store_every_epoch: True
 
 dataset:
   path: ""

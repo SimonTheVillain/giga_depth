@@ -387,7 +387,9 @@ def train():
 
                     print("storing network")
                     torch.save(module, f"trained_models/{args.experiment_name}_chk.pt")
-
+                    if "store_every_epoch" in config["training"].keys():
+                        if config["training"]["store_every_epoch"]:
+                            torch.save(module, f"trained_models/{args.experiment_name}_chk{epoch}.pt")
                     if disparity < min_test_disparity:
                         print("storing network")
                         min_test_disparity = disparity
