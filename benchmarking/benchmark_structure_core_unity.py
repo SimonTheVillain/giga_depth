@@ -306,6 +306,5 @@ def create_plot():
     ax.set_ylabel(ylabel="RMSE [m]", fontdict=font)
     plt.show()
 
-
 create_data()
 create_plot()

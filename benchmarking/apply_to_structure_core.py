@@ -1,10 +1,11 @@
 import matplotlib
+
 matplotlib.use('Agg')
 import torch
 import cv2
 import numpy as np
 
-#Work in the parent directory
+# Work in the parent directory
 import os
 import model
 from model.composite_model import CompositeModel
@@ -58,7 +59,7 @@ def apply_to_dataset(combined_model_pth="", output_folder_name="",
             os.mkdir(path_out)
 
         inds = os.listdir(path)
-        inds  = [re.search(r'\d+', s).group() for s in inds]
+        inds = [re.search(r'\d+', s).group() for s in inds]
         inds = set(inds)
         inds = list(inds)
         inds.sort()
@@ -108,7 +109,7 @@ def apply_to_dataset(combined_model_pth="", output_folder_name="",
             path = config["dataset_structure_plane_test_path"]
             path_out_root = config["dataset_structure_plane_test_results_path"]
             path_out = f"{path_out_root}/{output_folder_name}"
-        else: # experiment is photoneo
+        else:  # experiment is photoneo
             path = config["dataset_structure_photoneo_test_path"]
             path_out_root = config["dataset_structure_photoneo_test_results_path"]
             path_out = f"{path_out_root}/{output_folder_name}"
@@ -148,7 +149,7 @@ def apply_to_dataset(combined_model_pth="", output_folder_name="",
             cv2.imshow("irleft", irl)
             irl = torch.tensor(irl).cuda().unsqueeze(0).unsqueeze(0)
 
-            #run local contrast normalization (LCN)
+            # run local contrast normalization (LCN)
             # TODO: is this the way the x-positions are encoded?
 
             x = model(irl)
@@ -159,26 +160,28 @@ def apply_to_dataset(combined_model_pth="", output_folder_name="",
             x *= -1.0
 
             result = x.cpu()[:, :].numpy()
-            #msk = np.clip(msk.cpu()[0, 0, :, :].numpy()*255, 0, 255).astype(np.uint8)
+            # msk = np.clip(msk.cpu()[0, 0, :, :].numpy()*255, 0, 255).astype(np.uint8)
 
-            #result = coresup_pred.cpu()[0, 0, :, :].numpy()
+            # result = coresup_pred.cpu()[0, 0, :, :].numpy()
 
-            p = str(p_tgt) + ".exr" # = path_out + f"/{int(ind):05d}.exr"
+            p = str(p_tgt) + ".exr"  # = path_out + f"/{int(ind):05d}.exr"
             cv2.imshow("result", result * (1.0 / 50.0))
             cv2.imwrite(p, result)
 
-
-            p = str(p_tgt) + "_msk.png"# path_out + f"/{int(ind):05d}_msk.png"
-            #cv2.imshow("mask", msk)
-            #cv2.imwrite(p, result)
+            p = str(p_tgt) + "_msk.png"  # path_out + f"/{int(ind):05d}_msk.png"
+            # cv2.imshow("mask", msk)
+            # cv2.imwrite(p, result)
             cv2.waitKey(1)
-            print(p)
+            #print(p)
 
 
-combined_model_pth = "trained_models/full_77_lcn_j2_c1920.pt"
-output_folder_name = "GigaDepth77LCN"
-mode = "rendered"#"rendered" rendered_shapenet, captured_photoneo, captured_planes
-for mode in ["captured_plane", "captured_photoneo"]: # "rendered",
-    apply_to_dataset(combined_model_pth=combined_model_pth,
-                     mode=mode,
-                     output_folder_name=output_folder_name)
+experiments = [#("GigaDepth76c1920LCN", "full_76_lcn_j2_c1920.pt"),
+               #("GigaDepth76c1920", "full_76_j2_c1920.pt"),
+               ("GigaDepth76c2688LCN", "full_76_lcn_j2_c2688.pt")
+               ]
+for output_folder_name, model_name in experiments:
+    combined_model_pth = f"trained_models/{model_name}"
+    for mode in ["captured_plane", "captured_photoneo", "rendered"]:  # "rendered",
+        apply_to_dataset(combined_model_pth=combined_model_pth,
+                         mode=mode,
+                         output_folder_name=output_folder_name)

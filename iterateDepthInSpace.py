@@ -28,12 +28,13 @@ def generate_pcl(disp, focal, baseline, cxy, R, t):
     return pcd
 
 
-mode = "unity"  # unity or dis
+mode = "dis"  # unity or dis
 
 if mode == "unity":
-    base_path = "/media/simon/T7/datasets/structure_core_unity_sequences_DIS"
+    base_path = "/home/simon/datasets/structure_core_unity_sequences_DIS"
 elif mode == "dis":
-    base_path = "/media/simon/T7/datasets/DepthInSpace/rendered_default"  # TODO: this will be moved to the LaCie
+    base_path = "/media/simon/sandisk/datasets/DepthInSpace/rendered_default"  # TODO: this will be moved to the LaCie
+    base_path = "/media/simon/sandisk/datasets/DepthInSpace/captured"
 else:
     print("not a valid data source")
 
@@ -55,13 +56,14 @@ for ind in range(150):
     disp = np.array(f["disp"])
     grad = np.array(f["grad"])
     im = np.array(f["im"])
-    # sgm_disp = np.array(f["sgm_disp"]) # semiglobal matching disp?
+    sgm_disp = np.array(f["sgm_disp"]) # semiglobal matching disp?
     t = np.array(f["t"])
     print(im.shape)
     pcds = []
     for i in range(4):
         cv2.imshow(f"im_{i}", im[i, 0, :, :])
         cv2.imshow(f"disp_{i}", disp[i, 0, :, :] / 100)
+        cv2.imshow(f"sgm_disp_{i}", sgm_disp[i, 0, :, :] / 100)
 
         pcd = generate_pcl(disp[i, 0, :, :], focal, baseline, cxy, R[i, :], t[i, :])
         pcds.append(pcd)
