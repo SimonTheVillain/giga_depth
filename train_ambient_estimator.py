@@ -100,7 +100,7 @@ def train():
                     optimizer.zero_grad()
                     delta = torch.abs(ambient_est - ambient_gt).mean()
                     loss = delta.mean()
-                    loss += torch.abs(LCN_tensors(ambient_est) - LCN_tensors(ambient_gt)).mean()
+                    loss += torch.abs(LCN_tensors(ambient_est)[0] - LCN_tensors(ambient_gt)[0]).mean()
                     if half_precision:
                         scaler.scale(loss).backward()
                         scaler.step(optimizer)
@@ -116,7 +116,7 @@ def train():
 
                     delta = torch.abs(x_real - x_gt).mean()
                     loss = delta.mean()
-                    loss += torch.abs(LCN_tensors(ambient_est) - LCN_tensors(ambient_gt)).mean()
+                    loss += torch.abs(LCN_tensors(ambient_est)[0] - LCN_tensors(ambient_gt)[0]).mean()
 
                 loss_acc += loss.item()
                 loss_acc_sub += loss.item()
