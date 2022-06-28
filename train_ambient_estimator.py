@@ -7,6 +7,7 @@ from model.uNet import UNet
 from dataset.dataset_captured_ambient import DatasetCapturedAmbient
 import cv2
 from common.common import LCN_tensors
+import math
 
 def train():
     experiment_name = "amb_estimator1"
@@ -114,7 +115,7 @@ def train():
                     with torch.no_grad():
                         ambient_est= model(ir)
 
-                    delta = torch.abs(x_real - x_gt).mean()
+                    delta = torch.abs(ambient_est - ambient_gt).mean()
                     loss = delta.mean()
                     loss += torch.abs(LCN_tensors(ambient_est)[0] - LCN_tensors(ambient_gt)[0]).mean()
 
@@ -131,23 +132,20 @@ def train():
                     print(f"loss at iteration/batch {i_batch}: {loss_acc_sub / 100.0}")
                     loss_acc_sub = 0
 
-            writer.add_scalar(f'{phase}_subepoch/loss',
-                              loss / i_batch, step)
-            # store at the end of a validation phase of this epoch!
-            if not math.isnan(best_loss) and not math.isinf(loss_acc):
-                if isinstance(model, nn.DataParallel):
-                    module = model.module
-                else:
-                    module = model
+            loss_acc = loss_acc / dataset_sizes[phase]
+            print(f"loss of epoch {epoch} ({phase}): {loss_acc}")
 
-                print("storing network")
-                torch.save(module, f"trained_models/{experiment_name}_chk.pt")
-                if disparity < best_loss:
+            writer.add_scalar(f'{phase}/loss', loss_acc, step)
+            if phase == 'val':
+                # store at the end of a validation phase of this epoch!
+                if not math.isnan(best_loss) and not math.isinf(loss_acc):
                     print("storing network")
-                    best_loss = disparity
-                    torch.save(module, f"trained_models/{experiment_name}.pt")
+                    torch.save(model, f"trained_models/{experiment_name}_chk.pt")
+                    if loss_acc < best_loss:
+                        print("storing network (best)")
+                        best_loss = loss_acc
+                        torch.save(model, f"trained_models/{experiment_name}.pt")
 
-        scheduler.step()
     writer.close()
 
 
