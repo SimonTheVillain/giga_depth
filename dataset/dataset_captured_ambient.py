@@ -12,10 +12,14 @@ class DatasetCapturedAmbient(data.Dataset):
     def __init__(self, sequence_dir, phase='train'):
         self.sequence_dir = sequence_dir
         dirs = os.listdir(sequence_dir)
+        dirs.sort()
+        dirs_val = dirs[::25]
+        dirs_test = list(set(dirs).difference(set(dirs_val)))
+
         if phase == "val":
-            self.dirs = dirs[:10]
+            self.dirs = dirs_val
         elif phase == 'train':
-            self.dirs = dirs[10:]
+            self.dirs = dirs_test
 
     def __len__(self):
         return len(self.dirs) * 4 * 2

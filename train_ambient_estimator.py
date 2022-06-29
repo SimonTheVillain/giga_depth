@@ -1,6 +1,7 @@
 import torch
 import torch.optim as optim
 from torch.cuda.amp.grad_scaler import GradScaler
+from torch.cuda.amp import autocast
 import numpy
 from torch.utils.tensorboard import SummaryWriter
 from model.uNet import UNet
@@ -9,8 +10,9 @@ import cv2
 from common.common import LCN_tensors
 import math
 
+
 def train():
-    experiment_name = "amb_estimator1"
+    experiment_name = "amb_estimator2"
     optimizer = "adam"
     momentum = 0.9
     weight_decay = 1e-5
@@ -18,13 +20,16 @@ def train():
     half_precision = False
     shuffle = True
     num_workers = 8
-    batch_size = 1
-    epochs = 100
+    batch_size = 2
+    epochs = 10
     dataset_path = "/home/simon/datasets/structure_core/sequences_combined_ambient"
-
+    weight_LCN_loss = 1.0
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
     model = UNet(1, 1, channel_size_scale=0.25)
+    model.cuda()
+    model = torch.load("trained_models/amb_estimator2.pt")
+    model.eval()
     model.cuda()
 
     # for param_tensor in net.state_dict():
@@ -76,12 +81,12 @@ def train():
                 ambient_gt = ambient_gt.cuda()
 
                 if False:
-                    cv2.imshow("ir", ir[0,0,:,:].detach().cpu().numpy())
-                    cv2.imshow("ambient_gt", ambient_gt[0,0,:,:].detach().cpu().numpy())
+                    cv2.imshow("ir", ir[0, 0, :, :].detach().cpu().numpy())
+                    cv2.imshow("ambient_gt", ambient_gt[0, 0, :, :].detach().cpu().numpy())
                     cv2.waitKey()
 
-
                 if phase == 'train':
+                    optimizer.zero_grad()
                     torch.autograd.set_detect_anomaly(True)
                     if half_precision:
                         with autocast():
@@ -89,62 +94,75 @@ def train():
 
                     else:
                         ambient_est = model(ir)
+                        delta = torch.abs(ambient_est - ambient_gt).mean()
+                    loss = delta.mean()
+                    loss += (delta*delta).mean()
+                    # lcn1 = LCN_tensors(ambient_gt)[0]
+                    # cv2.imshow("lcn_gt", lcn1[0,0,:,:].detach().cpu().numpy()*0.1+0.5)
+                    # cv2.waitKey()
+                    loss += weight_LCN_loss * torch.abs(LCN_tensors(ambient_est)[0] - LCN_tensors(ambient_gt)[0]).mean()
 
                     if False:
-                        cv2.imshow("x_gt", x_gt[0, 0, :, :].detach().cpu().numpy())
-                        cv2.imshow("x_out", x_real[0, 0, :, :].detach().cpu().numpy())
-                        cv2.imshow("mask_gt", mask_gt[0, 0, :, :].detach().cpu().numpy())
                         cv2.imshow("ir", ir[0, 0, :, :].detach().cpu().numpy())
+                        cv2.imshow("ambient_gt", ambient_gt[0, 0, :, :].detach().cpu().numpy())
+                        cv2.imshow("ambient_est", ambient_est[0, 0, :, :].type(torch.float32).detach().cpu().numpy())
                         cv2.waitKey()
 
-
-                    optimizer.zero_grad()
-                    delta = torch.abs(ambient_est - ambient_gt).mean()
-                    loss = delta.mean()
-                    loss += torch.abs(LCN_tensors(ambient_est)[0] - LCN_tensors(ambient_gt)[0]).mean()
                     if half_precision:
                         scaler.scale(loss).backward()
+
                         scaler.step(optimizer)
                         scaler.update()
+
                     else:
                         loss.backward()
                         optimizer.step()
-                        model.zero_grad()
 
-                else: # val
+                else:  # val
                     with torch.no_grad():
-                        ambient_est= model(ir)
+                        if half_precision:
+                            with autocast():
+                                ambient_est = model(ir)
+                        else:
+                            ambient_est = model(ir)
 
                     delta = torch.abs(ambient_est - ambient_gt).mean()
                     loss = delta.mean()
-                    loss += torch.abs(LCN_tensors(ambient_est)[0] - LCN_tensors(ambient_gt)[0]).mean()
+                    loss += (delta*delta).mean()
+                    loss += weight_LCN_loss * torch.abs(
+                        LCN_tensors(ambient_est.type(torch.float32))[0] - LCN_tensors(ambient_gt)[0]).mean()
 
                 loss_acc += loss.item()
                 loss_acc_sub += loss.item()
 
-                # print progress every 99 steps!
+                # print progress every 100 steps!
+                if i_batch % 100 == 0:
+                    cv2.imwrite(f"tmp/{phase}_input.png",
+                                ir[0, 0, :, :].type(torch.float32).detach().cpu().numpy() * 255)
+                    cv2.imwrite(f"tmp/{phase}_ambient_gt.png",
+                                ambient_gt[0, 0, :, :].type(torch.float32).detach().cpu().numpy() * 255)
+                    cv2.imwrite(f"tmp/{phase}_ambient_est.png",
+                                ambient_est[0, 0, :, :].type(torch.float32).detach().cpu().numpy() * 255)
+
                 if i_batch % 100 == 99:
-                    cv2.imwrite(f"tmp/{phase}input.png", ir[0, 0, :, :].detach().cpu().numpy()*255)
-                    cv2.imwrite(f"tmp/{phase}ambient_gt.png", ambient_gt[0, 0, :, :].detach().cpu().numpy()*255)
-                    cv2.imwrite(f"tmp/{phase}ambient_est.png", ambient_est[0, 0, :, :].detach().cpu().numpy()*255)
                     writer.add_scalar(f'{phase}_subepoch/loss',
                                       loss_acc_sub / 100.0, step)
                     print(f"loss at iteration/batch {i_batch}: {loss_acc_sub / 100.0}")
                     loss_acc_sub = 0
 
-            loss_acc = loss_acc / dataset_sizes[phase]
-            print(f"loss of epoch {epoch} ({phase}): {loss_acc}")
+        loss_acc = loss_acc / dataset_sizes[phase]
+        print(f"loss of epoch {epoch} ({phase}): {loss_acc}")
 
-            writer.add_scalar(f'{phase}/loss', loss_acc, step)
-            if phase == 'val':
-                # store at the end of a validation phase of this epoch!
-                if not math.isnan(best_loss) and not math.isinf(loss_acc):
-                    print("storing network")
-                    torch.save(model, f"trained_models/{experiment_name}_chk.pt")
-                    if loss_acc < best_loss:
-                        print("storing network (best)")
-                        best_loss = loss_acc
-                        torch.save(model, f"trained_models/{experiment_name}.pt")
+        writer.add_scalar(f'{phase}/loss', loss_acc, step)
+        if phase == 'val':
+            # store at the end of a validation phase of this epoch!
+            if not math.isnan(best_loss) and not math.isinf(loss_acc):
+                print("storing network")
+                torch.save(model, f"trained_models/{experiment_name}_chk.pt")
+                if loss_acc < best_loss:
+                    print("storing network (best)")
+                    best_loss = loss_acc
+                    torch.save(model, f"trained_models/{experiment_name}.pt")
 
     writer.close()
 
