@@ -84,12 +84,12 @@ def train():
     weight_sobel = 1.0
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
-    model = UNet(1, 1, channel_size_scale=0.25)
+    model = UNet(1, 1, channel_size_scale=0.5)
     model.cuda()
     loss_sobel = GradLoss().cuda()
-    model = torch.load("trained_models/amb_estimator2.pt")
-    model.eval()
-    model.cuda()
+    #model = torch.load("trained_models/amb_estimator1.pt")
+    #model.eval()
+    #model.cuda()
 
     # for param_tensor in net.state_dict():
     #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
