@@ -1,5 +1,5 @@
 training:
-  name: full_76_j4_c1920
+  name: full_76_j4_c288
   load_model: ""
   batch_size: 4
   learning_rate: 4.0
@@ -28,6 +28,7 @@ dataset:
     start: 0
     height: 448
 
+
 backbone:
   load_file: ""
   name: Backbone
@@ -37,7 +38,7 @@ backbone:
   channels: []
   kernel_sizes: []
   channels_sub: [16, 24, 32, 40, 64, 64, 96, 160] # [16, 32, 32, 64, 64]
-  kernel_sizes_sub: [5, 3, 3, 3, 3, 5, 3, 3] # 21 pixel radius?
+  kernel_sizes_sub: [5, 3, 3, 3, 3, 5, 3, 3]
   norm: batch
   local_contrast_norm: False
 
@@ -45,13 +46,13 @@ regressor:
   load_file: ""
   name: Regressor
   lines: 448
-  classes: [16, 12, 10]
-  class_padding: [0, 2, 3]
+  classes: [8, 6, 6]
+  class_padding: [0, 1, 1]
   class_ch_in_offset: [0, 16, 80]
   class_ch_in: [64, 64, 64]
   class_ch: [[64, 32], [32], [32]]
   reg_data_start: 128
-  reg_superclasses: 480
+  reg_superclasses: 288
   reg_ch_in: 32
   reg_ch: [32] # 32
   reg_overlap_neighbours: 1
