@@ -1,5 +1,5 @@
 training:
-  name: full_76_lcn_j2_c1536
+  name: full_76_lcn_j4_c1536
   load_model: ""
   batch_size: 4
   learning_rate: 4.0
@@ -18,7 +18,7 @@ dataset:
   is_npy: False
   workers: 8
   tgt_res: [ 1216, 896 ]
-  vertical_jitter: 2
+  vertical_jitter: 4
   downsample_output: True
   dataset_type: structure_core_unity_sequences
   slice_in:

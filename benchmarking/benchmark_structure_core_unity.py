@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.axes as axes
 from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+from benchmarking.plot_settings import get_line_style
 
 
 def process_results(algorithm):
@@ -168,7 +169,8 @@ def create_data():
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]  #
-    algorithms = ["GigaDepth77LCN"]
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF"]
 
     threading = False
 
@@ -182,6 +184,7 @@ def create_data():
 
 
 def create_plot():
+    report_outliers = True
     # TODO: get this from configs/paths-local.yaml
     path_results = "/media/simon/ssd_datasets/datasets/structure_core_unity_test_results"
     path_results = "/home/simon/datasets/structure_core_unity_test_results"
@@ -194,14 +197,10 @@ def create_plot():
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]
-    algorithms = ["GigaDepth66", "GigaDepth66LCN",
-                  "GigaDepth71",
-                  "GigaDepth73",
-                  "GigaDepth74", "GigaDepth75",
-                  "GigaDepth76", "GigaDepth76LCN",
-                  "GigaDepth77LCN",
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF",
                   "ActiveStereoNet", "ActiveStereoNetFull",
-                  "connecting_the_dots_full", "connecting_the_dots_stereo",
+                  "connecting_the_dots_stereo",
                   "HyperDepth"]
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
@@ -216,6 +215,9 @@ def create_plot():
                     "GigaDepth76": "GigaDepth76",
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
                     "GigaDepth77LCN": "GigaDepth77 (LCN)",
+                    "GigaDepth76c1280LCN": "GigaDepth",
+                    "GigaDepth78Uc1920": "GigaDepth (UNet)",
+                    "DepthInSpaceFTSF": "DepthInSpace-FTSF",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots_stereo": "ConnectingTheDots",
@@ -233,15 +235,21 @@ def create_plot():
             data = pickle.load(f)
         x = data["inliers"]["ths"]
         y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        if report_outliers:
+            y = 1 - y
         #x = x[x < 5]
         #y = y[:len(x)]
-        ax.plot(x, y)
+        color, style = get_line_style(algorithm)
+        ax.plot(x, y, color=color, linestyle=style)
 
     ax.set(xlim=[0.0, 2])
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
-    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+    if report_outliers:
+        ax.set_ylabel(ylabel="outlier ratio", fontdict=font)
+    else:
+        ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
     #ax.axes([0, 5, 0, 1])
 
     ax.legend(legends)
@@ -252,12 +260,19 @@ def create_plot():
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
-        ax.plot(data[f"inliers_{th}"]["distances"][2:],
-                 np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:]))
+        y = np.array(data[f"inliers_{th}"]["data"][2:]) / np.array(data[f"inliers_{th}"]["pix_count"][2:])
+        if report_outliers:
+            y = 1 - y
+        x = data[f"inliers_{th}"]["distances"][2:]
+        color, style = get_line_style(algorithm)
+        ax.plot(x, y, color=color, linestyle=style)
     ax.legend(legends)
     #ax.axes([0, 10, 0, 1])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
-    ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
+    if report_outliers:
+        ax.set_ylabel(ylabel=f"outlier ratio ({th} pixel threshold)", fontdict=font)
+    else:
+        ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
 
 
     #plot the RMSE over distance
@@ -268,7 +283,9 @@ def create_plot():
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         rmse = np.sqrt(np.array(data[f"inliers_{th}"]["depth_rmse"][:]) / np.array(data[f"inliers_{th}"]["data"][:]))
-        plt.plot(data[f"inliers_{th}"]["distances"][:], rmse)
+        x = data[f"inliers_{th}"]["distances"][:]
+        color, style = get_line_style(algorithm)
+        ax.plot(x, rmse, color=color, linestyle=style)
     plt.legend(legends, loc='upper left')
     ax.set(xlim=[0.0, 6])
     ax.set(ylim=[0.0, 0.12])
@@ -282,13 +299,20 @@ def create_plot():
         for algorithm in algorithms:
             with open(path_results + f"/{algorithm}.pkl", "rb") as f:
                 data = pickle.load(f)
-            inliers = np.array(data[f"edge_{th}"]["inlier_count"][:]) / np.array(data[f"edge_{th}"]["pix_count"][:])
-            plt.plot(data[f"edge_{th}"]["radii"][:], inliers)
+            y = np.array(data[f"edge_{th}"]["inlier_count"][:]) / np.array(data[f"edge_{th}"]["pix_count"][:])
+            if report_outliers:
+               y = 1 - y
+            x = data[f"edge_{th}"]["radii"][:]
+            color, style = get_line_style(algorithm)
+            ax.plot(x, y, color=color, linestyle=style)
         plt.legend(legends, loc='lower right')
         #ax.set(xlim=[0.0, 6])
         #ax.set(ylim=[0.0, 0.12])
         ax.set_xlabel(xlabel="edge radius", fontdict=font)
-        ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
+        if report_outliers:
+            ax.set_ylabel(ylabel=f"outlier ratio ({th} pixel threshold)", fontdict=font)
+        else:
+            ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
 
 
     #plot RMSE over pixel proximity to edges
@@ -298,7 +322,9 @@ def create_plot():
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         rmse = np.sqrt(np.array(data[f"edge_{th}"]["depth_rmse"][:]) / np.array(data[f"edge_{th}"]["inlier_count"][:]))
-        plt.plot( data[f"edge_{th}"]["radii"][:], rmse)
+        x = data[f"edge_{th}"]["radii"][:]
+        color, style = get_line_style(algorithm)
+        ax.plot(x, rmse, color=color, linestyle=style)
     plt.legend(legends, loc='lower right')
     #ax.set(xlim=[0.0, 6])
     ax.set(ylim=[0.0, 0.3])
@@ -306,5 +332,5 @@ def create_plot():
     ax.set_ylabel(ylabel="RMSE [m]", fontdict=font)
     plt.show()
 
-create_data()
+#create_data()
 create_plot()

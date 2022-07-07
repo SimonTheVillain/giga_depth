@@ -52,7 +52,7 @@ regressor:
   class_ch_in: [64, 64, 64]
   class_ch: [[64, 32], [32], [32]]
   reg_data_start: 128
-  reg_superclasses: 384 # TODO: SHOULD/COULD BE HIGHER! 240, 384, 480, 640 960
+  reg_superclasses: 384 # TODO: SHOULD/COULD BE HIGHER! 480 like the LCN version
   reg_ch_in: 32
   reg_ch: [32] # 32
   reg_overlap_neighbours: 1

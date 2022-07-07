@@ -37,8 +37,8 @@ backbone:
   slices: 1
   channels: []
   kernel_sizes: []
-  channels_sub: [16, 24, 32, 40, 64, 64, 96, 160] # [16, 32, 32, 64, 64]
-  kernel_sizes_sub: [5, 3, 3, 3, 3, 5, 3, 3]
+    channels_sub: [16, 24, 32, 40, 64, 64, 96, 160] # [16, 32, 32, 64, 64]
+  kernel_sizes_sub: [5, 3, 3, 3, 3, 5, 3, 3] # 21 pixel radius?
   norm: batch
   local_contrast_norm: True
 
@@ -52,7 +52,7 @@ regressor:
   class_ch_in: [64, 64, 64]
   class_ch: [[64, 32], [32], [32]]
   reg_data_start: 128
-  reg_superclasses: 480 # TODO: SHOULD/COULD BE HIGHER! 240, 384, 480, 640 960
+  reg_superclasses: 480
   reg_ch_in: 32
   reg_ch: [32] # 32
   reg_overlap_neighbours: 1

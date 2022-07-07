@@ -19,9 +19,10 @@ def get_mpl_colormap(cmap_name):
 
     return color_range.reshape(256, 1, 3)
 
-pth_out = "/home/simon/Pictures/images_paper"
+pth_out = "/home/simon/Pictures/images_paper2"
 
 base = "/home/simon/datasets"
+base = "/media/simon/T7/datasets"
 
 
 def to_depth(disp):
@@ -91,7 +92,7 @@ def comparison_structure_ours():
         break
 
 def comparison_rendered():
-    pth_out = "/home/simon/Pictures/images_paper/supplemental/results_unity"
+    pth_out = "/home/simon/Pictures/images_paper2/supplemental/results_unity"
     c_res = (1401, 1001)
     src_cxy = (700, 500)
     tgt_res = (1216, 896)
@@ -108,6 +109,9 @@ def comparison_rendered():
                   "connecting_the_dots_stereo",
                   "connecting_the_dots_full",
                   "GigaDepth66LCN", "GigaDepth"]
+
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF"]
 
     diff_limit = 5
     ind = 0
@@ -169,7 +173,7 @@ def comparison_rendered():
 
 
 def comparison_captured():
-    pth_out = "/home/simon/Pictures/images_paper/supplemental/results_structure"
+    pth_out = "/home/simon/Pictures/images_paper2/supplemental/results_structure"
     c_res = (1401, 1001)
     src_cxy = (700, 500)
     tgt_res = (1216, 896)
@@ -183,6 +187,9 @@ def comparison_captured():
                   "ActiveStereoNet",
                   "connecting_the_dots",
                   "GigaDepth66LCN", "GigaDepth"]
+
+    algorithms = [#"GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF"]
 
     diff_limit = 5
     for frame_ind in range(11):
@@ -220,6 +227,7 @@ def comparison_captured():
                 path = f"{base}/structure_core_photoneo_test_results/{algorithm}/{frame_ind:03}/0.exr"
 
             disp = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+            disp *= 0.0634 / 0.075
             cv2.imshow("disp_raw", disp / 100)
             if disp.shape[1] == 608:
                 disp *= 2.0
@@ -262,6 +270,9 @@ def comparison_shapenet():
     algorithms = ["GigaDepth",
                   "HyperDepth",
                   "connecting_the_dots"]
+
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF"]
 
     diff_limit = 5
     frame_ind = 22

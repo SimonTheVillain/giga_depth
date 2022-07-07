@@ -12,8 +12,10 @@ matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+from benchmarking.plot_settings import get_line_style
 
 base_path = "/home/simon/datasets"
+base_path = "/media/simon/T7/datasets"
 
 def generate_disp(pcd):
     focal = 1.1154399414062500e+03
@@ -180,18 +182,19 @@ def create_plot():
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         x = data["inliers"]["ths"]
-        y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        y = 1 - data["inliers"]["data"] / data["inliers"]["pix_count"]
         #x = x[x < 5]
         #y = y[:len(x)]
+        get_line_style(algorithm)
         ax.plot(x, y)
 
     ax.set(xlim=[0.0, 1])
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
-    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+    ax.set_ylabel(ylabel="outlier ratio", fontdict=font)
 
-    ax.legend(legends, loc='lower right')
+    ax.legend(legends, loc='upper right')
     # todo: maybe reinstert the plots by threshold
     #th = 5
     #plt.figure(2)

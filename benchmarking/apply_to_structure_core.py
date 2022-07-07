@@ -177,7 +177,8 @@ def apply_to_dataset(combined_model_pth="", output_folder_name="",
 
 experiments = [#("GigaDepth76c1920LCN", "full_76_lcn_j2_c1920.pt"),
                #("GigaDepth76c1920", "full_76_j2_c1920.pt"),
-               ("GigaDepth76c2688LCN", "full_76_lcn_j2_c2688.pt")
+               ("GigaDepth76c1280LCN", "full_76_lcn_j2_c1280.pt"),
+               ("GigaDepth78Uc1920", "full_78_unet_j2_c1920.pt")
                ]
 for output_folder_name, model_name in experiments:
     combined_model_pth = f"trained_models/{model_name}"

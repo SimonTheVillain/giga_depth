@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+from benchmarking.plot_settings import get_line_style
 
 #TODO: get this from configs/paths-local.yaml
 with open("configs/paths-local.yaml", "r") as ymlfile:
@@ -35,8 +36,8 @@ baseline = 0.0634
 
 def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
     print(dst)
-    gt_path = config["dataset_structure_photoneo_test_path"]
-    results_path = config["dataset_structure_photoneo_test_results_path"]
+    gt_path = config["dataset_structure_plane_test_path"]
+    results_path = config["dataset_structure_plane_test_results_path"]
     eval_path = f"{results_path}/{src}"#GigaDepth66LCN"
     eval_path_pre = f"{results_path}/{src_pre}"#GigaDepth66LCN"
     output_path = f"{results_path}/{dst}"
@@ -147,7 +148,7 @@ def generate_pcl(disp):
 
 
 def process_results(algorithm):
-    results_path = config["dataset_structure_photoneo_test_results_path"]
+    results_path = config["dataset_structure_plane_test_results_path"]
     path_src = f"{results_path}/GT/{algorithm}"
     path_results = results_path
 
@@ -368,7 +369,7 @@ def to_pcd(depth):
     return pcd
 
 def process_data_of_algorithm(algorithm):
-    results_path = config["dataset_structure_photoneo_test_results_path"]
+    results_path = config["dataset_structure_plane_test_results_path"]
     path_src_base = f"{results_path}/{algorithm}"
     paths = []
 
@@ -432,16 +433,18 @@ def process_data_of_algorithm(algorithm):
 
 
 def process_data():
-    path_results = config["dataset_structure_photoneo_test_results_path"]
+    #path_results = config["dataset_structure_plane_test_results_path"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
                   "GigaDepth70", "GigaDepth71",
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "SGBM"]
-    algorithms = ["GigaDepth77LCN"]
+    algorithms = [
+                  "DepthInSpaceFTSF"]
 
     for algorithm in algorithms:
+        print(f"processing algorithm {algorithm}")
         process_data_of_algorithm(algorithm)
     return
 
@@ -463,6 +466,13 @@ def create_plot():
                   "ActiveStereoNet",
                   "HyperDepth", "HyperDepthXDomain", "SGBM"]
 
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF",
+                  "ActiveStereoNet",
+                  "connecting_the_dots",
+                  "HyperDepth", "HyperDepthXDomain",
+                  "SGBM"]
+
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
                     "GigaDepth66LCN": "GigaDepth (LCN)",
@@ -475,6 +485,9 @@ def create_plot():
                     "GigaDepth76": "GigaDepth76",
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
                     "GigaDepth77LCN": "GigaDepth77 (LCN)",
+                    "GigaDepth76c1280LCN": "GigaDepth",
+                    "GigaDepth78Uc1920": "GigaDepth (UNet)",
+                    "DepthInSpaceFTSF": "DepthInSpace-FTSF",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",
@@ -482,7 +495,7 @@ def create_plot():
                     "connecting_the_dots_full": "ConnectingTheDots (full)",
                     "HyperDepth": "HyperDepth",
                     "HyperDepthXDomain": "HyperDepthXDomain",
-                    "SGBM": "SGBM"}
+                    "SGBM": "SGM"}
 
     legends = [legend_names[x] for x in algorithms]
     font = {'family': 'normal',
@@ -496,16 +509,17 @@ def create_plot():
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         rmse = np.sqrt(np.array(data[f"inliers_{th}"]["depth_rmse"][:]) / np.array(data[f"inliers_{th}"]["pix_count"][:]))
-        plt.plot(data[f"inliers_{th}"]["distances"][:], rmse)
+        color, style = get_line_style(algorithm)
+        plt.plot(data[f"inliers_{th}"]["distances"][:], rmse, color=color, linestyle=style)
 
         #plt.plot(data[f"inliers_{th}"]["distances"], data[f"inliers_{th}"]["pix_count"])
     plt.legend(legends, loc='upper left')
-    ax.set(xlim=[0.0, 4.0])
+    ax.set(xlim=[0.0, 3.0])
     ax.set(ylim=[0.0, 0.04])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
     ax.set_ylabel(ylabel=f"RMSE [m]", fontdict=font)
     plt.show()
 
 
-process_data()
+#process_data()
 create_plot()

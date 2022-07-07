@@ -10,8 +10,8 @@ training:
   alpha_reg: [500, 1000, 2000, 2000, 2000]
   edge_weight: [0, 1, 2, 4, 20]
   gpu_list: [0]
-  epochs: 10
-  key_epochs: [ 2, 4, 6, 8 ]
+  epochs: 30
+  key_epochs: [ 22, 24, 26, 28 ]
   half_precision: True
 
 dataset:

@@ -12,10 +12,12 @@ matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
+from benchmarking.plot_settings import get_line_style
 
 base_path = "/media/simon/ssd_datasets/datasets"
 base_path = "/home/simon/datasets"
 base_path = "/media/simon/T7/datasets"
+report_outlier=True
 
 def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
     print(dst)
@@ -245,6 +247,7 @@ def process_results(algorithm):
     f.close()
 
 def create_plot():
+    report_outlier = True
     path_results = f"{base_path}/structure_core_photoneo_test_results"
 
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "GigaDepth68", "GigaDepth68LCN",
@@ -252,6 +255,12 @@ def create_plot():
                   "GigaDepth76", "GigaDepth76LCN",
                   "GigaDepth77LCN",
                   "ActiveStereoNet", "connecting_the_dots",
+                  "HyperDepth", "HyperDepthXDomain",
+                  "SGBM"]
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF",
+                  "ActiveStereoNet",
+                  "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
 
@@ -267,6 +276,9 @@ def create_plot():
                     "GigaDepth76": "GigaDepth76",
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
                     "GigaDepth77LCN": "GigaDepth77 (LCN)",
+                    "GigaDepth76c1280LCN": "GigaDepth",
+                    "GigaDepth78Uc1920": "GigaDepth (UNet)",
+                    "DepthInSpaceFTSF": "DepthInSpace-FTSF",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
                     "connecting_the_dots": "ConnectingTheDots",
@@ -274,7 +286,7 @@ def create_plot():
                     "connecting_the_dots_full": "ConnectingTheDots (full)",
                     "HyperDepth": "HyperDepth",
                     "HyperDepthXDomain": "HyperDepthXDomain",
-                    "SGBM": "SGBM"}
+                    "SGBM": "SGM"}
     legends = [legend_names[x] for x in algorithms]
     font = {'family': 'normal',
             #'weight': 'bold',
@@ -291,18 +303,25 @@ def create_plot():
             data = pickle.load(f)
         x = data["inliers"]["ths"]
         y = data["inliers"]["data"] / data["inliers"]["pix_count"]
+        if report_outlier:
+            y = 1 - y
         #x = x[x < 5]
         #y = y[:len(x)]
-        ax.plot(x, y)
+        color, style = get_line_style(algorithm)
+        ax.plot(x, y, color=color, linestyle=style)
 
     ax.set(xlim=[0.0, 5.0])
     ax.xaxis.set_major_locator(MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(MultipleLocator(0.1))
     ax.set_xlabel(xlabel="pixel threshold", fontdict=font)
-    ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+    if report_outlier:
+        ax.set_ylabel(ylabel="outlier ratio", fontdict=font)
+        ax.legend(legends, loc='upper right')
+    else:
+        ax.set_ylabel(ylabel="inlier ratio", fontdict=font)
+        ax.legend(legends, loc='lower right')
 
-    ax.legend(legends, loc='lower right')
-    # todo: maybe reinstert the plots by threshold
+    #ax.legend(legends, loc='lower right')
 
     #plot the inlier ratios over distance
     th = 5 # this is 1 in the structure core!!!!!
@@ -310,12 +329,19 @@ def create_plot():
     for algorithm in algorithms:
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
-        plt.plot( data[f"inliers_{th}"]["distances"][:],
-                 np.array(data[f"inliers_{th}"]["data"][:]) / np.array(data[f"inliers_{th}"]["pix_count"][:]))
+        x = data[f"inliers_{th}"]["distances"][:]
+        y = np.array(data[f"inliers_{th}"]["data"][:]) / np.array(data[f"inliers_{th}"]["pix_count"][:])
+        if report_outlier:
+            y = 1 - y
+        color, style = get_line_style(algorithm)
+        ax.plot(x, y, color=color, linestyle=style)
     plt.legend(legends, loc='upper right')
     ax.set(xlim=[0.0, 3.5])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
-    ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
+    if report_outlier:
+        ax.set_ylabel(ylabel=f"outlier ratio ({th} pixel threshold)", fontdict=font)
+    else:
+        ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
 
     #plot the RMSE over distance
     th = 5 # this is 1 in the structure core!!!!!
@@ -324,7 +350,9 @@ def create_plot():
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         rmse = np.sqrt(np.array(data[f"inliers_{th}"]["depth_rmse"][:]) / np.array(data[f"inliers_{th}"]["data"][:]))
-        plt.plot( data[f"inliers_{th}"]["distances"][:], rmse)
+        x = data[f"inliers_{th}"]["distances"][:]
+        color, style = get_line_style(algorithm)
+        ax.plot(x, rmse, color=color, linestyle=style)
     plt.legend(legends, loc='upper left')
     ax.set(xlim=[0.0, 3.5])
     ax.set(ylim=[0.0, 0.03])
@@ -340,8 +368,8 @@ def create_data():
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth77LCN"] #TODO: find bug in the hyperdepth implementation!!!!
-    #algorithms = ["HyperDepthXDomain"]
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF"]
     threading = False
 
     if threading:
@@ -366,12 +394,15 @@ def prepare_gts():
                   ("connecting_the_dots", "connecting_the_dots"),
                   ("HyperDepth", "HyperDepth"),
                   ("HyperDepthXDomain", "HyperDepthXDomain"),
-                  ("SGBM", "SGBM")]
-    algorithms = [("GigaDepth77LCN", "GigaDepth77LCN"),]
+                  ("SGBM", "SGM")]
+    algorithms = [("GigaDepth77LCN", "GigaDepth77LCN")]
+    algorithms = [("GigaDepth76c1280LCN", "GigaDepth76c1280LCN"),
+                  ("GigaDepth78Uc1920", "GigaDepth78Uc1920"),
+                  ("DepthInSpaceFTSF", "DepthInSpaceFTSF")]
     for alg in algorithms:
         prepare_gt(src_pre="GigaDepth66LCN", src=alg[1], dst=f"GT/{alg[0]}")
 
 
-prepare_gts()
-create_data()
+#prepare_gts()
+#create_data()
 create_plot()
