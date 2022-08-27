@@ -33,8 +33,10 @@ mode = "dis"  # unity or dis
 if mode == "unity":
     base_path = "/home/simon/datasets/structure_core_unity_sequences_DIS"
 elif mode == "dis":
-    base_path = "/media/simon/WD/datasets/DepthInSpace/rendered_default"  # TODO: this will be moved to the LaCie
-    base_path = "/media/simon/WD/datasets/DepthInSpace/captured"
+
+    type = "syn_real"
+    base_path = "/media/simon/sandisk/datasets/DepthInSpace/rendered_real"  # TODO: this will be moved to the LaCie
+    #base_path = "/media/simon/sandisk/datasets/DepthInSpace/captured"
 else:
     print("not a valid data source")
 
@@ -56,18 +58,20 @@ for ind in range(150):
     disp = np.array(f["disp"])
     grad = np.array(f["grad"])
     im = np.array(f["im"])
-    sgm_disp = np.array(f["sgm_disp"]) # semiglobal matching disp?
+    #sgm_disp = np.array(f["sgm_disp"]) # semiglobal matching disp?
     t = np.array(f["t"])
     print(im.shape)
     pcds = []
-    for i in range(4):
+    for i in range(1):
         cv2.imshow(f"im_{i}", im[i, 0, :, :])
-        cv2.imshow(f"grad_{i}", grad[i, 0, :, :])
-        cv2.imshow(f"disp_{i}", disp[i, 0, :, :] / 100)
-        cv2.imshow(f"sgm_disp_{i}", sgm_disp[i, 0, :, :] / 100)
+        cv2.imwrite(f"/home/simon/Pictures/images_paper2/supplemental/DIS_dataset/{type}.jpg", im[i, 0, :, :] *256)
+        cv2.imwrite(f"/home/simon/Pictures/images_paper2/supplemental/DIS_dataset/{type}_amb.jpg", ambient[i, 0, :, :] *256)
+        #cv2.imshow(f"grad_{i}", grad[i, 0, :, :])
+        #cv2.imshow(f"disp_{i}", disp[i, 0, :, :] / 100)
+        #cv2.imshow(f"sgm_disp_{i}", sgm_disp[i, 0, :, :] / 100)
 
-        pcd = generate_pcl(disp[i, 0, :, :], focal, baseline, cxy, R[i, :], t[i, :])
-        pcds.append(pcd)
+        #pcd = generate_pcl(disp[i, 0, :, :], focal, baseline, cxy, R[i, :], t[i, :])
+        #pcds.append(pcd)
 
-    o3d.visualization.draw_geometries(pcds)
+    #o3d.visualization.draw_geometries(pcds)
     cv2.waitKey()

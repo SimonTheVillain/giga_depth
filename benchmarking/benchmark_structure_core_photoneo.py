@@ -257,7 +257,7 @@ def create_plot():
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+    algorithms = ["GigaDepth76j4c1280LCN",  "GigaDepth72UNetLCN", "GigaDepth73LineLCN",# "GigaDepth78Uc1920",
                   "DepthInSpaceFTSF",
                   "ActiveStereoNet",
                   "connecting_the_dots",
@@ -277,7 +277,10 @@ def create_plot():
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
                     "GigaDepth77LCN": "GigaDepth77 (LCN)",
                     "GigaDepth76c1280LCN": "GigaDepth",
+                    "GigaDepth76j4c1280LCN": "GigaDepth",
                     "GigaDepth78Uc1920": "GigaDepth (UNet)",
+                    "GigaDepth72UNetLCN": "GigaDepth (UNet)",
+                    "GigaDepth73LineLCN": "GigaDepth (Line)",
                     "DepthInSpaceFTSF": "DepthInSpace-FTSF",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",
@@ -346,11 +349,19 @@ def create_plot():
     #plot the RMSE over distance
     th = 5 # this is 1 in the structure core!!!!!
     fig, ax = plt.subplots()
+    algorithms.remove("HyperDepth")
+    algorithms.remove("HyperDepthXDomain")
+    algorithms.remove("connecting_the_dots")
+    legends = [legend_names[x] for x in algorithms]
     for algorithm in algorithms:
+        print(algorithm)
         with open(path_results + f"/{algorithm}.pkl", "rb") as f:
             data = pickle.load(f)
         rmse = np.sqrt(np.array(data[f"inliers_{th}"]["depth_rmse"][:]) / np.array(data[f"inliers_{th}"]["data"][:]))
         x = data[f"inliers_{th}"]["distances"][:]
+        if algorithm == "DepthInSpaceFTSF":
+            rmse = rmse[x < 2.6]
+            x = x[x < 2.6]
         color, style = get_line_style(algorithm)
         ax.plot(x, rmse, color=color, linestyle=style)
     plt.legend(legends, loc='upper left')
@@ -368,8 +379,8 @@ def create_data():
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
-                  "DepthInSpaceFTSF"]
+
+    algorithms = [ "GigaDepth72UNetLCN", "GigaDepth73LineLCN"]
     threading = False
 
     if threading:
@@ -399,10 +410,12 @@ def prepare_gts():
     algorithms = [("GigaDepth76c1280LCN", "GigaDepth76c1280LCN"),
                   ("GigaDepth78Uc1920", "GigaDepth78Uc1920"),
                   ("DepthInSpaceFTSF", "DepthInSpaceFTSF")]
+    algorithms = [ #("GigaDepth72UNetLCN", "GigaDepth72UNetLCN"),
+                   ("GigaDepth73LineLCN", "GigaDepth73LineLCN")]
     for alg in algorithms:
         prepare_gt(src_pre="GigaDepth66LCN", src=alg[1], dst=f"GT/{alg[0]}")
 
 
-#prepare_gts()
-#create_data()
+prepare_gts()
+create_data()
 create_plot()

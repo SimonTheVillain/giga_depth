@@ -96,7 +96,7 @@ def GetModel(args, config):
                                     class_ch_in_offset=config["regressor"]["class_ch_in_offset"],
                                     class_ch_in=config["regressor"]["class_ch_in"],
                                     class_ch=config["regressor"]["class_ch"],
-                                    reg_data_start=config["regressor"]["reg_data_start"],
+                                    reg_ch_in_offset=config["regressor"]["reg_data_start"],
                                     reg_ch_in=config["regressor"]["reg_ch_in"],
                                     reg_ch=config["regressor"]["reg_ch"],
                                     reg_superclasses=config["regressor"]["reg_superclasses"],

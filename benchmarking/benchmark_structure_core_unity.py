@@ -172,6 +172,9 @@ def create_data():
     algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
                   "DepthInSpaceFTSF"]
 
+    algorithms = [ "GigaDepth72UNetLCN",
+                   "GigaDepth73LineLCN",]
+
     threading = False
 
     if threading:
@@ -197,7 +200,7 @@ def create_plot():
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_full", "connecting_the_dots_stereo",
                   "HyperDepth"]
-    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+    algorithms = ["GigaDepth76c1280LCN", "GigaDepth72UNetLCN", "GigaDepth73LineLCN",# "GigaDepth78Uc1920",
                   "DepthInSpaceFTSF",
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_stereo",
@@ -215,6 +218,8 @@ def create_plot():
                     "GigaDepth76": "GigaDepth76",
                     "GigaDepth76LCN": "GigaDepth76 (LCN)",
                     "GigaDepth77LCN": "GigaDepth77 (LCN)",
+                    "GigaDepth72UNetLCN": "GigaDepth (UNet)",
+                    "GigaDepth73LineLCN": "GigaDepth (Line)",
                     "GigaDepth76c1280LCN": "GigaDepth",
                     "GigaDepth78Uc1920": "GigaDepth (UNet)",
                     "DepthInSpaceFTSF": "DepthInSpace-FTSF",
@@ -314,8 +319,31 @@ def create_plot():
         else:
             ax.set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
 
+    # plot inlier ratios over pixel proximity to edges (same as above but with subplots!
+    fig, axs = plt.subplots(3, 1, sharex="all")
+    fig.subplots_adjust(hspace=0.1)
+    for ind, th in enumerate([0.5, 1, 2]):
+        for algorithm in algorithms:
+            with open(path_results + f"/{algorithm}.pkl", "rb") as f:
+                data = pickle.load(f)
+            y = np.array(data[f"edge_{th}"]["inlier_count"][:]) / np.array(data[f"edge_{th}"]["pix_count"][:])
+            if report_outliers:
+                y = 1 - y
+            x = data[f"edge_{th}"]["radii"][:]
+            color, style = get_line_style(algorithm)
+            axs[ind].plot(x, y, color=color, linestyle=style)
 
-    #plot RMSE over pixel proximity to edges
+        # ax.set(xlim=[0.0, 6])
+        axs[ind].set(ylim=[0.4, 1])
+        if report_outliers:
+            axs[ind].set_ylabel(ylabel=f"o({th})", fontdict=font)
+        else:
+            axs[ind].set_ylabel(ylabel=f"inlier ratio ({th} pixel threshold)", fontdict=font)
+
+    axs[0].legend(legends, loc='upper right')
+    axs[-1].set_xlabel(xlabel="edge radius", fontdict=font)
+
+            #plot RMSE over pixel proximity to edges
     th=1
     fig, ax = plt.subplots()
     for algorithm in algorithms:

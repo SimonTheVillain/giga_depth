@@ -5,6 +5,7 @@ matplotlib.use('tkAgg')
 from matplotlib import pyplot as plt
 import os
 import torch
+import h5py
 
 from common.common import LCN_np
 
@@ -102,7 +103,7 @@ def comparison_rendered():
     baseline = 0.0634
     rr = (src_cxy[0] - tgt_cxy[0], src_cxy[1] - tgt_cxy[1], tgt_res[0], tgt_res[1])
 
-    frame_inds = [83, 82, 77, 99]
+    frame_inds = [22, 83, 82, 77, 99, 31, 50, 78, 108]#the last ones are used for the supplementary (  13, 21, 24, 26,) might be interesting too
     algorithms = ["HyperDepth",
                   "ActiveStereoNetFull",
                   "ActiveStereoNet",
@@ -110,7 +111,12 @@ def comparison_rendered():
                   "connecting_the_dots_full",
                   "GigaDepth66LCN", "GigaDepth"]
 
-    algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+    algorithms = ["HyperDepth",
+                  "ActiveStereoNetFull",
+                  "ActiveStereoNet",
+                  "connecting_the_dots_stereo",
+                  "connecting_the_dots_full",
+                  "GigaDepth76c1280LCN", "GigaDepth78Uc1920", "GigaDepth72UNetLCN", "GigaDepth73LineLCN", #todo: make this 1920?
                   "DepthInSpaceFTSF"]
 
     diff_limit = 5
@@ -131,8 +137,8 @@ def comparison_rendered():
         disp_gt_color = color_code(disp_gt_raw, to_disp(upper_limit), to_disp(lower_limit))
         cv2.imshow("disp_gt", disp_gt_color)
 
-
-        os.mkdir(f"{pth_out}/{ind}")
+        if not os.path.exists(f"{pth_out}/{ind}"):
+            os.mkdir(f"{pth_out}/{ind}")
         pth = f"{pth_out}/{ind}/ir.png"
         cv2.imwrite(pth, ir)
         pth = f"{pth_out}/{ind}/gt.png"
@@ -188,7 +194,10 @@ def comparison_captured():
                   "connecting_the_dots",
                   "GigaDepth66LCN", "GigaDepth"]
 
-    algorithms = [#"GigaDepth76c1280LCN", "GigaDepth78Uc1920",
+    algorithms = ["HyperDepth",
+                  "ActiveStereoNet",
+                  "connecting_the_dots",
+                  "GigaDepth76j4c1280LCN", "GigaDepth78Uc1920", "GigaDepth72UNetLCN", "GIgaDepth73LineLCN",
                   "DepthInSpaceFTSF"]
 
     diff_limit = 5
@@ -227,7 +236,9 @@ def comparison_captured():
                 path = f"{base}/structure_core_photoneo_test_results/{algorithm}/{frame_ind:03}/0.exr"
 
             disp = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-            disp *= 0.0634 / 0.075
+            if algorithm == "DepthInSpaceFTSF": #todo: remove this as soon as the training of DIS is fixed
+                print("todo: remove this as soon as the training of DIS is fixed")
+                disp *= 0.0634 / 0.075
             cv2.imshow("disp_raw", disp / 100)
             if disp.shape[1] == 608:
                 disp *= 2.0
@@ -384,11 +395,54 @@ def store_lcn():
         cv2.imwrite(pth, (latent_rgb * 255).astype(np.uint8))
         cv2.waitKey()
 
+def depth_in_space():
+    pth_src = "/media/simon/sandisk/datasets/DepthInSpace"
+    pth_results = "/media/simon/sandisk/datasets/DepthInSpace_results"
+    algorithms = ["DepthInSpace", "GigaDepth"]
+    types = [ ("captured", "00000004"),
+              ("rendered_default", "00000512"),
+              ("rendered_kinect", "00000512"),
+              ("rendered_real", "00000512")]
+    for alg in algorithms:
+        print(alg)
+        for type, sub in types:
+            print(type)
+            f = h5py.File(f'{pth_src}/{type}/{sub}/frames.hdf5', 'r')
+            im = np.array(f["im"])
+            disp_gt = np.array(f["disp"])
+            im = im[0,0,:,:]
+            disp_gt = disp_gt[0,0,:,:]
 
+            lower_limit = np.min(disp_gt)*0.9
+            upper_limit = np.max(disp_gt)*1.1
+            diff_limit = 5
+
+            disp = cv2.imread(f"{pth_results}/{alg}/{type}/{sub}/0.exr", cv2.IMREAD_UNCHANGED)
+            disp_color = color_code(disp, lower_limit, upper_limit)
+            disp_gt_color = color_code(disp_gt, lower_limit, upper_limit)
+            cv2.imshow("im", im)
+            cv2.imshow("disp_gt", disp_gt/100)
+            cv2.imshow("disp", disp/100)
+
+            cv2.imshow("disp_gt_c", disp_gt_color)
+            cv2.imshow("disp_c", disp_color)
+            delta = np.abs(disp - disp_gt)
+            delta_color = color_code(delta, 0, diff_limit)
+            cv2.imshow("delta", delta/5)
+            cv2.imshow("delta_c", delta_color)
+            cv2.imwrite(f"{pth_out}/supplemental/DIS_results/{type}_im.jpg", im*256)
+            cv2.imwrite(f"{pth_out}/supplemental/DIS_results/{type}_gt.jpg", disp_gt_color)
+            cv2.imwrite(f"{pth_out}/supplemental/DIS_results/{type}_{alg}_disp.jpg", disp_color)
+            cv2.imwrite(f"{pth_out}/supplemental/DIS_results/{type}_{alg}_delta.jpg", delta_color)
+
+            cv2.waitKey()
+
+
+#depth_in_space()
 
 #comparison_structure_ours()
 
-#comparison_rendered()
-comparison_captured()
+comparison_rendered()
+#comparison_captured()
 #comparison_shapenet()
 #store_lcn()

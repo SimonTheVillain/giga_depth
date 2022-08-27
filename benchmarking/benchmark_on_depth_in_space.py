@@ -4,9 +4,11 @@ from pathlib import Path
 import h5py
 import cv2
 import time
+import os
 
 #todo: get this from the config file
 data_path = str(Path("/media/simon/sandisk/datasets/DepthInSpace/"))
+data_output_path = str(Path("/media/simon/sandisk/datasets/DepthInSpace_results/GigaDepth/"))
 data_inds_captured = np.arange(4, 147, 8)
 data_inds_rendered = np.arange(2 ** 9, 2 ** 10)
 thresholds = [0.1, 0.5, 1, 2, 5]
@@ -18,6 +20,8 @@ algorithms = [  ("syn_default", "dis_def_lcn_c1920.pt", "rendered_default", data
                 ]
 
 for name, model_name, subpath, inds in algorithms:
+    if not os.path.exists(f"{data_output_path}/{subpath}"):
+        os.mkdir(f"{data_output_path}/{subpath}")
     print("-" * 80)
     print(name)
 
@@ -34,6 +38,8 @@ for name, model_name, subpath, inds in algorithms:
             "valid": 0
         }
     for ind in inds:
+        if not os.path.exists(f"{data_output_path}/{subpath}/{ind:08d}"):
+            os.mkdir(f"{data_output_path}/{subpath}/{ind:08d}")
         #todo: load data
         f = h5py.File(f'{data_path}/{subpath}/{ind:08d}/frames.hdf5', 'r')
         im = torch.tensor(np.array(f["im"])).cuda()
@@ -53,6 +59,10 @@ for name, model_name, subpath, inds in algorithms:
             msk = disp != 0
             valid_count = torch.count_nonzero(msk).item()
             delta = torch.abs(result - disp)
+
+            for i in range(4):
+                cv2.imwrite(f"{data_output_path}/{subpath}/{ind:08d}/{i}.exr",
+                            result[i, 0, :, :].detach().cpu().numpy())
 
             if False:
                 print(f"test time elapsed {ttime_elapsed } ms")

@@ -81,12 +81,20 @@ class DatasetRenderedSequences(data.Dataset):
 
 
         sequence = self.sequence_dirs[idx]
-        bgr = cv2.imread(f"{sequence}/{frm}_{side}.png")
+        suffix = ""
+        if os.path.isfile(f"{sequence}/{frm}_{side}.png"):
+            suffix = "png"
+        if os.path.isfile(f"{sequence}/{frm}_{side}.jpg"):
+            suffix = "jpg"
+        if suffix == "":
+            print(f"No compatible image file found {sequence}/{frm}_{side}.(png/jpg")
+
+        bgr = cv2.imread(f"{sequence}/{frm}_{side}.{suffix}")
         gt = cv2.imread(f"{sequence}/{frm}_{side}_gt.exr", cv2.IMREAD_UNCHANGED)
 
-        if os.path.isfile(f"{sequence}/{frm}_{side}_msk.png"):
+        if os.path.isfile(f"{sequence}/{frm}_{side}_msk.{suffix}"):
             #load an existing mask
-            msk = cv2.imread(f"{sequence}/{frm}_{side}_msk.png", cv2.IMREAD_UNCHANGED)
+            msk = cv2.imread(f"{sequence}/{frm}_{side}_msk.{suffix}", cv2.IMREAD_UNCHANGED)
         else:
             #create a mask
             ir_no = cv2.imread(f"{sequence}/{frm}_{side}_noproj.exr", cv2.IMREAD_UNCHANGED)
@@ -208,6 +216,9 @@ def add_msk():
                 cv2.imshow("gt",gt)
                 cv2.waitKey()
 
+#def run_trough_dataset(path):
+#    DatasetRenderedSequences(path)
 
 if __name__ == "__main__":
+
     add_msk()

@@ -186,7 +186,8 @@ def create_plot():
         #x = x[x < 5]
         #y = y[:len(x)]
         get_line_style(algorithm)
-        ax.plot(x, y)
+        color, style = get_line_style(algorithm)
+        ax.plot(x, y, color=color, linestyle=style)
 
     ax.set(xlim=[0.0, 1])
     ax.xaxis.set_major_locator(MultipleLocator(0.5))

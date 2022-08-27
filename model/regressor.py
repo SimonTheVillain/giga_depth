@@ -582,7 +582,7 @@ class Regressor(nn.Module):
                  class_ch_in_offset=[0, 32, 64],
                  class_ch_in=[32, 32, 32],
                  class_ch=[[32, 32], [32, 32], [32, 32]],
-                 reg_data_start=96,
+                 reg_ch_in_offset=96,
                  reg_ch_in=32,
                  reg_ch=[32],
                  reg_superclasses=384,
@@ -599,7 +599,7 @@ class Regressor(nn.Module):
         self.regress_neighbours = reg_overlap_neighbours
         self.reg_line_div = reg_shared_over_lines
         self.pad_proj = reg_pad
-        self.reg_data_start = reg_data_start
+        self.reg_ch_in_offset = reg_ch_in_offset
         self.reg_ch_in = reg_ch_in
 
         self.c = Classifier3Stage(height=height,
@@ -639,7 +639,10 @@ class Regressor(nn.Module):
 
         device = x_in.device
         if hasattr(self, 'reg_data_start'):
-            x_for_r = x_in[:, self.reg_data_start:self.reg_data_start + self.reg_ch_in]
+            self.reg_ch_in_offset = self.reg_data_start
+
+        if hasattr(self, 'reg_ch_in_offset'):
+            x_for_r = x_in[:, self.reg_ch_in_offset:self.reg_ch_in_offset + self.reg_ch_in]
         else:
             if self.c.close_far_separation:
                 # the second half of channelss dedicated to close features

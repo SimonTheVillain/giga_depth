@@ -109,8 +109,8 @@ def comparison_rendered():
                   "connecting_the_dots_full",
                   "GigaDepth66LCN", "GigaDepth"]
 
-    algorithms = [#"GigaDepth76c1280LCN", "GigaDepth78Uc1920",
-                  "DepthInSpaceFTSF"]
+    algorithms = ["GigaDepth76j4c1280LCN"#"GigaDepth76c1280LCN", "GigaDepth78Uc1920","DepthInSpaceFTSF"
+         ]
 
     diff_limit = 5
     for frame_ind in frame_inds:
@@ -187,6 +187,8 @@ def comparison_captured():
     algorithms = ["GigaDepth76c1280LCN", "GigaDepth78Uc1920",
                   "DepthInSpaceFTSF"]
 
+    algorithms = ["GigaDepth76j4c1280LCN"]
+
     diff_limit = 5
     for frame_ind in range(11):
         print(frame_ind)
@@ -222,7 +224,9 @@ def comparison_captured():
                 path = f"{base}/structure_core_photoneo_test_results/{algorithm}/{frame_ind:03}/0.exr"
 
             disp = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-            #disp *= 0.0634 / 0.075
+            if algorithm == "DepthInSpaceFTSF":  # todo: remove this as soon as the training of DIS is fixed
+                print("todo: remove this as soon as the training of DIS is fixed")
+                disp *= 0.0634 / 0.075
             cv2.imshow("disp_raw", disp / 100)
             if disp.shape[1] == 608:
                 disp *= 2.0
@@ -379,9 +383,8 @@ def store_lcn():
         cv2.waitKey()
 
 
-
 #comparison_structure_ours()
-#comparison_rendered()
-comparison_captured()
+comparison_rendered()
+#comparison_captured()
 #comparison_shapenet()
 #store_lcn()

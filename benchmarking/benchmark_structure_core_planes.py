@@ -440,8 +440,7 @@ def process_data():
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
     algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN", "ActiveStereoNet", "SGBM"]
-    algorithms = [
-                  "DepthInSpaceFTSF"]
+    algorithms = ["connecting_the_dots"]
 
     for algorithm in algorithms:
         print(f"processing algorithm {algorithm}")
@@ -472,6 +471,7 @@ def create_plot():
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
+    algorithms = ["connecting_the_dots"]
 
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
@@ -514,8 +514,8 @@ def create_plot():
 
         #plt.plot(data[f"inliers_{th}"]["distances"], data[f"inliers_{th}"]["pix_count"])
     plt.legend(legends, loc='upper left')
-    ax.set(xlim=[0.0, 3.0])
-    ax.set(ylim=[0.0, 0.04])
+    #ax.set(xlim=[0.0, 4.0])
+    #ax.set(ylim=[0.0, 0.03])
     ax.set_xlabel(xlabel="distance [m]", fontdict=font)
     ax.set_ylabel(ylabel=f"RMSE [m]", fontdict=font)
     plt.show()

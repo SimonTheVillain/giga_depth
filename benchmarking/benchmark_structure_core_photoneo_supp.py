@@ -14,15 +14,14 @@ from multiprocessing import Pool
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 import time
 
-base_path = "/media/simon/ssd_datasets/datasets"
-base_path = "/home/simon/datasets"
+base_path = "/media/simon/T7/datasets"
 
 def prepare_gt(vis, src_pre="SGBM", src="SGBM", dst="Photoneo"):
     print(dst)
     gt_path = f"{base_path}/structure_core_photoneo_test"
     eval_path = f"{base_path}/structure_core_photoneo_test_results/{src}"#GigaDepth66LCN"
     eval_path_pre = f"{base_path}/structure_core_photoneo_test_results/{src_pre}"#GigaDepth66LCN"
-    output_path = f"/home/simon/Pictures/images_paper/supplemental/pointclouds"
+    output_path = f"/home/simon/Pictures/images_paper2/supplemental/pointclouds"
     focal = 1.1154399414062500e+03
     baseline = 0.0634
     cxy = (604, 457)
@@ -62,7 +61,9 @@ def prepare_gt(vis, src_pre="SGBM", src="SGBM", dst="Photoneo"):
 
             print(pth_src)
             disp = cv2.imread(pth_src, cv2.IMREAD_UNCHANGED)
-
+            if src == "DepthInSpaceFTSF": #todo: remove this as soon as the training of DIS is fixed
+                print("todo: remove this as soon as the training of DIS is fixed")
+                disp *= 0.0634 / 0.075
             cv2.imshow("disp", disp/100)
             cv2.waitKey(1)
 
@@ -119,7 +120,7 @@ def prepare_gt(vis, src_pre="SGBM", src="SGBM", dst="Photoneo"):
 
             # Close
             #vis.destroy_window()
-            if False:
+            if True:
                 mat = o3d.visualization.rendering.Material()
                 mat.shader = 'defaultUnlit'
                 parameters = o3d.io.read_pinhole_camera_parameters("ScreenCamera_pose.json")
@@ -385,7 +386,8 @@ def create_data():
         for algorithm in algorithms:
             process_results(algorithm)
 def prepare_gts():
-    algorithms = ["GigaDepth", "GigaDepth66", "GigaDepth66LCN",
+    algorithms = ["DepthInSpaceFTSF",
+                  "GigaDepth76c1280LCN",
                   "ActiveStereoNet",
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",

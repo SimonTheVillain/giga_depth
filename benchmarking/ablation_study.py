@@ -113,9 +113,9 @@ path_dst = "/media/simon/T7/datasets/structure_core_unity_test_ablation_results"
 path_src = "/media/simon/T7/datasets/structure_core_unity_test"
 
 experiments = [
-    ("unet", "full_72_unet"),
-    ("unet_line", "full_73_line"),
-    ("unet_c1920", "full_78_unet_j2_c1920"),
+    ("unet_lcn", "full_72_lcn_unet"),
+    ("unet_lcn_line", "full_73_lcn_line"),
+    ("unet_lcn_c1920", "full_78_lcn_unet_j2_c1920"),
     ("c288", "full_76_lcn_j2_c288"),
     ("c384", "full_76_lcn_j2_c384"),
     ("c640_r1", "full_76_lcn_j2_c640_r1"),
@@ -126,10 +126,18 @@ experiments = [
     ("c1920", "full_76_lcn_j2_c1920"),
     ("c1920_nolcn", "full_76_j2_c1920"),
     ("c2688", "full_76_lcn_j2_c2688"), ]
+
+#TODO: remove!!!
+experiments = [
+    ("unet_lcn", "full_72_lcn_unet"),
+    ("unet_lcn_line", "full_73_lcn_line")]
 algorithms = [algorithm for _, algorithm in experiments]
 
 
 def apply_model():
+    experiments = [("unet_lcn", "full_72_lcn_unet"),
+                    ("unet_lcn_line", "full_73_lcn_line"),
+                    ("unet_lcn_c1920", "full_78_lcn_unet_j2_c1920")]
     measure_time = False
     for experiment, net in experiments:
         print(experiment)
@@ -277,6 +285,9 @@ def create_plot(algorithms):
                     "full_72_unet": "UNet",
                     "full_73_line": "UNet with per-line output layers",
                     "full_78_unet_j2_c1920": "UNet + 1920 class MLPs",
+                    "full_72_lcn_unet": "UNet",
+                    "full_73_lcn_line": "UNet with per-line output layers",
+                    "full_78_lcn_unet_j2_c1920": "UNet + 1920 class MLPs",
                     }
     font = {'family': 'normal',
             # 'weight': 'bold',
@@ -415,5 +426,5 @@ def report_parameter_counts():
 
 #report_parameter_counts()
 #apply_model()
-#process_data(algorithms)
+process_data(algorithms)
 create_plot(algorithms)
