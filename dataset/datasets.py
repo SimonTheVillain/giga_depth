@@ -1,6 +1,5 @@
 from dataset.dataset_rendered_shapenet import *
 from dataset.dataset_rendered import DatasetRenderedSequences
-from dataset.combined_dataset import DatasetCombined
 from pathlib import Path
 import re
 
@@ -95,21 +94,3 @@ def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False,
         has_lr = True
         baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
         return datasets, baselines, has_lr, focal, principal, src_res
-
-    if version == "structure_core_combo":
-        datasets = {
-            'train': DatasetCombined(path, vertical_jitter=vertical_jitter, type='train'),
-            'val': DatasetCombined(path, vertical_jitter=vertical_jitter, type='val')
-        }
-
-        src_res = (1216, 896)
-        principal = (604, 457)
-        focal = (1.1154399414062500e+03, 1.1154399414062500e+03)  # same focal length in both directions
-        has_lr = True
-        baselines = {"right": 0.0634, "left": 0.0634}
-        return datasets, baselines, has_lr, focal, principal, src_res
-
-
-
-
-

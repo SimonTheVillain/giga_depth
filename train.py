@@ -1,21 +1,14 @@
-import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-import torch
-import torch.nn as nn
 import torch.nn.modules.loss
 import torch.optim as optim
 from torch.cuda.amp.grad_scaler import GradScaler
 from dataset.datasets import GetDataset
-from model.composite_model import CompositeModel, GetModel
-from model.backbone import *
+from model.composite_model import GetModel
 from model.backboneSliced import *
-from model.regressor import Reg_3stage
 from torch.utils.data import DataLoader
 import math
-from params import parse_args
+from common.params import parse_args
 
 from torch.utils.tensorboard import SummaryWriter
-
 
 def train():
     args, config = parse_args()  # todo: rename to params
@@ -25,29 +18,18 @@ def train():
 
     outlier_thresholds = list(set.union(set(args.outlier_thresholds), set(args.relative_outlier_thresholds)))
 
-    main_device = f"cuda:{args.gpu_list[0]}"  # torch.cuda.device(args.gpu_list[0])
-    # experiment_name = "cr8_2021_256_wide_reg_alpha10"
-    # args.experiment_name = "slice_bb64_16_14_12c123_nobbeach_168sc_32_reg_lr01_alpha10_1nn"
+    main_device = f"cuda:{args.gpu_list[0]}"
 
     writer = SummaryWriter(f"tensorboard/{args.experiment_name}")
 
     shuffle = True
-    slice = True
 
     model = GetModel(args, config)
-    if False:
-        model = torch.load(f"trained_models/dis_def_lcn_j2_c960_v2_chk.pt")
-        model.eval()
-        model.cuda()
-
     if len(args.gpu_list) > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
         model = nn.DataParallel(model, device_ids=args.gpu_list)
 
     model.to(args.gpu_list[0])
-
-    # for param_tensor in net.state_dict():
-    #    print(param_tensor, "\t", net.state_dict()[param_tensor].size())
 
     if args.optimizer == "sgd":
         optimizer = optim.SGD(model.parameters(),
@@ -93,8 +75,6 @@ def train():
 
     scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch=-1)
     scheduler.step(epoch=args.start_epoch)
-    #for i in range(args.start_epoch):
-    #    scheduler.step()
 
     if args.half_precision:
         scaler = GradScaler()

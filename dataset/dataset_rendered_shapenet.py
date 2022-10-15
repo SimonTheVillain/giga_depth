@@ -92,9 +92,7 @@ class DatasetRenderedShapenet(data.Dataset):
             # add some noise
             im += np.random.rand(im.shape[0], im.shape[1]) * np.random.rand() * self.noise
 
-
             # fix dimensions:
-            # TODO
             im = np.expand_dims(im, 0)
             x_d = np.expand_dims(x_d, 0)
             disp = np.expand_dims(disp, 0)
