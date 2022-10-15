@@ -6,6 +6,7 @@ from model.composite_model import GetModel
 from model.backboneSliced import *
 from torch.utils.data import DataLoader
 import math
+import cv2
 from common.params import parse_args
 
 from torch.utils.tensorboard import SummaryWriter
