@@ -2,6 +2,7 @@ from dataset.dataset_rendered_shapenet import *
 from dataset.dataset_rendered import DatasetRenderedSequences
 from dataset.combined_dataset import DatasetCombined
 from pathlib import Path
+import re
 
 def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False, left_only=False):
     if version == "depth_in_space":
@@ -59,6 +60,32 @@ def GetDataset(path, tgt_res, vertical_jitter=1, version="unity_4", debug=False,
             'train': DatasetRenderedSequences(paths_train, vertical_jitter=vertical_jitter,
                                       tgt_res=tgt_res, debug=debug, left_only=left_only),
             'val': DatasetRenderedSequences(paths_val, vertical_jitter=vertical_jitter,
+                                    tgt_res=tgt_res, use_all_frames=True, debug=debug, left_only=left_only)
+        }
+
+        src_res = (1216, 896)
+        principal = (604, 457)
+        focal = (1.1154399414062500e+03, 1.1154399414062500e+03) # same focal length in both directions
+        has_lr = True
+        baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
+        return datasets, baselines, has_lr, focal, principal, src_res
+
+    if version == "structure_core_unity":
+        files = os.listdir(path)
+        indices = set()
+        for file in files:
+            result = re.search(r"\d+", file)
+            indices.add(result.group(0))
+        indices = list(indices)
+        indices.sort()
+        indices = [str(Path(path) / x) for x in indices if os.path.isfile(f"{Path(path) / x}_left.jpg")]
+
+        indices_train = indices[:len(indices) - 256]
+        indices_val = indices[len(indices) - 256:]
+        datasets = {
+            'train': DatasetRenderedSequences(indices_train, vertical_jitter=vertical_jitter,
+                                      tgt_res=tgt_res, debug=debug, left_only=left_only),
+            'val': DatasetRenderedSequences(indices_val, vertical_jitter=vertical_jitter,
                                     tgt_res=tgt_res, use_all_frames=True, debug=debug, left_only=left_only)
         }
 

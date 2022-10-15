@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from uNet import ConvBlock, EncoderBlock, DecoderBlock
+from model.uNet import ConvBlock, EncoderBlock, DecoderBlock
 
 class InvalidationModel(nn.Module):
 

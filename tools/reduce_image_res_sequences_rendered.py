@@ -5,16 +5,16 @@ import multiprocessing
 import itertools
 
 folder_src = "/media/simon/sandisk2/dataset_collection/synthetic_train"
-folder_dst = "/media/simon/sandisk2/dataset_collection/synthetic_train_reduced"
+folder_dst = "/media/simon/sandisk2/dataset_collection/synthetic_train_reduced_jpg"
 min_tgt_res = 1000000
-export_jpg = False
+export_jpg = True
 
 def apply_recursively(input_root, output_root, current_sub, io_pairs):
     current_src = os.path.join(input_root, current_sub)
     current_tgt = os.path.join(output_root, current_sub)
     #print(os.listdir(current_tgt))
-    if 14 < len(os.listdir(current_tgt)) < 100:
-        return
+    #if 26 < len(os.listdir(current_tgt)) < 100:
+    #    return
     if os.path.isdir(current_src) and not os.path.exists(current_tgt):
         os.mkdir(current_tgt)
     for path in os.listdir(current_src):
@@ -23,16 +23,20 @@ def apply_recursively(input_root, output_root, current_sub, io_pairs):
         if os.path.isdir(current):
             apply_recursively(input_root, output_root, os.path.join(current_sub, path), io_pairs)
         else:
-            if current[-3:] == "png":
+            if current[-7:] != "msk.png":
                 current_dst = os.path.join(current_tgt, path)
                 io_pairs.append((current, current_dst))
-            #else:
-            #    current_dst = os.path.join(current_tgt, path)
-            #    os.system(f"cp {current} {current_dst}")
+            else:
+                current_dst = os.path.join(current_tgt, path)
+                print(f"cp {current} {current_dst}")
+                os.system(f"cp {current} {current_dst}")
+                os.system(f"rm {current_dst[:-3]}jpg")
 
 io_pairs = []
 
 apply_recursively(folder_src, folder_dst, "", io_pairs)
+
+exit(0)
 print(len(io_pairs))
 pool = multiprocessing.Pool(processes=12)
 

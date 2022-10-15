@@ -180,8 +180,10 @@ experiments = [#("GigaDepth76c1920LCN", "full_76_lcn_j2_c1920.pt"),
                #("GigaDepth76c1280LCN", "full_76_lcn_j2_c1280.pt"),
                #("GigaDepth78Uc1920", "full_78_unet_j2_c1920.pt")
                #("GigaDepth76j4c1280LCN", "full_76_lcn_j4_c1280.pt"),
-                ("GigaDepth73LineLCN", "full_73_lcn_line.pt"),
-                ("GigaDepth72UNetLCN", "full_72_lcn_unet.pt"),
+                #("GigaDepth73LineLCN", "full_73_lcn_line.pt"),
+                #("GigaDepth72UNetLCN", "full_72_lcn_unet.pt"),
+                ("GigaDepth76J4C1280_8GB_DELETE", "full_76_j4_c1280_8GB.pt"),
+                ("GigaDepth76J4C1280_8GBPNG_DELETE", "full_76_j4_c1280_8GB_png.pt"),
                ]
 for output_folder_name, model_name in experiments:
     combined_model_pth = f"trained_models/{model_name}"

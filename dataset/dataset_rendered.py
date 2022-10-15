@@ -8,7 +8,6 @@ from dataset.dataset_rendered_shapenet import DatasetRenderedShapenet
 from pathlib import Path
 
 
-
 class DatasetRenderedSequences(data.Dataset):
 
     def __init__(self, sequence_dirs,
@@ -45,7 +44,22 @@ class DatasetRenderedSequences(data.Dataset):
         # to the right sensor
         self.baselines = {"right": 0.07501 - 0.0634, "left": -0.0634}
 
+        # in case we don't have empty folders
+        if os.path.isdir(sequence_dirs[0]):
+            self.structure = "sequences"
+        elif os.path.isfile(sequence_dirs[0] + "_left.jpg"):
+            self.structure = "files"
+            self.use_all_frames = False
+        else:
+            print("Dataset not in a valid format")
+
     def __len__(self):
+        if self.structure == "files":
+            count = len(self.sequence_dirs)
+            if not self.left_only:
+                count *= 2
+            return count
+
         count = len(self.sequence_dirs)
         if not self.left_only:
             count *= 2
@@ -55,61 +69,73 @@ class DatasetRenderedSequences(data.Dataset):
         return count
 
     def __getitem__(self, idx):
-        # index within sequence:
-        if self.use_all_frames:
-            side = "left"
-            if self.left_only:
-                idx = idx
-                frm = idx % 4
-                idx = idx // 4
+        if self.structure == "sequences":
+            # index within sequence:
+            if self.use_all_frames:
+                side = "left"
+                if self.left_only:
+                    idx = idx
+                    frm = idx % 4
+                    idx = idx // 4
+                else:
+                    if idx % 2 == 1:
+                        side = "right"
+                    idx = idx // 2
+                    frm = idx % 4
+                    idx = idx // 4
             else:
-                if idx % 2 == 1:
-                    side = "right"
-                idx = idx // 2
-                frm = idx % 4
-                idx = idx // 4
-        else:
+                side = "left"
+                if not self.left_only:
+                    if idx % 2 == 1:
+                        side = "right"
+                    idx = int(idx / 2)
+
+                # frame index:
+                frm = np.random.randint(0, 3)
+
+            sequence = self.sequence_dirs[idx]
+            suffix = ""
+            if os.path.isfile(f"{sequence}/{frm}_{side}.png"):
+                suffix = "png"
+            if os.path.isfile(f"{sequence}/{frm}_{side}.jpg"):
+                suffix = "jpg"
+            if suffix == "":
+                print(f"No compatible image file found {sequence}/{frm}_{side}.(png/jpg")
+
+            bgr = cv2.imread(f"{sequence}/{frm}_{side}.{suffix}")
+            gt = cv2.imread(f"{sequence}/{frm}_{side}_gt.exr", cv2.IMREAD_UNCHANGED)
+
+            if os.path.isfile(f"{sequence}/{frm}_{side}_msk.{suffix}"):
+                # load an existing mask
+                msk = cv2.imread(f"{sequence}/{frm}_{side}_msk.png", cv2.IMREAD_UNCHANGED)
+            else:
+                # create a mask
+                ir_no = cv2.imread(f"{sequence}/{frm}_{side}_noproj.exr", cv2.IMREAD_UNCHANGED)
+                ir_msk = cv2.imread(f"{sequence}/{frm}_{side}_msk.exr", cv2.IMREAD_UNCHANGED)
+                msk = np.zeros((ir_no.shape[0], ir_no.shape[1]), dtype=np.ubyte)
+                th = 0.0001
+                delta = np.abs(ir_no - ir_msk)
+                msk[(delta[:, :, 0] + delta[:, :, 1] + delta[:, :, 2]) > th] = 255
+                msk[gt[:, :, 1] > 0] = 0
+        elif self.structure == "files":
+
             side = "left"
             if not self.left_only:
                 if idx % 2 == 1:
                     side = "right"
                 idx = int(idx / 2)
 
+            sequence = self.sequence_dirs[idx]
+            bgr = cv2.imread(f"{sequence}_{side}.jpg")
+            gt = cv2.imread(f"{sequence}_{side}_d.exr", cv2.IMREAD_UNCHANGED)
+            msk = cv2.imread(f"{sequence}_{side}_msk.png", cv2.IMREAD_UNCHANGED)
 
-            #frame index:
-            frm = np.random.randint(0, 3)
-
-
-        sequence = self.sequence_dirs[idx]
-        suffix = ""
-        if os.path.isfile(f"{sequence}/{frm}_{side}.png"):
-            suffix = "png"
-        if os.path.isfile(f"{sequence}/{frm}_{side}.jpg"):
-            suffix = "jpg"
-        if suffix == "":
-            print(f"No compatible image file found {sequence}/{frm}_{side}.(png/jpg")
-
-        bgr = cv2.imread(f"{sequence}/{frm}_{side}.{suffix}")
-        gt = cv2.imread(f"{sequence}/{frm}_{side}_gt.exr", cv2.IMREAD_UNCHANGED)
-
-        if os.path.isfile(f"{sequence}/{frm}_{side}_msk.{suffix}"):
-            #load an existing mask
-            msk = cv2.imread(f"{sequence}/{frm}_{side}_msk.{suffix}", cv2.IMREAD_UNCHANGED)
+        if len(gt.shape) == 3:
+            d = gt[:, :, 0]
         else:
-            #create a mask
-            ir_no = cv2.imread(f"{sequence}/{frm}_{side}_noproj.exr", cv2.IMREAD_UNCHANGED)
-            ir_msk = cv2.imread(f"{sequence}/{frm}_{side}_msk.exr", cv2.IMREAD_UNCHANGED)
-            msk = np.zeros((ir_no.shape[0], ir_no.shape[1]), dtype=np.ubyte)
-            th = 0.0001
-            delta = np.abs(ir_no - ir_msk)
-            msk[(delta[:, :, 0] + delta[:, :, 1] + delta[:, :, 2]) > th] = 255
-            msk[gt[:, :, 1] > 0] = 0
+            d = gt
 
-        #msk = cv2.imread(f"{sequence}/{frm}_{side}_msk.png", cv2.IMREAD_UNCHANGED)
-        d = gt[:, :, 0]
-        #d = cv2.imread(f"{sequence}/{frm}_{side}_d.exr", cv2.IMREAD_UNCHANGED)
         v_offset = np.random.randint(-self.vertical_jitter, self.vertical_jitter)
-
 
         if d is None:
             print(f"the depth file {sequence} is invalid nonetype. selecting random other!")
@@ -121,7 +147,7 @@ class DatasetRenderedSequences(data.Dataset):
 
         rr = self.readout_rect
         bgr = bgr[rr[1] + v_offset:rr[1] + v_offset + rr[3], rr[0]:rr[0] + rr[2], :].astype(np.float32) * (
-                    1.0 / 255.0)
+                1.0 / 255.0)
         channel_weights = np.random.random(3) * 2
         channel_weights = channel_weights / (np.sum(channel_weights) + 0.01)
 
@@ -151,7 +177,7 @@ class DatasetRenderedSequences(data.Dataset):
         disp = self.baselines[side] * (self.focal / 2) / depth
         x_d = disp + np.expand_dims(np.arange(0, int(self.tgt_res[0] / 2)), 0).astype(np.float32)
         x_d = x_d.astype(np.float32)
-        x_d = x_d * (2.0/float(self.tgt_res[0])) #normalize between 0 and 1 (above and below are not impossible
+        x_d = x_d * (2.0 / float(self.tgt_res[0]))  # normalize between 0 and 1 (above and below are not impossible
 
         # downsample the mask. (prioritize invalid pixel!!!)
         msk[msk == 0] = 2
@@ -167,7 +193,7 @@ class DatasetRenderedSequences(data.Dataset):
 
         # Create Edge map by executing sobel on depth
         #  threshold
-        depth_1 = 1.0/depth
+        depth_1 = 1.0 / depth
         depth_1[np.isnan(depth_1)] = 0
         grad_x = cv2.Sobel(depth_1, cv2.CV_32F, 1, 0, ksize=3)
         grad_y = cv2.Sobel(depth_1, cv2.CV_32F, 0, 1, ksize=3)
@@ -195,30 +221,88 @@ def add_msk():
 
     lcn_module = LCN()
     for idx, sequence in enumerate(paths):
-        print(f"{idx/len(paths)}")
+        print(f"{idx / len(paths)}")
         for side in ["left", "right"]:
             for i in range(4):
                 # create a mask
                 gt = cv2.imread(f"{sequence}/{i}_{side}_gt.exr", cv2.IMREAD_UNCHANGED)
                 ir = cv2.imread(f"{sequence}/{i}_{side}.png", cv2.IMREAD_UNCHANGED)
-                ir = cv2.cvtColor(ir, cv2.COLOR_BGR2GRAY).astype(np.float32) * 1.0/255.0
+                ir = cv2.cvtColor(ir, cv2.COLOR_BGR2GRAY).astype(np.float32) * 1.0 / 255.0
                 lcnp = LCN_np(ir)
                 ir = torch.tensor(ir).unsqueeze(0).unsqueeze(0)
                 lcn, mean, std = LCN_tensors(ir)
                 lcn2 = lcn_module(ir)
                 lcn = lcn * 0.5 + 0.5
-                cv2.imshow("ir", ir[0,0,:,:].cpu().numpy())
-                cv2.imshow("lcn", lcn[0,0,:,:].cpu().numpy())
-                cv2.imshow("mean", mean[0,0,:,:].cpu().numpy())
-                cv2.imshow("std", std[0,0,:,:].cpu().numpy())
-                cv2.imshow("lcn2", lcn2[0,0,:,:].cpu().numpy())
+                cv2.imshow("ir", ir[0, 0, :, :].cpu().numpy())
+                cv2.imshow("lcn", lcn[0, 0, :, :].cpu().numpy())
+                cv2.imshow("mean", mean[0, 0, :, :].cpu().numpy())
+                cv2.imshow("std", std[0, 0, :, :].cpu().numpy())
+                cv2.imshow("lcn2", lcn2[0, 0, :, :].cpu().numpy())
                 cv2.imshow("lcnp", lcnp)
-                cv2.imshow("gt",gt)
+                cv2.imshow("gt", gt)
                 cv2.waitKey()
 
-#def run_trough_dataset(path):
-#    DatasetRenderedSequences(path)
+
+def run_trough_dataset(path):
+    sequences = os.listdir(path)
+
+    paths = [Path(path) / x for x in sequences if os.path.isdir(Path(path) / x)]
+    paths.sort()
+    paths_train = paths[:len(paths) - 64]
+    paths_val = paths[len(paths) - 64:]
+    dataset_train = DatasetRenderedSequences(paths_train,
+                                             vertical_jitter=4,
+                                             use_all_frames=True,
+                                             left_only=False,
+                                             tgt_res=(1216, 896))
+    dataset_val = DatasetRenderedSequences(paths_val,
+                                             vertical_jitter=4,
+                                             use_all_frames=True,
+                                             left_only=False,
+                                             tgt_res=(1216, 896))
+    print("Iterate over training-set")
+    for data in dataset_train:
+        print(len(data))
+
+    print("Iterate over validation-set")
+    for data in dataset_val:
+        print(len(data))
+
+def run_trough_non_sequence_dataset(path):
+    files = os.listdir(path)
+    indices = set()
+    for file in files:
+        result = re.search(r"\d+", file)
+        indices.add(result.group(0))
+    indices = list(indices)
+    indices.sort()
+    indices = [str(Path(path) / x) for x in indices if os.path.isfile(f"{Path(path) / x}_left.jpg")]
+
+    indices_train = indices[:len(indices) - 64]
+    indices_val = indices[len(indices) - 64:]
+    dataset_train = DatasetRenderedSequences(indices_train,
+                                             vertical_jitter=4,
+                                             use_all_frames=True,
+                                             left_only=False,
+                                             tgt_res=(1216, 896))
+    dataset_val = DatasetRenderedSequences(indices_val,
+                                             vertical_jitter=4,
+                                             use_all_frames=True,
+                                             left_only=False,
+                                             tgt_res=(1216, 896))
+    print("Iterate over training-set")
+    for data in dataset_train:
+        print(len(data))
+
+    print("Iterate over validation-set")
+    for data in dataset_val:
+        print(len(data))
+
 
 if __name__ == "__main__":
+    run_trough_non_sequence_dataset("/media/simon/sandisk2/dataset_collection/synthetic_test")
 
-    add_msk()
+    run_trough_dataset("/media/simon/sandisk2/dataset_collection/synthetic_train_reduced")
+    run_trough_dataset("/media/simon/sandisk2/dataset_collection/synthetic_train_reduced_jpg")
+
+    #add_msk()

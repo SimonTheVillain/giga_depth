@@ -174,6 +174,8 @@ def create_data():
 
     algorithms = [ "GigaDepth72UNetLCN",
                    "GigaDepth73LineLCN",]
+    algorithms = ["GigaDepth76J4C1280_8GB_DELETE",
+                  "GigaDepth76J4C1280_8GBPNG_DELETE"]
 
     threading = False
 
@@ -205,6 +207,10 @@ def create_plot():
                   "ActiveStereoNet", "ActiveStereoNetFull",
                   "connecting_the_dots_stereo",
                   "HyperDepth"]
+
+    algorithms = ["GigaDepth76J4C1280_8GB_DELETE",
+                  "GigaDepth76J4C1280_8GBPNG_DELETE"]
+
     legend_names = {"GigaDepth": "GigaDepth light",
                     "GigaDepth66": "GigaDepth",
                     "GigaDepth66LCN": "GigaDepth (LCN)",
@@ -222,6 +228,8 @@ def create_plot():
                     "GigaDepth73LineLCN": "GigaDepth (Line)",
                     "GigaDepth76c1280LCN": "GigaDepth",
                     "GigaDepth78Uc1920": "GigaDepth (UNet)",
+                    "GigaDepth76J4C1280_8GB_DELETE": "Trained on JPGs",
+                    "GigaDepth76J4C1280_8GBPNG_DELETE": "Trained on PNGs",
                     "DepthInSpaceFTSF": "DepthInSpace-FTSF",
                     "ActiveStereoNet": "ActiveStereoNet",
                     "ActiveStereoNetFull": "ActiveStereoNet (full)",

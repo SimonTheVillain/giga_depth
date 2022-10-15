@@ -65,6 +65,9 @@ def prepare_gt(src_pre="SGBM", src="SGBM", dst="Photoneo"):
 
             print(pth_src)
             disp = cv2.imread(pth_src, cv2.IMREAD_UNCHANGED)
+            if src == "DepthInSpaceFTSF":  # todo: remove this as soon as the training of DIS is fixed
+                print("todo: remove this as soon as the training of DIS is fixed")
+                disp *= 0.0634 / 0.075
             pcd = generate_pcl(disp)
 
             print("Apply FINE point-to-point ICP")
@@ -196,6 +199,10 @@ def process_results(algorithm):
             d_gt = (focal * baseline) / disp_gt
             d = (focal * baseline) / estimate
 
+        if algorithm == "DepthInSpaceFTSF":
+            print("todo: remove this as soon as the training of DIS is fixed")
+            d *= 0.0634 / 0.075
+
         d_gt[disp_gt == 0] = 0
         cv2.imshow("gt", disp_gt / 100)
         cv2.imshow("estimate", estimate/100)
@@ -257,11 +264,17 @@ def create_plot():
                   "ActiveStereoNet", "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
-    algorithms = ["GigaDepth76j4c1280LCN",  "GigaDepth72UNetLCN", "GigaDepth73LineLCN",# "GigaDepth78Uc1920",
+    algorithms = ["GigaDepth76j4c1280LCN", # "GigaDepth72UNetLCN", "GigaDepth73LineLCN",# "GigaDepth78Uc1920",
                   "DepthInSpaceFTSF",
                   "ActiveStereoNet",
                   "connecting_the_dots",
                   "HyperDepth", "HyperDepthXDomain",
+                  "SGBM"]
+    algorithms = ["GigaDepth76j4c1280LCN", # "GigaDepth72UNetLCN", "GigaDepth73LineLCN",# "GigaDepth78Uc1920",
+                  "DepthInSpaceFTSF",
+                  "ActiveStereoNet",
+                  "connecting_the_dots",
+                  "HyperDepth", #"HyperDepthXDomain",
                   "SGBM"]
 
     legend_names = {"GigaDepth": "GigaDepth light",
@@ -349,9 +362,12 @@ def create_plot():
     #plot the RMSE over distance
     th = 5 # this is 1 in the structure core!!!!!
     fig, ax = plt.subplots()
-    algorithms.remove("HyperDepth")
-    algorithms.remove("HyperDepthXDomain")
-    algorithms.remove("connecting_the_dots")
+    if "HyperDepth" in algorithms:
+        algorithms.remove("HyperDepth")
+    if "HyperDepthXDomain" in algorithms:
+        algorithms.remove("HyperDepthXDomain")
+    if "connecting_the_dots" in algorithms:
+        algorithms.remove("connecting_the_dots")
     legends = [legend_names[x] for x in algorithms]
     for algorithm in algorithms:
         print(algorithm)
@@ -380,7 +396,7 @@ def create_data():
                   "HyperDepth", "HyperDepthXDomain",
                   "SGBM"]
 
-    algorithms = [ "GigaDepth72UNetLCN", "GigaDepth73LineLCN"]
+    algorithms = [ "DepthInSpaceFTSF"]#"GigaDepth72UNetLCN", "GigaDepth73LineLCN"]
     threading = False
 
     if threading:
@@ -411,11 +427,12 @@ def prepare_gts():
                   ("GigaDepth78Uc1920", "GigaDepth78Uc1920"),
                   ("DepthInSpaceFTSF", "DepthInSpaceFTSF")]
     algorithms = [ #("GigaDepth72UNetLCN", "GigaDepth72UNetLCN"),
-                   ("GigaDepth73LineLCN", "GigaDepth73LineLCN")]
+                   #,("GigaDepth73LineLCN", "GigaDepth73LineLCN"),
+                    ("DepthInSpaceFTSF", "DepthInSpaceFTSF")]
     for alg in algorithms:
         prepare_gt(src_pre="GigaDepth66LCN", src=alg[1], dst=f"GT/{alg[0]}")
 
 
-prepare_gts()
-create_data()
+#prepare_gts()
+#create_data()
 create_plot()

@@ -23,33 +23,30 @@ def train():
     # TODO: DO SOMETHING U-NET to get the artifacts on the left of the image out!
     # or give the x position as fourier features?
     # some data augmentation too!
-    experiment_name = "mask_training_5"
+    experiment_name = "mask_training_7"
     writer = SummaryWriter(f"tensorboard/{experiment_name}")
 
-    dataset_path = "/home/simon/datasets/structure_core_unity_sequences"
+    dataset_path = "/media/simon/sandisk2/dataset_collection/synthetic_test"
 
-    model_path_backbone = "trained_models/full_67_backbone.pt"
-    model_path_regressor = "trained_models/full_67_regressor.pt"
+    model_path = "trained_models/full_76_lcn_j4_c1280_chk.pt"
 
     weight_invalid = 5.0
     learning_rate = 1e-3
     weight_decay = 1e-4
     batch_size = 4
     num_workers = 8
-    epochs = 10
+    epochs = 40
     half_precision = True
 
     main_device = torch.cuda.current_device()
-    model_backbone = torch.load(model_path_backbone)
-    model_backbone.eval()
-    model_regressor = torch.load(model_path_regressor)
-    model_regressor.eval()
-    model_depth = CompositeModel(model_backbone, model_regressor, half_precision=True)
+    model_depth = torch.load(model_path)
     model_depth.cuda()
     model_depth.eval()
 
     #model_invalidation = InvalidationModel([4, 8, 32, 32, 1])
-    model_invalidation = InvalidationModelU()
+    #model_invalidation = InvalidationModelU()
+    #maybe this is not enough to detect the artifacts on the left of the image
+    model_invalidation = InvalidationModel([4, 8, 16, 16, 1])
     model_invalidation.cuda()
     model_invalidation.eval()
 
@@ -63,13 +60,15 @@ def train():
         GetDataset(dataset_path,
                    vertical_jitter=4,
                    tgt_res=[1216, 896],
-                   version="structure_core_unity_sequences",
+                   version="structure_core_unity",
                    left_only=True)
 
 
     dataloaders = {x: torch.utils.data.DataLoader(datasets[x], batch_size=batch_size,
                                                   shuffle=True, num_workers=num_workers)
                    for x in ['train', 'val']}
+
+    #TODO: load the original training set to perform testing.
 
     if half_precision:
         scaler = GradScaler()
@@ -113,7 +112,7 @@ def train():
                 mask_gt[torch.logical_or(x_gt < 0.0, x_gt > 1.0)] = 0
 
                 with torch.no_grad():
-                    x, _, entropy1, entropy2, entropy3 = model_depth(ir.type(torch.half), output_entropies=True)
+                    x, entropy1, entropy2, entropy3 = model_depth(ir.type(torch.half), output_entropies=True)
                     invalid_pixel_gt = torch.ones_like(mask_gt)
                     invalid_pixel_gt[torch.abs(x - x_gt) < (
                                 5 / 1280)] = 0.0  # invalidate every pixel we are more than 10 pixel away
@@ -138,7 +137,7 @@ def train():
                     undetected_invalid = torch.mean(undetected_invalid.float())
                     undetected_invalid_handcrafted_accu += undetected_invalid.item()
 
-                    if True:
+                    if False:
                         cv2.imshow("ir", ir[0, 0, :, :].detach().cpu().numpy())
                         cv2.imshow("x", x[0, 0, :, :].detach().cpu().numpy())
                         cv2.imshow("disp", disp[0, 0, :, :].detach().cpu().numpy()/100)

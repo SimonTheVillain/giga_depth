@@ -29,7 +29,9 @@ def get_line_style(experiment_name):
                 "connecting_the_dots": (colors[1], "solid"),
                 "HyperDepth": (colors[6], "solid"),
                 "HyperDepthXDomain": (colors[6], "dashed"),
-                "SGBM": (colors[7], "solid")
+                "SGBM": (colors[7], "solid"),
+                "GigaDepth76J4C1280_8GB_DELETE": (colors[0], "solid"),
+                "GigaDepth76J4C1280_8GBPNG_DELETE": (colors[1], "solid")
                 }
     return settings[experiment_name]
 #print(plt.rcParams['axes.prop_cycle'].by_key()['color'])
