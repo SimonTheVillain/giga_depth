@@ -1,20 +1,45 @@
 # GigaDepth
 Simon Schreiberhuber, Jean-Baptiste Weibel, Timothy Patten, Markus Vincze
-Paper (TODO: LINK), Dataset (TODO: LINK)
+Paper (TODO: ARXIV LINK), [Dataset/Trained Models](https://doi.org/10.48436/q76vf-y9t57)
 
 ## Requirements
 Our algorithm relies on custom CUDA kernels and thus requires an **NVIDIA GPU**. 
 Tensor cores are not utilized, as they are not as beneficial to our regression tree as they are for the CNN backbone.
-We tested this work on a RTX 3090 and a RTX 2070 and expect it to work on older as well as newer cards.
+We tested this work on a Ubuntu 20.04 machine with a RTX 3090 and a RTX 2070 and expect it to work on older as well as newer cards.
 
 The libraries used are:
-
-`numpy, OpenCV, cuda (11), pytorch (1.8), ninja, tensorboard, scipy, matplotlib`
+```
+numpy, OpenCV, cuda (11), pytorch (1.8), ninja, tensorboard, scipy, matplotlib
+```
+Feel free to contact [Simon Schreiberhuber](simon.schreiberhuber@gmx.net) if you find this list not to be complete.
 
 ## Dataset(s)
-Download the datasets at this link (TODO)
+Download the datasets at the [link](https://doi.org/10.48436/q76vf-y9t57) from above.
+There are two versions of the training set. One where the input images are compressed as (lossy) `jpg` files, 
+one with `png` encoding. Both variants contain the following folders:
+- **synthetic_train**: Sequences of 4 frames each rendered with Unity3D. Randomly selected objects with randomly 
+sampled size and textures are randomly placed around a camera to generate an extremely diverse dataset.
+- **synthetic_test**: Single frames rendered with Unity3D. Scenes and objects are 100% different from the training data.
+- **patterns_capture**: Several images captured by the Occipital Structure Core
+- **captured_train**: Captured data that can be used for training of methods as "DepthInSpace", "ActiveStereoNet", 
+"ConnectingTheDots" or "HyperDepth". 241 of the 967 sequences also capture frames with deactivated dot-projector. 
+In "ConnectingTheDots" terminology this would be equivalent the "ambient" images.
+- **captured_test_planes**: Captured ceiling. We initially had an evaluation based on planes fitted on this data, 
+but as some baseline algorithms performed so abysmally, we excluded it.
+- **captured_test**: 11 Sequences captured by the Structure Core with baseline pointcluds captured by a
+Photoneo MotionCam-3D M in scanning mode.
+- - **captured_test_unused**: Three additional scenes that we didn't include in our testing. 
+They were simply captured after performing our evaluation, we did not exclude them to tweak our results.
+
+
+We believe that the `jpg` variant of the dataset with 190GB is sufficient for training and won't lead to a reduced performance due 
+to compression artifacts. If you still feel that the compression is creating some form of bias, we suggest to load the 
+bigger `png` dataset at around 500GB.
 ## Trained Model
-Download the pretrained models at this link (TODO)
+Download the pretrained models at this [link](https://doi.org/10.48436/q76vf-y9t57) from above.
+We provide two models:
+- `jitter4_1280classes.pt` trained on synthetic data according to `lcn_4jitter_1280classes.yaml`
+- `jitter4_1920classes.pt` trained on synthetic data according to `lcn_4jitter_1920classes.yaml`
 
 ## Usage
 ### Training
@@ -27,7 +52,7 @@ can handle it.
 
 Training then is started by giving the config file and the folder to the dataset
 ```
-python3 train.py --config_file=configs/lcn_4jitter_1280classes_8gb.yaml --dataset_path=synthetic_sequences_train
+python3 train.py --config_file=configs/lcn_4jitter_1280classes_8gb.yaml --dataset_path=synthetic_train
 ```
 The path to the batch size can be overwritten to fit the GPU memory size by `-b=1`. Specifically a 24GB GPU as the 
 RTX 3090 should be able to handle a batch size of at least 4 if not 8 and train within 12 hours.
@@ -67,9 +92,3 @@ If you find the code, data, or the models useful, please cite this paper:
 ```
 ## Acknowledgements 
 The research leading to these results has received funding from EC Horizon 2020 for Research and Innovation under grant agreement No. 101017089, TraceBot and the Austrian Science Foundation (FWF) under grant agreement No. I3969-N30, InDex.
-
-
-## Licence
-``` 
- [Creative Commons Attribution Non-commercial No Derivatives](http://creativecommons.org/licenses/by-nc-nd/3.0/)
-```
