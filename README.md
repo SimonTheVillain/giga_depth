@@ -1,6 +1,6 @@
 # GigaDepth
 Simon Schreiberhuber, Jean-Baptiste Weibel, Timothy Patten, Markus Vincze
-Paper (TODO: ARXIV LINK), [Dataset/Trained Models](https://doi.org/10.48436/q76vf-y9t57)
+[Paper](https://www.ecva.net/papers/eccv_2022/papers_ECCV/papers/136930209.pdf) [Supplementary](https://www.ecva.net/papers/eccv_2022/papers_ECCV/papers/136930209-supp.pdf), [Dataset/Trained Models](https://doi.org/10.48436/q76vf-y9t57)
 
 ## Requirements
 Our algorithm relies on custom CUDA kernels and thus requires an **NVIDIA GPU**. 
@@ -60,7 +60,7 @@ RTX 3090 should be able to handle a batch size of at least 4 if not 8 and train 
 ### Run
 To run the script on a dataset, either synthetic or real call and output color coded images in the output folder.
 ```
-python3 run.py --model_path= --input_path= --output_path
+python3 run.py --model_path=trained_models/jitter4_1280classes.pt --input_path=.../synthetic_test --output_path=.../synthetic_test_results
 ```
 
 
